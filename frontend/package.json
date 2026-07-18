@@ -1,0 +1,32 @@
+{
+  "name": "frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@astryxdesign/core": "^0.1.6",
+    "@astryxdesign/theme-neutral": "^0.1.6",
+    "@heroicons/react": "^2.2.0",
+    "@stomp/stompjs": "^7.3.0",
+    "lightweight-charts": "^5.2.0",
+    "next": "16.2.10",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "sockjs-client": "^1.6.1"
+  },
+  "devDependencies": {
+    "@astryxdesign/cli": "^0.1.6",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/sockjs-client": "^1.5.4",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.10",
+    "typescript": "^5"
+  }
+}

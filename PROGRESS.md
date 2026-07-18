@@ -8,17 +8,14 @@
 
 **계획서(Phase 1~7) 로드맵 전체 완료** (2026-07-18): Phase 6(Prometheus + Grafana 관측성)까지 끝나면서 `stock-monitor-dev-plan.html`의 Phase 1~6이 전부 완료됨. Phase 7(CI/CD)은 Git 저장소 초기화/첫 푸시(`github.com/parkjunss/marketboard`, Private)까지는 됐지만 실제 GitHub Actions 워크플로는 아직 없음 — 유일하게 남은 로드맵 항목. 그 외엔 사용자가 그때그때 요청하는 개선 작업 위주로 진행 중.
 
-이번 세션에 추가로: 포트폴리오 삭제 다이얼로그 버그 수정(`useImperativeAlertDialog` → 제어형 `AlertDialog`, 프로젝트 전체에서 이제 완전히 안 씀), 종목 세부 페이지(`/symbols/[ticker]`) 보강(뉴스/기술지표/재무링크/전일대비/회사명/1년고저/기업개요/차트 SMA오버레이/잘못된 티커 처리/뒤로가기 링크), 시세보드→종목리스트 통합(관심종목 별표 이관), 티커 이름 truncate, SMA 라인 색상 버그 수정, Prometheus/Grafana 관측성(커스텀 메트릭 4종 + 독립 Docker 컨테이너 + 대시보드)까지 전부 진행됨 — 상세는 각 섹션 참고.
+이번 세션에 추가로: 포트폴리오 삭제 다이얼로그 버그 수정(`useImperativeAlertDialog` → 제어형 `AlertDialog`, 프로젝트 전체에서 이제 완전히 안 씀), 종목 세부 페이지(`/symbols/[ticker]`) 보강(뉴스/기술지표/재무링크/전일대비/회사명/1년고저/기업개요/차트 SMA오버레이/잘못된 티커 처리/뒤로가기 링크), 시세보드→종목리스트 통합(관심종목 별표 이관), 티커 이름 truncate, SMA 라인 색상 버그 수정, Prometheus/Grafana 관측성(커스텀 메트릭 4종 + 독립 Docker 컨테이너 + 대시보드), **S&P500 500종목 일봉 백필이 정체돼 보이던 문제 조사 및 수정**(진짜 원인은 yfinance가 아니라 종목마다 새 MySQL 커넥션을 여느라 커넥션당 ~10초씩 걸리던 것 — 상세는 아래 "버그 수정" 섹션)까지 전부 진행됨 — 상세는 각 섹션 참고.
 
 **바로 시작할 것 후보:**
 
-1. **S&P500 500종목 일봉 백필이 정체된 것으로 보임 — 조사 필요**: 이번 세션 중 세 번(수 시간에 걸쳐) `SELECT COUNT(DISTINCT symbol_id) FROM price_history WHERE timeframe='1d'`를 확인했는데 매번 217/507로 **완전히 동일**함 — 우연이라기엔 너무 정확히 같아서 실제로 멈춰있을 가능성이 높음. 콜렉터 `/health`는 정상 응답 중(`ws_connected: true`, `reconnect_count: 0`)이라 프로세스 자체는 살아있고 실시간 WS는 문제 없음 — 문제가 있다면 배치 루프(`sp500_universe.py`의 백필 부분) 쪽. 콜렉터 콘솔 로그를 직접 확인하거나, 이제는 Grafana 대시보드(`http://localhost:3300`, admin/admin)에서 `marketboard_indicators_recompute_total{result="success"}`가 5분마다 증가하는 폭(사실상 "매 배치마다 처리된 종목 수")을 보면 힌트가 될 수 있음 — 이 값이 실행마다 커지고 있지 않다면 새로 채워지는 종목이 없다는 뜻.
-
-2. **Phase 7 — GitHub Actions CI/CD**: 저장소는 준비됐으니 워크플로만 추가하면 됨(`./gradlew test`, `uv run pytest`, `npx tsc --noEmit`/`eslint` 정도를 PR마다 돌리는 기본 워크플로부터 시작 권장).
+1. **Phase 7 — GitHub Actions CI/CD**: 저장소는 준비됐으니 워크플로만 추가하면 됨(`./gradlew test`, `uv run pytest`, `npx tsc --noEmit`/`eslint` 정도를 PR마다 돌리는 기본 워크플로부터 시작 권장). 계획서 로드맵(Phase 1~7) 중 유일하게 남은 항목.
 
 **남겨둔 확인 작업 (급하지 않음)**
 - 장 마감 후 `collector/app/rest_fallback.py`(이제 Finnhub REST가 아니라 yfinance 기반) 전체 폴백 루프 재검증 — fetch+publish 경로 자체는 확인했지만, 스테일 조건이 실제로 걸리는 장 마감 상황의 전체 루프는 아직 안 봄
-- Git 저장소 아직 미초기화 — 첫 커밋 시 `collector/.env`(FINNHUB_API_KEY) 제외됐는지 재확인
 - `symbols` 테이블에 테스트로 넣었던 `AMZN` row가 남아있음(is_active=1) — 그대로 둬도 무방(이제 관리자 화면에서 언제든 비활성화 가능)
 - `indicators.cron`(기본 5분 주기)이 실제로 여러 번 순환하며 값이 갱신되는지는 아직 짧은 구간만 봄 — 하루 이상 켜둔 상태로 `computed_at`이 계속 최신으로 갱신되는지 다음 세션에 확인
 - `@astryxdesign/charts`(공식 차트 패키지) 설치가 peer dependency 충돌로 보류됨(canary 버전이 `@astryxdesign/core@0.1.6-canary.*`를 요구, 우리는 안정 `^0.1.6` 사용 중) — 지금은 커스텀 SVG `Sparkline`/`MultiLineChart`/`GroupedBarChart` 컴포넌트로 우회했지만, core가 canary 라인을 따라잡거나 charts가 안정 릴리스되면 재검토
@@ -39,7 +36,7 @@
 | 구성요소 | 상태 | 비고 |
 |---|---|---|
 | marketboardBackend (Spring Boot) | ✅ Phase 1, 3, 5 완료 + 커스텀 대시보드 + `QuoteResponse.name` + 시장지표/재무 프록시 API + 포트폴리오 백엔드 추가 | docker-compose는 의도적으로 Phase 7로 이관 |
-| collector (Python) | ✅ Phase 2 완료, Phase 5 알림 체크 로직 추가, 뉴스/시장지표/재무/종목프로필 프록시 + S&P500 유니버스 배치 + 실시간 대상 종목 일봉 자동 갱신 루프 추가 | REST 폴백은 이제 yfinance 기반(장중 실거래로는 미검증, fetch+publish 경로만 별도 확인). S&P500 전체(503종목) 배치 진행 중(멤버십 완료, 일봉 백필 진행 중). 실시간 WS 대상은 SPY/QQQ/DIA + 상위 10종목(13개)로 확정, 일봉은 `active_symbols_daily_refresh_loop`가 매일 자동 갱신 |
+| collector (Python) | ✅ Phase 2 완료, Phase 5 알림 체크 로직 추가, 뉴스/시장지표/재무/종목프로필 프록시 + S&P500 유니버스 배치 + 실시간 대상 종목 일봉 자동 갱신 루프 추가 | REST 폴백은 이제 yfinance 기반(장중 실거래로는 미검증, fetch+publish 경로만 별도 확인). S&P500 전체(503종목) 배치 완료(2026-07-18, 커넥션 재사용 버그 수정 후 91.5초·실패 0건). 실시간 WS 대상은 SPY/QQQ/DIA + 상위 10종목(13개)로 확정, 일봉은 `active_symbols_daily_refresh_loop`가 매일 자동 갱신 |
 | frontend (Next.js) | ✅ Phase 4, 5 완료 + `/dashboard` + `/stock-list`(구 시세 보드 통합, 관심종목 별표 포함) + `/market` + `/financials`(다중 종목 비교가 랜딩, 선택 시 `/financials/[ticker]` 상세로 이동) + `/portfolio` + `/symbols/[ticker]`(뉴스/기술지표/기업개요/SMA오버레이 보강) | Astryx 디자인 시스템 적용, 포트 3100 고정(아래 "참고"), 구 `/`(시세 보드)는 `/stock-list`로 리다이렉트 |
 | 인프라 (docker-compose / CI/CD / 관측성) | ✅ Phase 6(Prometheus+Grafana) 완료, ⚪ docker-compose/CI는 Phase 7 예정 | 로컬 개발은 공용 `mysql-container`/`redis-container`(다른 프로젝트와 공유) 재사용, Prometheus/Grafana는 프로젝트 스코프 독립 컨테이너(`marketboard-prometheus`/`marketboard-grafana`) |
 
@@ -569,6 +566,32 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 - **알아둘 점 — Micrometer가 카운터 이름의 `.created`를 조용히 지움**: `marketboard.watchlist.items.created`로 등록한 카운터가 Prometheus로 나갈 땐 `marketboard_watchlist_items_total`(created가 사라짐)로 나옴 — `_created`가 OpenMetrics 스펙에서 "이 메트릭이 언제 생성됐는지"를 뜻하는 예약 접미사라서, Micrometer의 Prometheus 네이밍 컨벤션이 카운터 이름 끝의 `created`를 자동으로 제거하고 표준 `_total`을 붙이기 때문(버그 아님, 의도된 변환). 앞으로 카운터 이름에 `count`/`total`/`created` 같은 예약어를 끝에 붙이면 실제 노출되는 이름이 코드에 쓴 것과 달라질 수 있으니, Grafana 쿼리를 새로 작성할 땐 항상 `curl :8080/actuator/prometheus`로 실제 노출된 이름을 먼저 확인할 것.
 - **알아둘 점 — Prometheus/Grafana는 아직 `docker-compose.yml`에 안 들어가 있음**: 기존 방침(mysql/redis도 Phase 7 전까진 수동 `docker run`)과 동일하게, 이 두 컨테이너도 지금은 수동 기동 상태. Phase 7에서 배포용 `docker-compose.yml`을 쓸 때 `observability/` 설정을 그대로 서비스로 편입하면 됨.
 
+### ✅ 버그 수정 — S&P500 500종목 일봉 백필이 사실상 멈춰있던 문제 (2026-07-18)
+
+지난 세션부터 "217/507에서 안 움직이는 것 같다"고 남겨뒀던 항목을 본격 조사 → **완전히 잘못된 가설로 시작해서, 실측을 거듭한 끝에 진짜 원인을 찾아 수정 완료**. 최종 결과만 보면 간단하지만, 중간에 완전히 틀린 방향으로 상당한 시간을 썼기 때문에 그 과정 전체를 기록함(같은 실수를 반복하지 않기 위해).
+
+**1차 가설(틀림) — "yfinance가 500종목을 한 번에 요청하면 못 버틴다"**: `POST /sp500/sync`를 수동으로 재실행해서 관찰하니 8분 넘게 응답이 전혀 안 왔음(콜렉터 자체는 살아있고 실시간 WS는 계속 정상 — `run_sp500_batch`가 `asyncio.to_thread`로 별도 스레드에서 도는 동안 메인 이벤트루프는 안 막혔던 것). "Yahoo Finance 비공식 API가 500개 이상 티커를 한 번에 묶으면 rate limit에 걸린다"고 추정하고, `collector/app/sp500_universe.py`를 다음처럼 고쳤음: (a) 40개씩 청크로 나눠서 순차 호출, (b) 청크당 `ThreadPoolExecutor` + `future.result(timeout=60)`으로 강제 타임아웃, (c) 청크 사이 2초 딜레이.
+
+**재발(가설 반박)**: 고친 버전으로 다시 돌렸는데도 **똑같이 멈춤** — 이번엔 15분 넘게 응답 없음, CPU 사용률도 거의 0(블로킹 대기 상태). "그럼 yfinance 내부 스레드풀(`threads=True`)이 내가 만든 `ThreadPoolExecutor`와 중첩되면서 뭔가 꼬이는 것 아닐까" 하는 2차 가설을 세우고 `threads=False`(청크 내에서 순차 fetch) + `CHUNK_SIZE=20`으로 다시 수정 → **역시 재현**(6분 넘게 CPU 거의 0).
+
+**진짜 원인 발견 — 개별 조각 실측으로 좁혀감**: 이쯤에서 "혹시 전체 조합이 아니라 특정 한 조각이 문제 아닐까" 싶어서 `run_sp500_batch()`를 구성하는 조각들을 하나씩 독립 실행해서 시간을 재봄:
+- Wikipedia 스크레이핑(`get_sp500_constituents`): 3초 — 정상
+- DB 심볼 upsert(`ensure_sp500_symbols`, 503건): 11초 — 정상
+- 실제 첫 청크(40종목) yfinance 다운로드: 2~4초 — 정상
+- `_download_chunk_with_timeout`(내가 만든 타임아웃 래퍼) 단독 호출: 4.4초 — 정상
+- 청크 8개(160종목) 연속 다운로드 루프: 전부 3~4초씩, 문제 없음
+
+**여기까지 전부 빨랐는데, 유일하게 안 해본 게 "다운로드한 데이터를 실제로 DB에 쓰는 것"까지 포함한 루프**였음 — 이걸 포함해서 재현하자마자 바로 잡힘: **청크 1개(20종목) 다운로드는 4.5초인데, 그 데이터를 DB에 쓰는 데 201.9초**가 걸림. `mysql_writer.insert_candles_bulk()`가 **티커 1개당 새 MySQL 커넥션을 열고 닫는 구조**였는데(`run_sp500_batch`의 루프가 종목별로 이 함수를 호출), 이 환경에서 새 커넥션을 열 때마다 **~10초**가 걸리고 있었음(원인은 확정 못 함 — MySQL `skip_name_resolve`는 이미 켜져 있어서 흔한 "커넥트마다 역방향 DNS 조회" 문제는 아니었음, Docker NAT/포트포워딩 계층의 오버헤드로 추정). 503종목 × ~10초 ≈ 80분 이상이 걸릴 수 있는 구조였던 것 — "멈춘 것처럼 보인" 진짜 정체.
+
+**최종 수정**:
+- `collector/app/mysql_writer.py`의 `insert_candles_bulk(rows)`에 옵셔널 `conn` 파라미터 추가 — 넘기면 그 커넥션을 재사용(호출자가 lifecycle 관리), 안 넘기면 기존처럼 자체 커넥션을 열고 닫음(하위 호환).
+- `collector/app/sp500_universe.py`의 `run_sp500_batch()` — 배치 시작 시 커넥션을 **하나만** 열어서 전체 루프 동안 재사용, 끝나면 `finally`에서 닫음.
+- 1차/2차 가설에서 시도했던 `threads=False`/`CHUNK_SIZE=20`은 근본 원인이 아니었다는 게 밝혀졌으므로 되돌림(`threads=True`, `CHUNK_SIZE=40`) — 다만 청크 나누기 + 청크별 `CHUNK_TIMEOUT_SECONDS=60` 타임아웃 래퍼 자체는 "한 청크가 느려져도 전체가 안 막히게" 하는 방어적 장치로 그대로 유지.
+- 부수적으로 `insert_candles_bulk` 호출부에 없던 try/except도 추가(종목 하나의 DB 쓰기 실패가 나머지 전체 청크를 건너뛰게 만들던 잠재 버그 — 발견은 했지만 이번 사건의 직접 원인은 아니었음).
+- **검증**: 수정 후 `run_sp500_batch()`를 실제 503종목으로 단독 실행 → **91.5초 만에 완료**, `{'constituents': 503, 'candle_rows': 62183, 'failed_tickers': []}` — **실패 티커 0개**. DB 재확인: `price_history`의 `COUNT(DISTINCT symbol_id)`가 217 → **506**, 전체 row 수 41,528 → **77,263**. 콜렉터 재기동 후 `/health` 정상(13종목 실시간 구독 그대로 유지), `uv run pytest`(10건) 회귀 없음.
+- **알아둘 점**: 이 프로젝트에서 "느리다/멈춘 것 같다"는 증상을 조사할 때, 외부 API(yfinance/Yahoo)를 먼저 의심하기 쉽지만 **이번엔 진짜 원인이 우리 쪽 DB 커넥션 관리였음** — 다음에 비슷한 증상을 보면 외부 서비스보다 먼저 "커넥션을 매번 새로 여는 곳은 없는지"부터 체크할 것. `collector/main.py`의 `_refresh_active_symbols_daily_bars()`(실시간 대상 13종목 일봉 갱신 루프)도 내부적으로 `backfill.py`의 백필 함수를 종목별로 호출하는 구조라 같은 패턴의 위험이 있는지는 아직 확인 안 함(종목 수가 13개뿐이라 체감 못 했을 가능성 — 낮은 우선순위로 남겨둠).
+- 이전에 "야후 응답이 느려진다"고 잘못 추정해서 적어뒀던 메모(아래 "S&P500 배치 재실행/확장 방법" 항목)는 이 발견에 맞게 갱신함.
+
 ### ⚪ Phase 7 — CI/CD (GitHub Actions)
 - Git 저장소는 이제 초기화 및 첫 푸시 완료(`github.com/parkjunss/marketboard`, Private) — GitHub Actions 워크플로 자체는 아직 없음
 
@@ -595,12 +618,11 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 
 ## 다음 액션 제안 (우선순위 순)
 > 상세 실행 계획은 문서 맨 위 "다음 세션 시작점" 참고.
-1. S&P500 500종목 일봉 백필 정체 조사 — 217/507에서 세 번 연속 안 움직임, 콜렉터 로그 확인 필요
-2. Phase 7 — GitHub Actions CI/CD 워크플로 작성 (계획서 로드맵 중 유일하게 남은 항목)
-3. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
-4. (배포 준비 시점) `docker-compose.yml`(mysql+redis+backend+collector+frontend+observability, 격리 스택) 작성 — `observability/` 설정은 이미 있으니 그대로 서비스로 편입
+1. Phase 7 — GitHub Actions CI/CD 워크플로 작성 (계획서 로드맵 중 유일하게 남은 항목)
+2. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
+3. (배포 준비 시점) `docker-compose.yml`(mysql+redis+backend+collector+frontend+observability, 격리 스택) 작성 — `observability/` 설정은 이미 있으니 그대로 서비스로 편입
 
-**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18)
+**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18), S&P500 일봉 백필 정체 문제 조사·수정(2026-07-18)
 
 ---
 
@@ -630,5 +652,5 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 - **콜렉터는 핫리로드가 없음**: Java 백엔드는 IntelliJ devtools가 파일 변경을 감지해 자동 재시작하지만, 콜렉터는 `uv run uvicorn main:app --port 8000`을 `--reload` 없이 띄운 상태라 `collector/` 쪽 코드(`main.py`, `app/*.py`)를 바꾼 뒤엔 반드시 프로세스를 수동으로 재시작해야 새 라우트/로직이 반영됨(2026-07-18, `symbol_profile.py` 추가 때 이걸 놓쳐서 한 번 헛디딤 — 이제 알아둘 것).
 - 임의 티커를 `Symbol`로 새로 만들어야 하면 `symbol/SymbolResolutionService.resolveOrFetch(ticker)`(2026-07-18 추가, 포트폴리오 포지션 추가 흐름에서 사용)를 재사용할 것 — DB에 없으면 콜렉터 `GET /symbol-profile/{ticker}`로 조회해 **비활성**(`is_active=false`) `Symbol`을 만듦(관리자 종목 추가와 달리 `syncActiveSymbols()`를 호출하지 않아 실시간 WS 구독 대상이 몰래 늘어나지 않음). 임의 티커의 현재가가 필요하면 `quote/QuoteService.resolvePrice(ticker)`(같은 날 추가)를 재사용 — Redis 실시간 캐시 우선, 없으면 `price_history` 최신 일봉 종가로 폴백, 둘 다 없으면 `Optional.empty()`.
 - **S&P500 유니버스와 실시간 WS 대상은 서로 다른 개념**: `symbols.is_active`(실시간 Finnhub WS 구독)와 `symbols.in_sp500_universe`(yfinance 배치 전용, 2026-07-18 추가)는 완전히 독립적인 두 플래그. 한 종목이 둘 다 true일 수도(예: GOOGL), 하나만 true일 수도 있음 — "이 종목이 S&P500이니까 실시간으로 봐야 한다"고 가정하지 말 것. S&P500 유니버스 종목 목록이 필요하면 `SymbolRepository`에 `findByInSp500UniverseTrue...` 계열 메서드를 추가해 재사용(현재는 `findByActiveTrueOrInSp500UniverseTrueOrderByPriorityAsc()`만 있음, `IndicatorCalculationService` 전용).
-- **S&P500 배치 재실행/확장 방법**: 콜렉터 `.env`의 `SP500_BATCH_LIMIT`을 지우거나 늘리면 다음 재시작(또는 24시간 뒤 자동 루프, 혹은 `POST /sp500/sync?limit=N` 수동 호출)부터 그만큼 반영됨 — 코드 변경 불필요. 수동 트리거를 연달아 호출하면 야후 응답이 눈에 띄게 느려지는 걸 실측함(콜렉터 자체가 멈추는 건 아님, `asyncio.to_thread`로 격리돼 있어 다른 엔드포인트는 정상 동작) — 간격을 두고 호출할 것.
+- **S&P500 배치 재실행/확장 방법**: 콜렉터 `.env`의 `SP500_BATCH_LIMIT`을 지우거나 늘리면 다음 재시작(또는 24시간 뒤 자동 루프, 혹은 `POST /sp500/sync?limit=N` 수동 호출)부터 그만큼 반영됨 — 코드 변경 불필요. **(2026-07-18 정정)** 예전엔 여기에 "수동 트리거를 연달아 호출하면 야후 응답이 느려진다"고 적혀 있었는데 잘못된 추정이었음 — 진짜 원인은 yfinance가 아니라 `insert_candles_bulk`가 종목마다 새 MySQL 커넥션을 열던 것(커넥션 재사용으로 수정 완료, 위 "버그 수정 — S&P500 500종목 일봉 백필이 사실상 멈춰있던 문제" 참고). 수정 후 503종목 전체가 91.5초에 끝남 — 더 이상 간격을 두고 호출할 필요 없음.
 - 이 문서는 계획서(`stock-monitor-dev-plan.html`)의 로드맵을 기준으로 코드베이스를 스캔해 작성한 스냅샷입니다. 실제 작업이 진행되면 각 체크박스와 표를 갱신해 주세요.

@@ -101,14 +101,26 @@ def insert_candle(
         conn.close()
 
 
-def insert_candles_bulk(rows: list[tuple[int, datetime, float, float, float, float, float, str]]) -> int:
-    """Batch-writes many candles over a single connection (e.g. yfinance backfill)."""
+def insert_candles_bulk(
+    rows: list[tuple[int, datetime, float, float, float, float, float, str]],
+    conn: pymysql.connections.Connection | None = None,
+) -> int:
+    """Batch-writes many candles. Reuses `conn` if the caller passes one (caller owns its
+    lifecycle) -- otherwise opens and closes a fresh connection for just this call. Pass a shared
+    connection when writing many batches in a loop (e.g. the S&P 500 backfill, which calls this
+    once per ticker): opening a fresh connection per call was observed to add ~10s of latency
+    *per call* in this environment (cause unconfirmed -- MySQL's skip_name_resolve is already on,
+    so it isn't the classic reverse-DNS-on-connect culprit -- but reusing one connection sidesteps
+    it regardless of the underlying cause)."""
     if not rows:
         return 0
-    conn = connect()
+    owns_conn = conn is None
+    if owns_conn:
+        conn = connect()
     try:
         with conn.cursor() as cur:
             cur.executemany(_INSERT_CANDLE_SQL, rows)
         return len(rows)
     finally:
-        conn.close()
+        if owns_conn:
+            conn.close()

@@ -1,0 +1,11 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    # Resolves via Docker's embedded DNS — Grafana and Prometheus run on the same
+    # user-defined network (marketboard-observability), see PROGRESS.md for the run commands.
+    url: http://marketboard-prometheus:9090
+    isDefault: true
+    editable: true

@@ -1,5 +1,6 @@
 package org.juns.marketboardbackend.alert;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import org.juns.marketboardbackend.alert.dto.AlertRequest;
 import org.juns.marketboardbackend.alert.dto.AlertResponse;
@@ -18,16 +19,19 @@ public class AlertService {
     private final SymbolRepository symbolRepository;
     private final UserRepository userRepository;
     private final AlertRedisMirror alertRedisMirror;
+    private final MeterRegistry meterRegistry;
 
     public AlertService(
             AlertRepository alertRepository,
             SymbolRepository symbolRepository,
             UserRepository userRepository,
-            AlertRedisMirror alertRedisMirror) {
+            AlertRedisMirror alertRedisMirror,
+            MeterRegistry meterRegistry) {
         this.alertRepository = alertRepository;
         this.symbolRepository = symbolRepository;
         this.userRepository = userRepository;
         this.alertRedisMirror = alertRedisMirror;
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional(readOnly = true)
@@ -49,6 +53,7 @@ public class AlertService {
                 .targetPrice(request.targetPrice())
                 .build());
         alertRedisMirror.mirror(saved);
+        meterRegistry.counter("marketboard.alerts.created").increment();
         return AlertResponse.from(saved);
     }
 

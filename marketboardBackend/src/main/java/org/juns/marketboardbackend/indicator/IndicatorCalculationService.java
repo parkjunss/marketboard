@@ -1,5 +1,7 @@
 package org.juns.marketboardbackend.indicator;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
@@ -24,14 +26,17 @@ public class IndicatorCalculationService {
     private final SymbolRepository symbolRepository;
     private final PriceHistoryRepository priceHistoryRepository;
     private final IndicatorRepository indicatorRepository;
+    private final MeterRegistry meterRegistry;
 
     public IndicatorCalculationService(
             SymbolRepository symbolRepository,
             PriceHistoryRepository priceHistoryRepository,
-            IndicatorRepository indicatorRepository) {
+            IndicatorRepository indicatorRepository,
+            MeterRegistry meterRegistry) {
         this.symbolRepository = symbolRepository;
         this.priceHistoryRepository = priceHistoryRepository;
         this.indicatorRepository = indicatorRepository;
+        this.meterRegistry = meterRegistry;
     }
 
     @Scheduled(cron = "${indicators.cron}")
@@ -41,9 +46,20 @@ public class IndicatorCalculationService {
         // latter's daily bars only change once a day, so most of these recomputes are no-ops
         // between backfills, but that's cheap enough not to warrant a separate schedule.
         List<Symbol> symbols = symbolRepository.findByActiveTrueOrInSp500UniverseTrueOrderByPriorityAsc();
+        Timer.Sample sample = Timer.start(meterRegistry);
         for (Symbol symbol : symbols) {
-            recomputeForSymbol(symbol);
+            try {
+                recomputeForSymbol(symbol);
+                meterRegistry.counter("marketboard.indicators.recompute", "result", "success").increment();
+            } catch (RuntimeException ex) {
+                // Caught per-symbol so one bad symbol doesn't abort the whole batch (and its
+                // failure is actually counted, rather than propagating out of the @Transactional
+                // method and silently rolling back everyone else's successful upserts too).
+                meterRegistry.counter("marketboard.indicators.recompute", "result", "failure").increment();
+                log.warn("Failed to recompute indicators for {}: {}", symbol.getTicker(), ex.getMessage());
+            }
         }
+        sample.stop(meterRegistry.timer("marketboard.indicators.recompute.duration"));
         log.info("Recomputed indicators for {} symbol(s)", symbols.size());
     }
 

@@ -1,0 +1,93 @@
+{
+  "title": "MarketBoard Overview",
+  "uid": "marketboard-overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Request Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count[1m]))",
+          "legendFormat": "req/s"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "HTTP p95 Latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "STOMP Active Sessions",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
+      "targets": [{ "expr": "marketboard_stomp_sessions_active", "legendFormat": "sessions" }]
+    },
+    {
+      "id": 4,
+      "title": "Collector WS Connected",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "red" }, { "value": 1, "color": "green" }] }
+        },
+        "overrides": []
+      },
+      "targets": [{ "expr": "marketboard_collector_ws_connected", "legendFormat": "connected" }]
+    },
+    {
+      "id": 5,
+      "title": "Collector Reconnect Count",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 8 },
+      "targets": [{ "expr": "marketboard_collector_reconnect_count", "legendFormat": "reconnects" }]
+    },
+    {
+      "id": 6,
+      "title": "Indicator Recompute Job Duration",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [{ "expr": "marketboard_indicators_recompute_duration_seconds_max", "legendFormat": "last run" }]
+    },
+    {
+      "id": 7,
+      "title": "Indicator Recompute Results (rate/10m)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "targets": [
+        { "expr": "sum(rate(marketboard_indicators_recompute_total[10m])) by (result)", "legendFormat": "{{result}}" }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Watchlist / Alert Creation Rate (10m)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "targets": [
+        { "expr": "rate(marketboard_watchlist_items_total[10m])", "legendFormat": "watchlist items" },
+        { "expr": "rate(marketboard_alerts_total[10m])", "legendFormat": "alerts" }
+      ]
+    }
+  ]
+}

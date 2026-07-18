@@ -1,5 +1,6 @@
 package org.juns.marketboardbackend.watchlist;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import org.juns.marketboardbackend.common.exception.DuplicateWatchlistItemException;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
@@ -17,14 +18,17 @@ public class WatchlistService {
     private final WatchlistItemRepository watchlistItemRepository;
     private final SymbolRepository symbolRepository;
     private final UserRepository userRepository;
+    private final MeterRegistry meterRegistry;
 
     public WatchlistService(
             WatchlistItemRepository watchlistItemRepository,
             SymbolRepository symbolRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            MeterRegistry meterRegistry) {
         this.watchlistItemRepository = watchlistItemRepository;
         this.symbolRepository = symbolRepository;
         this.userRepository = userRepository;
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional(readOnly = true)
@@ -45,6 +49,7 @@ public class WatchlistService {
         int nextOrder = watchlistItemRepository.countByUser_Id(userId);
         WatchlistItem saved = watchlistItemRepository.save(
                 WatchlistItem.builder().user(user).symbol(symbol).sortOrder(nextOrder).build());
+        meterRegistry.counter("marketboard.watchlist.items.created").increment();
         return WatchlistItemResponse.from(saved);
     }
 

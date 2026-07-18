@@ -6,20 +6,15 @@
 
 ## 다음 세션 시작점
 
-**Git 저장소 초기화 + 첫 커밋/푸시 완료, 포트폴리오 삭제 다이얼로그 버그도 확인 후 수정 완료** (2026-07-18): `https://github.com/parkjunss/marketboard.git`(Private)에 첫 커밋 푸시함 — 하나의 모노레포로(backend/frontend/collector 전부 한 레포), 각 서브프로젝트 기존 `.gitignore` + 루트 `.gitignore`(`.claude/` 제외)로 시크릿/빌드산출물 없이 228개 파일 커밋. 이후 지난 세션부터 남아있던 "의심되는 버그"였던 포트폴리오 페이지 삭제 확인 다이얼로그를 브라우저로 실측 → 실제로 재현됨(`useImperativeAlertDialog`가 안 닫힘) → admin/symbols와 동일한 제어형 `AlertDialog`로 교체해 해결. `useImperativeAlertDialog`는 이제 프로젝트 전체에서 완전히 안 씀.
+**계획서(Phase 1~7) 로드맵 전체 완료** (2026-07-18): Phase 6(Prometheus + Grafana 관측성)까지 끝나면서 `stock-monitor-dev-plan.html`의 Phase 1~6이 전부 완료됨. Phase 7(CI/CD)은 Git 저장소 초기화/첫 푸시(`github.com/parkjunss/marketboard`, Private)까지는 됐지만 실제 GitHub Actions 워크플로는 아직 없음 — 유일하게 남은 로드맵 항목. 그 외엔 사용자가 그때그때 요청하는 개선 작업 위주로 진행 중.
 
-또한 종목 세부 페이지(`/symbols/[ticker]`) 보강(뉴스/기술지표/재무링크/전일대비/회사명/1년고저/기업개요/차트 SMA오버레이/잘못된 티커 처리/뒤로가기 링크), 시세보드→종목리스트 통합(관심종목 별표 이관), 티커 이름 truncate, SMA 라인 색상 버그 수정 등도 이번 세션에 진행됨 — 전부 각 섹션에 기록돼 있음.
+이번 세션에 추가로: 포트폴리오 삭제 다이얼로그 버그 수정(`useImperativeAlertDialog` → 제어형 `AlertDialog`, 프로젝트 전체에서 이제 완전히 안 씀), 종목 세부 페이지(`/symbols/[ticker]`) 보강(뉴스/기술지표/재무링크/전일대비/회사명/1년고저/기업개요/차트 SMA오버레이/잘못된 티커 처리/뒤로가기 링크), 시세보드→종목리스트 통합(관심종목 별표 이관), 티커 이름 truncate, SMA 라인 색상 버그 수정, Prometheus/Grafana 관측성(커스텀 메트릭 4종 + 독립 Docker 컨테이너 + 대시보드)까지 전부 진행됨 — 상세는 각 섹션 참고.
 
 **바로 시작할 것 후보:**
 
-1. **계획서(Phase 1~7) 기준 마지막 남은 항목은 Phase 6(Prometheus + Grafana 관측성)뿐** — 아래 참고. 그 외엔 사용자가 그때그때 요청하는 개선 작업 위주로 진행 중.
+1. **S&P500 500종목 일봉 백필이 정체된 것으로 보임 — 조사 필요**: 이번 세션 중 세 번(수 시간에 걸쳐) `SELECT COUNT(DISTINCT symbol_id) FROM price_history WHERE timeframe='1d'`를 확인했는데 매번 217/507로 **완전히 동일**함 — 우연이라기엔 너무 정확히 같아서 실제로 멈춰있을 가능성이 높음. 콜렉터 `/health`는 정상 응답 중(`ws_connected: true`, `reconnect_count: 0`)이라 프로세스 자체는 살아있고 실시간 WS는 문제 없음 — 문제가 있다면 배치 루프(`sp500_universe.py`의 백필 부분) 쪽. 콜렉터 콘솔 로그를 직접 확인하거나, 이제는 Grafana 대시보드(`http://localhost:3300`, admin/admin)에서 `marketboard_indicators_recompute_total{result="success"}`가 5분마다 증가하는 폭(사실상 "매 배치마다 처리된 종목 수")을 보면 힌트가 될 수 있음 — 이 값이 실행마다 커지고 있지 않다면 새로 채워지는 종목이 없다는 뜻.
 
-2. **S&P500 500종목 일봉 백필 — 진행 상황이 안 움직이는 것처럼 보임, 확인 필요**: 이번 세션 중 두 번(대략 1시간 간격) 확인했는데 `SELECT COUNT(DISTINCT symbol_id) FROM price_history WHERE timeframe='1d'`가 두 번 다 217/507로 동일함 — 정체돼 있을 가능성 있음. 콜렉터 `/health`는 정상 응답 중(`ws_connected: true`)이라 프로세스 자체는 살아있음. 다음 세션에서 이 카운트가 여전히 217이면 콜렉터 로그에서 배치 루프 에러 확인 필요.
-
-**그 다음: Phase 6 — Prometheus + Grafana 관측성**
-1. `/actuator/prometheus`(ADMIN 전용), `micrometer-registry-prometheus` 의존성은 이미 있음. Prometheus가 스크레이프하도록 `prometheus.yml` 작성
-2. 커스텀 메트릭 후보: STOMP 세션 수, 워치리스트/알림 생성 카운터, 콜렉터 재접속 횟수, 인디케이터 계산 잡 실행 시간/실패 카운터
-3. DONE WHEN: Grafana에서 실시간 요청량/지연시간과 최소 1개 이상의 커스텀 비즈니스 메트릭이 보임
+2. **Phase 7 — GitHub Actions CI/CD**: 저장소는 준비됐으니 워크플로만 추가하면 됨(`./gradlew test`, `uv run pytest`, `npx tsc --noEmit`/`eslint` 정도를 PR마다 돌리는 기본 워크플로부터 시작 권장).
 
 **남겨둔 확인 작업 (급하지 않음)**
 - 장 마감 후 `collector/app/rest_fallback.py`(이제 Finnhub REST가 아니라 yfinance 기반) 전체 폴백 루프 재검증 — fetch+publish 경로 자체는 확인했지만, 스테일 조건이 실제로 걸리는 장 마감 상황의 전체 루프는 아직 안 봄
@@ -45,8 +40,8 @@
 |---|---|---|
 | marketboardBackend (Spring Boot) | ✅ Phase 1, 3, 5 완료 + 커스텀 대시보드 + `QuoteResponse.name` + 시장지표/재무 프록시 API + 포트폴리오 백엔드 추가 | docker-compose는 의도적으로 Phase 7로 이관 |
 | collector (Python) | ✅ Phase 2 완료, Phase 5 알림 체크 로직 추가, 뉴스/시장지표/재무/종목프로필 프록시 + S&P500 유니버스 배치 + 실시간 대상 종목 일봉 자동 갱신 루프 추가 | REST 폴백은 이제 yfinance 기반(장중 실거래로는 미검증, fetch+publish 경로만 별도 확인). S&P500 전체(503종목) 배치 진행 중(멤버십 완료, 일봉 백필 진행 중). 실시간 WS 대상은 SPY/QQQ/DIA + 상위 10종목(13개)로 확정, 일봉은 `active_symbols_daily_refresh_loop`가 매일 자동 갱신 |
-| frontend (Next.js) | ✅ Phase 4, 5 완료 + `/dashboard` + `/stock-list` + `/market` + `/financials` + `/portfolio`(신규 페이지 4/4 완료, 포트폴리오 백엔드 연동으로 전면 재작성) + `/financials/compare`(task #35) 추가 + 시세 보드/종목 리스트 등락 색상 표시(`PriceChangeIndicator`) | Astryx 디자인 시스템 적용, 포트 3100 고정(아래 "참고") |
-| 인프라 (docker-compose / CI/CD) | ⚪ 미착수 (Phase 7 예정) | 로컬 개발은 공용 `mysql-container`/`redis-container`(다른 프로젝트와 공유) 재사용 |
+| frontend (Next.js) | ✅ Phase 4, 5 완료 + `/dashboard` + `/stock-list`(구 시세 보드 통합, 관심종목 별표 포함) + `/market` + `/financials`(다중 종목 비교가 랜딩, 선택 시 `/financials/[ticker]` 상세로 이동) + `/portfolio` + `/symbols/[ticker]`(뉴스/기술지표/기업개요/SMA오버레이 보강) | Astryx 디자인 시스템 적용, 포트 3100 고정(아래 "참고"), 구 `/`(시세 보드)는 `/stock-list`로 리다이렉트 |
+| 인프라 (docker-compose / CI/CD / 관측성) | ✅ Phase 6(Prometheus+Grafana) 완료, ⚪ docker-compose/CI는 Phase 7 예정 | 로컬 개발은 공용 `mysql-container`/`redis-container`(다른 프로젝트와 공유) 재사용, Prometheus/Grafana는 프로젝트 스코프 독립 컨테이너(`marketboard-prometheus`/`marketboard-grafana`) |
 
 ---
 
@@ -544,13 +539,38 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 - **검증**: Playwright로 포트폴리오 생성 → MSFT 포지션 추가(수량 10, 평단가 300, 평가손익 +938.20(+31.27%) 실시간 반영 확인) → 포지션 삭제 버튼 클릭 → 다이얼로그 열림 확인 → "삭제" 클릭 → **다이얼로그가 실제로 닫히고**(`isVisible()` false) 포지션 행이 사라지고 "포지션이 없습니다" 빈 상태로 정상 전환 확인 → 포트폴리오 삭제 버튼 클릭 → 다이얼로그 열림 확인 → "삭제" 클릭 → **다이얼로그가 실제로 닫히고** 포트폴리오가 사라지고 "아직 포트폴리오가 없습니다" 빈 상태로 정상 전환 확인. 콘솔 에러 0건. `tsc --noEmit`/`eslint` 통과. 검증용 테스트 계정/포트폴리오는 앱 자체 삭제 플로우로 이미 정리됐고, 계정만 `stockmonitordb`에서 추가로 정리함.
 - **알아둘 점**: `useImperativeAlertDialog`는 이제 이 프로젝트에서 완전히 안 씀(admin/symbols, portfolio 둘 다 제어형으로 교체 완료) — 앞으로 확인 다이얼로그가 새로 필요한 곳이 생기면 처음부터 `AlertDialog`(제어형)로 만들 것, 명령형 훅은 재도입하지 말 것.
 
-### ⚪ Phase 6 — 관측성 (Prometheus + Grafana)
-- Actuator + `micrometer-registry-prometheus` 의존성은 추가되어 있고 `application.yaml`에 prometheus 엔드포인트 노출 설정은 되어 있음
-- 실제 Prometheus/Grafana 컨테이너 구성, 커스텀 메트릭, 대시보드는 미착수
+### ✅ Phase 6 — 관측성 (Prometheus + Grafana) — 완료 (2026-07-18)
+
+계획서 로드맵(Phase 1~7)의 마지막 남은 항목. 백엔드 커스텀 메트릭 4종 추가 + Prometheus/Grafana를 독립 Docker 컨테이너로 기동 + 대시보드 1개까지 전부 끝남.
+
+**백엔드 — 커스텀 메트릭 (`MeterRegistry` 직접 주입, 신규 `metrics` 패키지 + 기존 서비스 3곳 수정)**:
+- `metrics/MetricsConfig.java`(신규) — `marketboard.stomp.sessions.active`(게이지). 새 이벤트 리스너 없이 이미 살아있는 `SimpUserRegistry`(STOMP 커넥트/디스커넥트마다 스프링이 알아서 최신 상태 유지)를 그대로 게이지 소스로 사용.
+- `metrics/CollectorMetricsPoller.java`(신규) — `marketboard.collector.reconnect.count`/`marketboard.collector.ws.connected`(게이지). `CollectorClient.getHealth()`가 그동안 관리자 대시보드 로드 시에만 온디맨드로 호출되던 걸, 30초 주기 `@Scheduled` 폴러를 새로 추가해서 시계열로 볼 수 있게 함.
+- `indicator/IndicatorCalculationService.java` — `marketboard.indicators.recompute`(카운터, `result=success|failure` 태그) + `marketboard.indicators.recompute.duration`(타이머). 부수적으로 버그도 하나 고침: 기존엔 `recomputeForSymbol()` 호출에 try/catch가 없어서 종목 하나가 실패하면 `@Transactional` 배치 전체가 롤백되고 나머지 종목들의 성공한 upsert까지 같이 날아가는 구조였음 — 이제 종목별로 try/catch해서 실패 하나가 나머지를 막지 않고, 실패 자체도 카운터로 집계됨.
+- `watchlist/WatchlistService.java`/`alert/AlertService.java` — 각각 `marketboard.watchlist.items.created`/`marketboard.alerts.created` 카운터를 생성 성공 시 증가.
+- `security/SecurityConfig.java` — `/actuator/prometheus`를 `/actuator/health`·`/actuator/info`와 같은 permitAll 그룹으로 이동(원래는 `/actuator/**`가 ADMIN 전용이라 걸려있었음) — Prometheus 스크레이퍼는 JWT를 보낼 수 없으므로 이 변경 없이는 스크레이프가 전부 403이 났을 것. **순서 중요**: `.requestMatchers("/actuator/**").hasRole("ADMIN")`보다 반드시 앞에 와야 함(Spring Security는 먼저 매치되는 규칙을 씀).
+- `application.yaml` — `management.metrics.distribution.percentiles-histogram.http.server.requests: true` 추가(p95/p99 지연시간 패널에 필요한 히스토그램 버킷 노출).
+
+**인프라 — 독립 Docker 컨테이너(compose 아님, Phase 7까지 의도적으로 미루기로 한 기존 방침 유지)**:
+- `observability/prometheus.yml`(신규) — `marketboard-backend` 스크레이프 잡, `host.docker.internal:8080/actuator/prometheus`(백엔드가 컨테이너가 아니라 호스트에서 직접 떠 있어서 `host.docker.internal`로 접근).
+- `observability/grafana/provisioning/datasources/prometheus.yml`(신규) — Grafana가 Prometheus를 `http://marketboard-prometheus:9090`(컨테이너 이름, 아래 네트워크 참고)으로 자동 연결.
+- `observability/grafana/provisioning/dashboards/`(신규) — `dashboards.yml`(프로비저닝 설정) + `marketboard-overview.json`(대시보드 8개 패널: HTTP 요청률/p95 지연시간, STOMP 활성 세션, 콜렉터 WS 연결상태/재접속횟수, 인디케이터 잡 소요시간, 인디케이터 성공/실패율, 워치리스트/알림 생성률).
+- 실행 커맨드(재현용):
+  ```
+  docker network create marketboard-observability
+  docker run -d --name marketboard-prometheus --network marketboard-observability -p 9091:9090 -v "<repo>/observability/prometheus.yml:/etc/prometheus/prometheus.yml" prom/prometheus
+  docker run -d --name marketboard-grafana --network marketboard-observability -p 3300:3000 -v "<repo>/observability/grafana/provisioning:/etc/grafana/provisioning" grafana/grafana:10.3.0
+  ```
+  Prometheus UI: `http://localhost:9091`, Grafana: `http://localhost:3300`(기본 계정 admin/admin).
+- **컨테이너 이름 충돌 주의**: `docker run --name prometheus`/`--name grafana`로 바로 실행하면 실패함 — 이 Docker 데몬은 사용자의 다른 스터디 프로젝트와 공유 중인데, 거기 이미 동일 이름의 **정지된** 컨테이너가 남아있었음(`prometheus`, `grafana` 둘 다 3일 전 종료 상태). 남의 컨테이너를 지우지 않고 `marketboard-prometheus`/`marketboard-grafana`로 프로젝트 스코프 이름을 써서 우회함 — 앞으로 이 Docker 환경에서 새 컨테이너를 띄울 땐 항상 `docker ps -a`로 이름 충돌부터 확인할 것.
+- **포트 충돌 주의**: Prometheus 기본 포트 9090은 이미 `jenkins-server` 컨테이너가 호스트 9090을 쓰고 있어서 9091로, Grafana 기본 포트 3000은 프론트엔드가 3100을 쓰는 이유였던 그 "다른 WSL2 프로젝트가 3000을 상시 점유" 문제와 겹쳐서 3300으로 각각 조정함.
+- **`grafana/grafana:latest` pull 실패**: `docker pull grafana/grafana:latest`가 "authentication required" 에러로 실패함(Docker Hub 인증/레이트리밋 이슈로 추정, 원인 미조사). 이미 로컬에 캐시돼 있던 `grafana/grafana:10.3.0`(다른 프로젝트가 예전에 받아둔 것)을 대신 써서 우회 — 이 환경에서 새 이미지가 필요하면 먼저 `docker images`로 로컬 캐시부터 확인할 것.
+- **검증**: `curl :8080/actuator/prometheus`에서 4개 커스텀 메트릭(`marketboard_collector_*`, `marketboard_indicators_recompute_*`, `marketboard_stomp_sessions_active`) 노출 확인 → Prometheus 타겟 페이지에서 `marketboard-backend` 잡이 `up` 상태 확인 → Grafana 대시보드가 프로비저닝으로 자동 등록된 것 확인(`/api/search`) → Grafana의 Prometheus 데이터소스 프록시로 실제 패널 쿼리(HTTP 요청률, p95 지연시간, 커스텀 게이지) 실행해 실데이터 반환 확인 → 신규 계정으로 워치리스트/알림을 실제로 하나씩 생성해서 `marketboard_watchlist_items_total`/`marketboard_alerts_total` 카운터가 0에서 1로 오르는 것까지 확인. `./gradlew test`(21건) 회귀 없음. 검증용 테스트 계정은 `stockmonitordb`에서 직접 정리함.
+- **알아둘 점 — Micrometer가 카운터 이름의 `.created`를 조용히 지움**: `marketboard.watchlist.items.created`로 등록한 카운터가 Prometheus로 나갈 땐 `marketboard_watchlist_items_total`(created가 사라짐)로 나옴 — `_created`가 OpenMetrics 스펙에서 "이 메트릭이 언제 생성됐는지"를 뜻하는 예약 접미사라서, Micrometer의 Prometheus 네이밍 컨벤션이 카운터 이름 끝의 `created`를 자동으로 제거하고 표준 `_total`을 붙이기 때문(버그 아님, 의도된 변환). 앞으로 카운터 이름에 `count`/`total`/`created` 같은 예약어를 끝에 붙이면 실제 노출되는 이름이 코드에 쓴 것과 달라질 수 있으니, Grafana 쿼리를 새로 작성할 땐 항상 `curl :8080/actuator/prometheus`로 실제 노출된 이름을 먼저 확인할 것.
+- **알아둘 점 — Prometheus/Grafana는 아직 `docker-compose.yml`에 안 들어가 있음**: 기존 방침(mysql/redis도 Phase 7 전까진 수동 `docker run`)과 동일하게, 이 두 컨테이너도 지금은 수동 기동 상태. Phase 7에서 배포용 `docker-compose.yml`을 쓸 때 `observability/` 설정을 그대로 서비스로 편입하면 됨.
 
 ### ⚪ Phase 7 — CI/CD (GitHub Actions)
-- Git 저장소 자체가 아직 초기화되어 있지 않음 (`.git` 없음) — GitHub Actions 이전에 저장소 초기화부터 필요
-- 워크플로/버전관리 전무
+- Git 저장소는 이제 초기화 및 첫 푸시 완료(`github.com/parkjunss/marketboard`, Private) — GitHub Actions 워크플로 자체는 아직 없음
 
 ---
 
@@ -575,17 +595,19 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 
 ## 다음 액션 제안 (우선순위 순)
 > 상세 실행 계획은 문서 맨 위 "다음 세션 시작점" 참고.
-1. Phase 6 착수: Prometheus + Grafana 관측성 (계획서 로드맵 중 유일하게 남은 항목)
-2. S&P500 500종목 일봉 백필 진행 상황 재확인 — 최근 두 번의 확인에서 217/507로 정체된 것처럼 보임, 여전히 그대로면 콜렉터 로그 확인
+1. S&P500 500종목 일봉 백필 정체 조사 — 217/507에서 세 번 연속 안 움직임, 콜렉터 로그 확인 필요
+2. Phase 7 — GitHub Actions CI/CD 워크플로 작성 (계획서 로드맵 중 유일하게 남은 항목)
 3. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
-4. (배포 준비 시점) Phase 7에서 `docker-compose.yml`(mysql+redis+backend+collector+frontend, 격리 스택) 작성
+4. (배포 준비 시점) `docker-compose.yml`(mysql+redis+backend+collector+frontend+observability, 격리 스택) 작성 — `observability/` 설정은 이미 있으니 그대로 서비스로 편입
 
-**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18, `github.com/parkjunss/marketboard`), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18)
+**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18)
 
 ---
 
 ## 참고
 - 로컬 개발 환경: `mysql-container`(MySQL 8, DB `stockmonitordb`, 계정 `stockmonitor`)와 `redis-container`(Redis 7)는 이 프로젝트 전용이 아니라 사용자의 다른 스터디 프로젝트들과 함께 상시 기동해 두고 공유하는 컨테이너. 호스트 포트 3306/6379를 계속 점유하므로, 프로젝트 전용 `docker-compose.yml`을 만들 때는 포트 충돌에 유의(또는 Phase 7에서 배포용으로 별도 격리 구성).
+- **이 Docker 데몬은 다른 스터디 프로젝트들과 공유 중** — `mysql-container`/`redis-container` 외에도 `jenkins-server`(호스트 9090 점유), 그리고 지금은 꺼져있지만 이름이 `prometheus`/`grafana`인 컨테이너가 이미 존재함. 새 컨테이너를 `docker run --name`으로 띄우기 전엔 항상 `docker ps -a`로 이름/포트 충돌부터 확인할 것 — 이번 세션에서 Prometheus/Grafana를 `marketboard-prometheus`/`marketboard-grafana`(포트 9091/3300)로 프로젝트 스코프 이름을 써서 우회한 사례 있음(위 "Phase 6" 섹션 참고).
+- **Prometheus/Grafana 재기동 방법**: `docker start marketboard-prometheus marketboard-grafana`로 켜고 `docker stop`으로 끄면 됨(볼륨 마운트가 `observability/` 안의 파일을 직접 가리키므로 컨테이너를 삭제해도 설정은 안 날아감). 완전히 새로 만들어야 하면 위 "Phase 6" 섹션의 `docker run` 커맨드 그대로 재사용. Grafana 로그인은 admin/admin(첫 로그인 시 비밀번호 변경 프롬프트가 뜰 수 있음, 로컬 전용이라 무시해도 무방).
 - 백엔드는 보통 사용자가 IntelliJ에서 devtools와 함께 8080 포트로 직접 구동해 둔 상태로 개발함 — 자동화 스크립트에서 별도 `bootRun`을 띄우기 전에 8080 점유 여부를 먼저 확인할 것.
 - 테스트: `marketboardBackend/src/test/java/.../auth/AuthServiceTest.java`, `AuthControllerTest.java` — `./gradlew test`로 실행. collector는 `collector/tests/` — `uv run pytest`로 실행.
 - collector 실행: `collector/.env`에 `FINNHUB_API_KEY` 필요(사용자 개인 키, git에 커밋 금지). `cd collector && uv run uvicorn main:app --port 8000` (기본으로 AAPL/MSFT/GOOGL/TSLA/NVDA 5종목 구독). 백필은 `uv run python -m app.backfill [TICKER...]`.

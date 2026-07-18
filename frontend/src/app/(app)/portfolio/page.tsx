@@ -19,7 +19,7 @@ import { Center } from '@astryxdesign/core/Center';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Banner } from '@astryxdesign/core/Banner';
-import { useImperativeAlertDialog } from '@astryxdesign/core/AlertDialog';
+import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
@@ -50,9 +50,14 @@ function PriceSourceBadge({ source }: { source: PortfolioPositionResponse['price
 
 interface PositionRow extends PortfolioPositionResponse, Record<string, unknown> {}
 
+type DeleteTarget =
+  | { type: 'position'; positionId: number; ticker: string }
+  | { type: 'portfolio'; portfolioId: number; name: string };
+
 export default function PortfolioPage() {
   const { authFetch } = useAuth();
-  const deleteDialog = useImperativeAlertDialog();
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [portfolios, setPortfolios] = useState<PortfolioSummaryResponse[] | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -145,6 +150,21 @@ export default function PortfolioPage() {
     await Promise.all([refreshPositions(effectiveSelectedId), refreshPortfolios()]);
   }
 
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      if (deleteTarget.type === 'position') {
+        await handleRemovePosition(deleteTarget.positionId);
+      } else {
+        await handleDeletePortfolio(deleteTarget.portfolioId);
+      }
+      setDeleteTarget(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   const selectedPortfolio = portfolios?.find((p) => p.id === effectiveSelectedId) ?? null;
   const rows: PositionRow[] = (positions?.key === effectiveSelectedId ? positions.data : []) as PositionRow[];
 
@@ -206,14 +226,7 @@ export default function PortfolioPage() {
           icon={<Icon icon={TrashIcon} size="sm" />}
           label={`${row.ticker} 포지션 삭제`}
           variant="ghost"
-          clickAction={() =>
-            deleteDialog.show({
-              title: '포지션을 삭제할까요?',
-              description: `${row.ticker} 포지션을 이 포트폴리오에서 제거합니다. 되돌릴 수 없습니다.`,
-              actionLabel: '삭제',
-              onAction: () => handleRemovePosition(row.id),
-            })
-          }
+          clickAction={() => setDeleteTarget({ type: 'position', positionId: row.id, ticker: row.ticker })}
         />
       ),
     },
@@ -342,12 +355,7 @@ export default function PortfolioPage() {
                 label="포트폴리오 삭제"
                 variant="ghost"
                 clickAction={() =>
-                  deleteDialog.show({
-                    title: '포트폴리오를 삭제할까요?',
-                    description: `"${selectedPortfolio.name}" 포트폴리오와 보유한 모든 포지션이 삭제됩니다. 되돌릴 수 없습니다.`,
-                    actionLabel: '삭제',
-                    onAction: () => handleDeletePortfolio(selectedPortfolio.id),
-                  })
+                  setDeleteTarget({ type: 'portfolio', portfolioId: selectedPortfolio.id, name: selectedPortfolio.name })
                 }
               />
             </HStack>
@@ -394,7 +402,23 @@ export default function PortfolioPage() {
         </VStack>
       ) : null}
 
-      {deleteDialog.element}
+      <AlertDialog
+        isOpen={deleteTarget != null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setDeleteTarget(null);
+        }}
+        title={deleteTarget?.type === 'position' ? '포지션을 삭제할까요?' : '포트폴리오를 삭제할까요?'}
+        description={
+          deleteTarget?.type === 'position'
+            ? `${deleteTarget.ticker} 포지션을 이 포트폴리오에서 제거합니다. 되돌릴 수 없습니다.`
+            : deleteTarget?.type === 'portfolio'
+              ? `"${deleteTarget.name}" 포트폴리오와 보유한 모든 포지션이 삭제됩니다. 되돌릴 수 없습니다.`
+              : ''
+        }
+        actionLabel="삭제"
+        isActionLoading={isDeleting}
+        onAction={handleConfirmDelete}
+      />
     </VStack>
   );
 }

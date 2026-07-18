@@ -6,15 +6,15 @@
 
 ## 다음 세션 시작점
 
-**포트폴리오 백엔드 + S&P500 유니버스 배치 + 재무 대시보드 다중 종목 비교(task #35) 전부 완료** (2026-07-18): 사용자가 이번 세션에 요청한 것들이 모두 끝남 — 포트폴리오 백엔드, yfinance 펀더멘털 최소 조회, S&P500 시세+지표 배치, CORS 버그 수정, 관리자 종목 일괄 활성화, 실시간 WS 대상 종목 재구성(대표 지수 ETF + 상위 10종목), 시세 보드/종목 리스트 등락 색상 표시, 실시간 대상 종목 일봉 자동 갱신(버그 수정), 그리고 재무 대시보드 다중 종목 비교(`/financials/compare`, task #35). 계획서 로드맵(Phase 1~7)에 있던 항목은 이제 Phase 6(관측성)만 남음. 상세는 각 "추가 기능"/"버그 수정" 섹션 참고.
+**Git 저장소 초기화 + 첫 커밋/푸시 완료, 포트폴리오 삭제 다이얼로그 버그도 확인 후 수정 완료** (2026-07-18): `https://github.com/parkjunss/marketboard.git`(Private)에 첫 커밋 푸시함 — 하나의 모노레포로(backend/frontend/collector 전부 한 레포), 각 서브프로젝트 기존 `.gitignore` + 루트 `.gitignore`(`.claude/` 제외)로 시크릿/빌드산출물 없이 228개 파일 커밋. 이후 지난 세션부터 남아있던 "의심되는 버그"였던 포트폴리오 페이지 삭제 확인 다이얼로그를 브라우저로 실측 → 실제로 재현됨(`useImperativeAlertDialog`가 안 닫힘) → admin/symbols와 동일한 제어형 `AlertDialog`로 교체해 해결. `useImperativeAlertDialog`는 이제 프로젝트 전체에서 완전히 안 씀.
+
+또한 종목 세부 페이지(`/symbols/[ticker]`) 보강(뉴스/기술지표/재무링크/전일대비/회사명/1년고저/기업개요/차트 SMA오버레이/잘못된 티커 처리/뒤로가기 링크), 시세보드→종목리스트 통합(관심종목 별표 이관), 티커 이름 truncate, SMA 라인 색상 버그 수정 등도 이번 세션에 진행됨 — 전부 각 섹션에 기록돼 있음.
 
 **바로 시작할 것 후보:**
 
-1. **포트폴리오 페이지의 삭제 확인 다이얼로그, 브라우저로 실측 검증 필요 (의심되는 버그)** — 관리자 종목 일괄 활성화 기능을 만들다가 `useImperativeAlertDialog`(명령형 훅) 패턴이 `onAction` 안에서 `.hide()`를 호출해도 다이얼로그가 안 닫히는 버그를 발견/우회했음(제어형 `<AlertDialog isOpen/onOpenChange>` 패턴으로 교체해 해결). `app/(app)/portfolio/page.tsx`의 포트폴리오/포지션 삭제 확인 다이얼로그가 **동일한 `useImperativeAlertDialog` 패턴**을 쓰고 있는데, 지난 세션에 포트폴리오 기능을 검증할 때 삭제 플로우는 브라우저로 실측한 적이 없음(추가만 테스트함) — 다음에 포트폴리오 페이지를 만지게 되면 삭제 버튼이 실제로 다이얼로그를 닫는지 먼저 확인하고, 안 닫히면 admin/symbols와 동일하게 제어형 `AlertDialog`로 교체할 것.
+1. **계획서(Phase 1~7) 기준 마지막 남은 항목은 Phase 6(Prometheus + Grafana 관측성)뿐** — 아래 참고. 그 외엔 사용자가 그때그때 요청하는 개선 작업 위주로 진행 중.
 
-2. **S&P500 500종목 일봉 백필이 세션 종료 시점에도 계속 진행 중** — 콜렉터를 이번 세션 중 재기동해서 처음부터 다시 도는 중(진행 상황 유실은 아니고 그냥 처음부터 재시작). 다음 세션 시작 시 `SELECT COUNT(DISTINCT symbol_id) FROM price_history WHERE timeframe='1d'`로 진행 상황 확인하고, 멈춰 있으면 콜렉터 로그에서 에러 확인 필요.
-
-3. **계획서(Phase 1~7) 기준 마지막 남은 항목은 Phase 6(Prometheus + Grafana 관측성)뿐** — 아래 참고. 그 외엔 사용자가 그때그때 요청하는 개선 작업 위주로 진행 중.
+2. **S&P500 500종목 일봉 백필 — 진행 상황이 안 움직이는 것처럼 보임, 확인 필요**: 이번 세션 중 두 번(대략 1시간 간격) 확인했는데 `SELECT COUNT(DISTINCT symbol_id) FROM price_history WHERE timeframe='1d'`가 두 번 다 217/507로 동일함 — 정체돼 있을 가능성 있음. 콜렉터 `/health`는 정상 응답 중(`ws_connected: true`)이라 프로세스 자체는 살아있음. 다음 세션에서 이 카운트가 여전히 217이면 콜렉터 로그에서 배치 루프 에러 확인 필요.
 
 **그 다음: Phase 6 — Prometheus + Grafana 관측성**
 1. `/actuator/prometheus`(ADMIN 전용), `micrometer-registry-prometheus` 의존성은 이미 있음. Prometheus가 스크레이프하도록 `prometheus.yml` 작성
@@ -536,6 +536,14 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 - **검증**: Playwright로 AAPL 재방문 → 스크린샷에서 SMA20 라인이 뚜렷한 파랑, SMA50 라인이 뚜렷한 보라로 렌더링되고 우측 가격 라벨도 각각 파랑/보라 배경으로 표시되는 것 육안 확인. 콘솔 에러 0건. `tsc --noEmit`/`eslint` 통과. 검증용 테스트 계정은 `stockmonitordb`에서 직접 정리함.
 - **알아둘 점**: 캔버스/SVG 등 CSS 엔진을 거치지 않는 렌더링 대상(차트 라이브러리, `<canvas>`)에 Astryx 색상을 넘길 땐 항상 `useTheme().tokens[key]`(또는 `token(key)`)로 해석한 실제 값을 넘길 것 — `var(--color-*)` 문자열을 그대로 넘기면 이번처럼 DOM 밖에서는 조용히 무시되고 기본색(보통 검은색)으로 떨어짐. 반대로 `PriceChangeIndicator`/`financials` 차트처럼 실제 DOM/SVG 엘리먼트의 `style`/`fill` 속성에 넣는 경우엔 `var(--color-*)` 문자열 그대로 써도 정상 동작함(이건 CSS 엔진이 처리하니까) — 렌더링 대상이 DOM/SVG인지 캔버스인지에 따라 방식이 달라진다는 점에 유의.
 
+### ✅ 버그 수정 — 포트폴리오 페이지의 삭제 확인 다이얼로그가 안 닫히던 문제 (2026-07-18)
+
+지난 세션부터 "의심되는 버그"로 남겨뒀던 항목("다음 세션 시작점" 참고) — 관리자 페이지에서 이미 한 번 확인됐던 `useImperativeAlertDialog`의 `.hide()` 미동작 버그가 `app/(app)/portfolio/page.tsx`(포지션 삭제 + 포트폴리오 삭제, 두 곳 모두 같은 `deleteDialog` 인스턴스 공유)에도 동일하게 있는지 브라우저로 실측 후, 있길래 admin/symbols 페이지에서 썼던 것과 동일한 제어형 패턴으로 교체.
+
+**수정**: `useImperativeAlertDialog()` 제거 → `AlertDialog`(제어형)로 교체. 포지션 삭제/포트폴리오 삭제가 각자 다른 동적 제목·설명(예: "MSFT 포지션을 삭제할까요?")을 써야 해서, 클릭한 대상을 판별할 수 있는 판별 유니온 상태 하나로 통합: `deleteTarget: { type: 'position'; positionId; ticker } | { type: 'portfolio'; portfolioId; name } | null`. `isOpen={deleteTarget != null}`이고, `title`/`description`은 `deleteTarget.type`에 따라 렌더 시점에 계산. `onAction`(`handleConfirmDelete`)이 실제 삭제 API를 호출하고 성공하면 명시적으로 `setDeleteTarget(null)`(AlertDialog는 자동으로 안 닫힘 — `onAction` 안에서 직접 닫아야 함, admin/symbols의 `handleBulkActivate`와 동일한 책임 분담).
+- **검증**: Playwright로 포트폴리오 생성 → MSFT 포지션 추가(수량 10, 평단가 300, 평가손익 +938.20(+31.27%) 실시간 반영 확인) → 포지션 삭제 버튼 클릭 → 다이얼로그 열림 확인 → "삭제" 클릭 → **다이얼로그가 실제로 닫히고**(`isVisible()` false) 포지션 행이 사라지고 "포지션이 없습니다" 빈 상태로 정상 전환 확인 → 포트폴리오 삭제 버튼 클릭 → 다이얼로그 열림 확인 → "삭제" 클릭 → **다이얼로그가 실제로 닫히고** 포트폴리오가 사라지고 "아직 포트폴리오가 없습니다" 빈 상태로 정상 전환 확인. 콘솔 에러 0건. `tsc --noEmit`/`eslint` 통과. 검증용 테스트 계정/포트폴리오는 앱 자체 삭제 플로우로 이미 정리됐고, 계정만 `stockmonitordb`에서 추가로 정리함.
+- **알아둘 점**: `useImperativeAlertDialog`는 이제 이 프로젝트에서 완전히 안 씀(admin/symbols, portfolio 둘 다 제어형으로 교체 완료) — 앞으로 확인 다이얼로그가 새로 필요한 곳이 생기면 처음부터 `AlertDialog`(제어형)로 만들 것, 명령형 훅은 재도입하지 말 것.
+
 ### ⚪ Phase 6 — 관측성 (Prometheus + Grafana)
 - Actuator + `micrometer-registry-prometheus` 의존성은 추가되어 있고 `application.yaml`에 prometheus 엔드포인트 노출 설정은 되어 있음
 - 실제 Prometheus/Grafana 컨테이너 구성, 커스텀 메트릭, 대시보드는 미착수
@@ -567,12 +575,12 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 
 ## 다음 액션 제안 (우선순위 순)
 > 상세 실행 계획은 문서 맨 위 "다음 세션 시작점" 참고.
-1. S&P500 500종목 일봉 백필 진행 상황 확인(세션 종료 시점 진행 중이었음 — `SELECT COUNT(DISTINCT symbol_id) FROM price_history WHERE timeframe='1d'`로 503에 도달했는지, 멈췄으면 콜렉터 로그 확인)
-2. 포트폴리오 페이지(`/portfolio`)의 삭제 확인 다이얼로그가 실제로 닫히는지 브라우저로 확인(의심되는 버그 — 위 "다음 세션 시작점" 항목 1 참고)
-3. Phase 6 착수: Prometheus + Grafana 관측성
-4. Git 저장소 초기화 (현재 미초기화 상태 — 커밋 이력 없음). Phase 1~5 산출물부터 첫 커밋 권장 (`collector/.env`, `frontend/.env.local`은 `.gitignore` 처리됨 — 커밋 전 재확인)
-5. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
-6. (배포 준비 시점) Phase 7에서 `docker-compose.yml`(mysql+redis+backend+collector+frontend, 격리 스택) 작성
+1. Phase 6 착수: Prometheus + Grafana 관측성 (계획서 로드맵 중 유일하게 남은 항목)
+2. S&P500 500종목 일봉 백필 진행 상황 재확인 — 최근 두 번의 확인에서 217/507로 정체된 것처럼 보임, 여전히 그대로면 콜렉터 로그 확인
+3. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
+4. (배포 준비 시점) Phase 7에서 `docker-compose.yml`(mysql+redis+backend+collector+frontend, 격리 스택) 작성
+
+**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18, `github.com/parkjunss/marketboard`), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18)
 
 ---
 

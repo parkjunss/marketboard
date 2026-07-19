@@ -1,0 +1,128 @@
+networks:
+  marketboard:
+
+volumes:
+  mysql-data:
+  grafana-data:
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: marketboard-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: stockmonitordb
+      MYSQL_USER: stockmonitor
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3308:3306"
+    networks: [marketboard]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: marketboard-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    networks: [marketboard]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./marketboardBackend
+    image: ghcr.io/parkjunss/marketboard-backend:latest
+    container_name: marketboard-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/stockmonitordb?useSSL=false&serverTimezone=UTC
+      DB_USERNAME: stockmonitor
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_SEED_EMAIL: ${ADMIN_SEED_EMAIL}
+      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      COLLECTOR_BASE_URL: http://collector:8000
+    ports:
+      - "8081:8080"
+    networks: [marketboard]
+
+  collector:
+    build:
+      context: ./collector
+    image: ghcr.io/parkjunss/marketboard-collector:latest
+    container_name: marketboard-collector
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: stockmonitordb
+      MYSQL_USER: stockmonitor
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "8001:8000"
+    networks: [marketboard]
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL}
+    image: ghcr.io/parkjunss/marketboard-frontend:latest
+    container_name: marketboard-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3100:3100"
+    networks: [marketboard]
+
+  prometheus:
+    image: prom/prometheus
+    container_name: marketboard-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./observability/prometheus.deploy.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9091:9090"
+    networks: [marketboard]
+
+  grafana:
+    image: grafana/grafana:10.3.0
+    container_name: marketboard-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3300:3000"
+    networks: [marketboard]

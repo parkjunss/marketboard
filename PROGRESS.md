@@ -6,13 +6,13 @@
 
 ## 다음 세션 시작점
 
-**계획서(Phase 1~7) 로드맵 중 테스트 게이트까지 완료** (2026-07-19): Phase 6(Prometheus + Grafana 관측성)에 이어 Phase 7의 PR 테스트 워크플로(`.github/workflows/ci.yml`)까지 추가됨. 단, 계획서 §07의 Phase 7 전체 범위(ARM64 buildx → GHCR 푸시 → SSH로 라즈베리파이 배포)는 실제 배포 대상 Pi/SSH 접근/GHCR 시크릿이 아직 없어 **의도적으로 범위에서 제외**함(사용자와 합의) — 남은 로드맵 항목으로 아래 "Phase 7" 섹션에 남겨둠.
+**계획서(Phase 1~7) 로드맵 중 테스트 게이트 + 배포 준비까지 완료** (2026-07-19): Phase 6(Prometheus + Grafana 관측성)에 이어 Phase 7의 PR 테스트 워크플로(`.github/workflows/ci.yml`), 그리고 배포용 `Dockerfile` 3종 + `docker-compose.yml` + `.env.example`까지 전부 추가됨. 배포 대상은 사용자가 이미 SSH로 연결해둔 라즈베리파이 `rasp4`(SSH 별칭 `raspberrypi`, `192.168.0.174`)로 확정 — 단, 이 Pi가 사설 IP라 GitHub 호스팅 러너가 SSH로 직접 못 들어가서, 계획서 원안(SSH 스텝)이 아니라 **Pi에 self-hosted runner를 설치하는 방식**으로 결정함(GHCR 이미지 푸시까지는 호스팅 러너, 실제 `docker compose pull && up -d`는 Pi에 상주하는 self-hosted runner가 outbound로 처리). self-hosted runner 설치 자체(GitHub 웹에서 등록 토큰 발급 필요)와 `ci.yml`의 build+deploy job 추가는 아직 안 함 — 상세는 아래 "Phase 7" 섹션의 "남은 일" 참고.
 
 이전 세션(2026-07-18)에 추가된 것: 포트폴리오 삭제 다이얼로그 버그 수정(`useImperativeAlertDialog` → 제어형 `AlertDialog`, 프로젝트 전체에서 이제 완전히 안 씀), 종목 세부 페이지(`/symbols/[ticker]`) 보강(뉴스/기술지표/재무링크/전일대비/회사명/1년고저/기업개요/차트 SMA오버레이/잘못된 티커 처리/뒤로가기 링크), 시세보드→종목리스트 통합(관심종목 별표 이관), 티커 이름 truncate, SMA 라인 색상 버그 수정, Prometheus/Grafana 관측성(커스텀 메트릭 4종 + 독립 Docker 컨테이너 + 대시보드), S&P500 500종목 일봉 백필이 정체돼 보이던 문제 조사 및 수정(진짜 원인은 yfinance가 아니라 종목마다 새 MySQL 커넥션을 여느라 커넥션당 ~10초씩 걸리던 것) — 상세는 아래 각 섹션 참고.
 
 **바로 시작할 것 후보:**
 
-1. **(배포 준비 시점) Phase 7 나머지 — ARM64 buildx/GHCR/Pi 배포**: 실제 라즈베리파이 호스트와 SSH 접근, GHCR 푸시용 시크릿이 준비되면 진행. `docker-compose.yml` 작성(아래 항목)이 선행되어야 함.
+1. **Phase 7 나머지 — Pi에 self-hosted runner 설치 + `ci.yml` build/deploy job 추가**: GitHub 저장소 웹(Settings → Actions → Runners)에서 사용자가 등록 토큰을 직접 발급받아야 진행 가능. 상세 절차는 아래 "Phase 7" 섹션 "남은 일" 참고.
 
 **남겨둔 확인 작업 (급하지 않음)**
 - 장 마감 후 `collector/app/rest_fallback.py`(이제 Finnhub REST가 아니라 yfinance 기반) 전체 폴백 루프 재검증 — fetch+publish 경로 자체는 확인했지만, 스테일 조건이 실제로 걸리는 장 마감 상황의 전체 루프는 아직 안 봄
@@ -35,10 +35,10 @@
 
 | 구성요소 | 상태 | 비고 |
 |---|---|---|
-| marketboardBackend (Spring Boot) | ✅ Phase 1, 3, 5 완료 + 커스텀 대시보드 + `QuoteResponse.name` + 시장지표/재무 프록시 API + 포트폴리오 백엔드 추가 | docker-compose는 의도적으로 Phase 7 배포 단계로 이관 |
-| collector (Python) | ✅ Phase 2 완료, Phase 5 알림 체크 로직 추가, 뉴스/시장지표/재무/종목프로필 프록시 + S&P500 유니버스 배치 + 실시간 대상 종목 일봉 자동 갱신 루프 추가 | REST 폴백은 이제 yfinance 기반(장중 실거래로는 미검증, fetch+publish 경로만 별도 확인). S&P500 전체(503종목) 배치 완료(2026-07-18, 커넥션 재사용 버그 수정 후 91.5초·실패 0건). 실시간 WS 대상은 SPY/QQQ/DIA + 상위 10종목(13개)로 확정, 일봉은 `active_symbols_daily_refresh_loop`가 매일 자동 갱신 |
-| frontend (Next.js) | ✅ Phase 4, 5 완료 + `/dashboard` + `/stock-list`(구 시세 보드 통합, 관심종목 별표 포함) + `/market` + `/financials`(다중 종목 비교가 랜딩, 선택 시 `/financials/[ticker]` 상세로 이동) + `/portfolio` + `/symbols/[ticker]`(뉴스/기술지표/기업개요/SMA오버레이 보강) | Astryx 디자인 시스템 적용, 포트 3100 고정(아래 "참고"), 구 `/`(시세 보드)는 `/stock-list`로 리다이렉트 |
-| 인프라 (docker-compose / CI/CD / 관측성) | ✅ Phase 6(Prometheus+Grafana) 완료, ✅ CI(GitHub Actions PR 테스트 워크플로) 완료(2026-07-19), ⚪ docker-compose/배포 파이프라인(ARM64 buildx+GHCR+Pi)은 Phase 7 잔여 항목 | 로컬 개발은 공용 `mysql-container`/`redis-container`(다른 프로젝트와 공유) 재사용, Prometheus/Grafana는 프로젝트 스코프 독립 컨테이너(`marketboard-prometheus`/`marketboard-grafana`) |
+| marketboardBackend (Spring Boot) | ✅ Phase 1, 3, 5 완료 + 커스텀 대시보드 + `QuoteResponse.name` + 시장지표/재무 프록시 API + 포트폴리오 백엔드 추가 + 배포용 `Dockerfile` 추가(2026-07-19) | |
+| collector (Python) | ✅ Phase 2 완료, Phase 5 알림 체크 로직 추가, 뉴스/시장지표/재무/종목프로필 프록시 + S&P500 유니버스 배치 + 실시간 대상 종목 일봉 자동 갱신 루프 추가 + 배포용 `Dockerfile` 추가(2026-07-19) | REST 폴백은 이제 yfinance 기반(장중 실거래로는 미검증, fetch+publish 경로만 별도 확인). S&P500 전체(503종목) 배치 완료(2026-07-18, 커넥션 재사용 버그 수정 후 91.5초·실패 0건). 실시간 WS 대상은 SPY/QQQ/DIA + 상위 10종목(13개)로 확정, 일봉은 `active_symbols_daily_refresh_loop`가 매일 자동 갱신 |
+| frontend (Next.js) | ✅ Phase 4, 5 완료 + `/dashboard` + `/stock-list`(구 시세 보드 통합, 관심종목 별표 포함) + `/market` + `/financials`(다중 종목 비교가 랜딩, 선택 시 `/financials/[ticker]` 상세로 이동) + `/portfolio` + `/symbols/[ticker]`(뉴스/기술지표/기업개요/SMA오버레이 보강) + 배포용 `Dockerfile`(standalone output) 추가(2026-07-19) | Astryx 디자인 시스템 적용, 포트 3100 고정(아래 "참고"), 구 `/`(시세 보드)는 `/stock-list`로 리다이렉트 |
+| 인프라 (docker-compose / CI/CD / 관측성) | ✅ Phase 6(Prometheus+Grafana) 완료, ✅ CI(GitHub Actions PR 테스트 워크플로) 완료(2026-07-19), ✅ 배포용 `docker-compose.yml` + Dockerfile 3종 작성 완료(2026-07-19, 로컬 amd64 빌드/기동 검증까지 끝남), ⚪ Pi self-hosted runner 설치 + `ci.yml` build/deploy job은 Phase 7 잔여 항목 | 로컬 개발은 공용 `mysql-container`/`redis-container`(다른 프로젝트와 공유) 재사용, Prometheus/Grafana는 프로젝트 스코프 독립 컨테이너(`marketboard-prometheus`/`marketboard-grafana`). 배포 대상 Pi(`rasp4`)는 이미 다른 프로젝트(`tradehub`)와 포트를 공유하므로 호스트 포트를 재배정함(위 "Phase 7" 섹션 참고) |
 
 ---
 
@@ -599,7 +599,24 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
   - `collector`: `astral-sh/setup-uv` + `uv sync --locked --all-groups` + `uv run pytest`(10건, 순수 로직 테스트라 외부 의존성 없음)
   - `frontend`: `npm ci` + `npx tsc --noEmit` + `npm run lint`(eslint) + `npm run build`(`next build`) — `NEXT_PUBLIC_API_BASE_URL`/`NEXT_PUBLIC_WS_URL`는 `.env.local`(gitignore)이 없어도 코드에 폴백 기본값이 있어 빌드 실패 없음(`src/lib/api.ts`, `src/lib/quote-stream-context.tsx`)
   - 로컬에서 3개 job의 커맨드를 전부 그대로 실행해 사전 검증함(백엔드 41초/`BUILD SUCCESSFUL`, collector 10건 통과, 프론트 typecheck/lint/build 전부 통과) — CI 러너 자체(실제 GitHub Actions 실행)는 다음 푸시/PR에서 최초로 트리거될 것이므로 아직 미검증
-- **범위 결정 — ARM64 buildx / GHCR 푸시 / SSH 배포는 이번에 제외**: 계획서 §07 Phase 7의 전체 목표("main 푸시 → 몇 분 뒤 Pi에서 새 버전 자동 반영")는 실제 라즈베리파이 호스트, SSH 접근, GHCR 인증 시크릿이 필요한데 아직 그런 배포 대상 인프라가 없음(로컬 개발 환경만 존재) — 사용자와 합의하여 "PR마다 테스트를 돌리는 게이트"까지만 이번에 완료하고, 실제 배포 파이프라인(및 그 전제인 `docker-compose.yml`)은 배포 인프라가 준비되는 시점으로 미룸. 계획서 로드맵의 유일하게 남은 항목.
+- **범위 결정(2026-07-19, 이후 정정됨) — 처음엔 ARM64 buildx / GHCR 푸시 / SSH 배포를 "배포 대상 인프라가 없다"는 이유로 제외했었음**: 이후 대화에서 사용자가 이미 라즈베리파이(`rasp4`, SSH 별칭 `raspberrypi`)에 SSH로 접속해둔 상태라는 게 밝혀짐 — 아래 "배포 준비" 항목 참고, 정정됨.
+
+**배포 준비 — Dockerfile 3종 + `docker-compose.yml` 작성 완료 (2026-07-19)**
+- 배포 대상: 기존에 SSH로 연결해둔 라즈베리파이 `rasp4`(`192.168.0.174`, aarch64, RAM 7.6GB) — 이미 다른 프로젝트 `tradehub`가 떠 있어 포트 80/3000/8080/6379/3307/9092를 점유 중(상세는 세션 메모리 `project_raspberrypi_shared_deploy_target` 참고). **사설 IP라 GitHub 호스팅 러너가 SSH로 직접 못 들어감** → self-hosted runner를 Pi에 설치해 outbound 연결만으로 배포하는 방식으로 결정(아래 "남은 일" 참고). 이미지 레지스트리는 GHCR(`ghcr.io/parkjunss/marketboard-*`)로 결정, `docker-compose.yml`부터 먼저 작성하기로 순서 합의.
+- `marketboardBackend/Dockerfile`(신규) — `eclipse-temurin:17-jdk`로 `./gradlew bootJar` 빌드 후 `eclipse-temurin:17-jre` 런타임으로 멀티스테이지 축소. `.dockerignore` 동반 추가.
+- `collector/Dockerfile`(신규) — `ghcr.io/astral-sh/uv:python3.12-bookworm-slim` 베이스, deps만 먼저 `uv sync --no-install-project`로 캐싱 레이어 분리 후 앱 코드 복사 + 재동기화. `.dockerignore` 동반 추가.
+- `frontend/Dockerfile`(신규) — `next.config.ts`에 `output: "standalone"` 추가 후 3단계(`deps`/`build`/`runtime`) 빌드, `node:20-alpine`. `NEXT_PUBLIC_API_BASE_URL`/`NEXT_PUBLIC_WS_URL`은 Next.js가 빌드 타임에 클라이언트 번들에 박아 넣는 값이라 컨테이너 런타임 env가 아니라 **Docker build ARG**로 받도록 함(`.dockerignore`에 `.env*`를 넣어 로컬 `.env.local`이 이미지에 실수로 안 들어가게 함 — ARG로 명시적으로 넘긴 값만 반영되도록). `.dockerignore` 동반 추가.
+- `docker-compose.yml`(신규, 프로젝트 루트) — mysql/redis/backend/collector/frontend/prometheus/grafana 7개 서비스, 전용 브리지 네트워크(`marketboard`). tradehub와 안 겹치게 호스트 포트 재배정: mysql `3308`(컨테이너 3306), redis `6380`(컨테이너 6379), backend `8081`(컨테이너 8080), frontend `3100`(로컬 개발 컨벤션과 동일하게 컨테이너도 3100), collector `8001`(컨테이너 8000, 외부 노출은 디버깅용이고 백엔드는 도커 네트워크 내부에서 `http://collector:8000`으로 호출), prometheus `9091`, grafana `3300`(기존 로컬 관측성 컨테이너와 동일 포트 컨벤션 유지). 각 서비스에 `build:`(로컬/수동 빌드용)와 `image: ghcr.io/parkjunss/marketboard-*:latest`(CI가 푸시한 이미지를 `docker compose pull`로 받는 용도)를 둘 다 지정해서 두 워크플로 다 지원.
+- `observability/prometheus.deploy.yml`(신규) — 기존 `observability/prometheus.yml`은 로컬 개발용(백엔드가 호스트에서 직접 떠서 `host.docker.internal:8080`을 스크레이프)이라 그대로 못 씀. 배포용은 백엔드도 같은 컴포즈 네트워크의 컨테이너라 스크레이프 타깃을 서비스명 `backend:8080`으로 바꾼 별도 파일. 기존 로컬용 파일은 그대로 둠(둘 다 필요).
+- `.env.example`(신규, 루트) — `docker-compose.yml`이 읽는 env var 목록(DB_PASSWORD/MYSQL_ROOT_PASSWORD/JWT_SECRET/ADMIN_SEED_*/CORS_ALLOWED_ORIGINS/FINNHUB_API_KEY/NEXT_PUBLIC_*/GRAFANA_ADMIN_PASSWORD) 문서화. 루트 `.gitignore`에 `.env` 추가(실제 배포 시크릿은 Pi의 `.env`에만 존재, 커밋 안 됨).
+- **로컬 검증 완료** (2026-07-19, Docker Desktop으로 amd64 빌드 — 최종 ARM64 크로스빌드 검증은 아님, 아래 "남은 일" 참고): 3개 Dockerfile 전부 `docker build` 성공. 백엔드는 실제로 컨테이너 기동까지 해서 기존 로컬 `mysql-container`/`redis-container`에 붙여 `/actuator/health` → `200`, 로그에서 Flyway/Hibernate/Tomcat 정상 기동 확인. 프론트엔드도 컨테이너 기동 후 `/`, `/login` → `200` 확인, 빌드 ARG로 넘긴 `NEXT_PUBLIC_API_BASE_URL` 값이 실제 클라이언트 번들(`*.next/static/chunks/*.js`)에 박혀 들어간 것까지 grep으로 확인. collector는 컨테이너 안에서 `main.py` import 성공 확인. `docker compose config`로 `docker-compose.yml` 문법/변수 보간도 검증함.
+- **환경 이슈 발견/해결**: 로컬 Docker Desktop이 `eclipse-temurin:17-jdk`(공개 이미지, 인증 불필요) pull 시 `401 Unauthorized: incorrect username or password`로 실패하는 현상 있었음 — Docker Desktop의 자격증명 저장소(`credsStore: desktop`)에 남아있던 상한 Docker Hub 로그인 정보가 익명 pull까지 방해한 것으로 추정(이전 세션의 "grafana/grafana:latest pull 실패" 이슈와 동일 계열 원인일 가능성). `docker logout` 한 번으로 해결됨 — 이 환경에서 앞으로 도커 이미지 pull이 뜬금없이 401로 실패하면 우선 `docker logout` 시도할 것.
+
+**남은 일 (Phase 7 완주까지)**:
+1. Pi(`rasp4`)에 GitHub Actions self-hosted runner 설치 — 사설 IP(`192.168.0.174`)라 GitHub 호스팅 러너가 SSH로 못 들어가는 문제를 우회하기 위해 SSH 스텝 대신 이 방식으로 결정함. 등록 토큰은 GitHub 웹(저장소 Settings → Actions → Runners)에서 사용자가 직접 발급받아야 함(API로 대행 불가).
+2. `ci.yml`에 build+deploy job 추가 — GitHub 호스팅 러너에서 `buildx`로 ARM64 이미지 크로스빌드 후 GHCR 푸시 → Pi의 self-hosted runner가 이어받아 `docker compose pull && up -d`(SSH 불필요, 러너가 Pi에 상주).
+3. GHCR 인증 시크릿 및 `.env.example`의 각 값(특히 `FINNHUB_API_KEY`, `JWT_SECRET`, DB 비밀번호)을 실제 값으로 채운 `.env`를 Pi에 배치(커밋 금지).
+4. 최초 배포 시 ARM64 실제 빌드/기동 검증(로컬은 amd64로만 확인함) — 특히 백엔드 Dockerfile의 `eclipse-temurin` 계열과 collector의 `astral-sh/uv` 이미지가 멀티아치 이미지인지는 확인했으나(공식 이미지라 aarch64 포함이 사실상 보장됨) 실제 Pi 위에서의 기동은 아직 미검증.
 
 ---
 
@@ -624,11 +641,11 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 
 ## 다음 액션 제안 (우선순위 순)
 > 상세 실행 계획은 문서 맨 위 "다음 세션 시작점" 참고.
-1. 다음 푸시/PR에서 GitHub Actions `ci.yml`이 실제로 초록불 나는지 원격에서 최초 확인(로컬 사전 검증은 끝났지만 GitHub 러너 자체 실행은 아직 안 봄)
-2. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
-3. (배포 준비 시점) `docker-compose.yml`(mysql+redis+backend+collector+frontend+observability, 격리 스택) 작성 — `observability/` 설정은 이미 있으니 그대로 서비스로 편입, 이후 Phase 7 나머지(ARM64 buildx+GHCR+Pi 배포)로 이어짐
+1. Phase 7 마무리 — Pi(`rasp4`)에 GitHub Actions self-hosted runner 설치(등록 토큰은 사용자가 GitHub 웹에서 직접 발급) → `ci.yml`에 build(ARM64 buildx+GHCR 푸시)+deploy(`docker compose pull && up -d`) job 추가. 상세는 "Phase 7" 섹션의 "남은 일" 참고
+2. 다음 푸시/PR에서 GitHub Actions `ci.yml`(PR 테스트 워크플로)이 실제로 초록불 나는지 원격에서 최초 확인(로컬 사전 검증은 끝났지만 GitHub 러너 자체 실행은 아직 안 봄)
+3. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
 
-**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18), S&P500 일봉 백필 정체 문제 조사·수정(2026-07-18), Phase 7 PR 테스트 워크플로 추가(2026-07-19)
+**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18), S&P500 일봉 백필 정체 문제 조사·수정(2026-07-18), Phase 7 PR 테스트 워크플로 추가(2026-07-19), 배포용 Dockerfile 3종 + docker-compose.yml 작성 및 로컬 검증(2026-07-19)
 
 ---
 

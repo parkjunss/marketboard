@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: marketboard-backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      # Same compose network as the backend service here (unlike prometheus.yml, used for
+      # local dev where the backend runs directly on the host, not in a container).
+      - targets: ['backend:8080']

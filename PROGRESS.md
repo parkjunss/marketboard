@@ -1,18 +1,18 @@
 # MarketBoard — 진행상황 추적
 
-> 최종 갱신: 2026-07-18
+> 최종 갱신: 2026-07-19
 > 기준 계획서: `stock-monitor-dev-plan.html` (2026-07-16 작성, Phase 1~7 로드맵)
 > 참고: `marketboard_development_plan.html`은 이전 버전의 위젯/템플릿 중심 기획서로, 현재는 `stock-monitor-dev-plan.html`이 실행 기준 문서.
 
 ## 다음 세션 시작점
 
-**계획서(Phase 1~7) 로드맵 전체 완료** (2026-07-18): Phase 6(Prometheus + Grafana 관측성)까지 끝나면서 `stock-monitor-dev-plan.html`의 Phase 1~6이 전부 완료됨. Phase 7(CI/CD)은 Git 저장소 초기화/첫 푸시(`github.com/parkjunss/marketboard`, Private)까지는 됐지만 실제 GitHub Actions 워크플로는 아직 없음 — 유일하게 남은 로드맵 항목. 그 외엔 사용자가 그때그때 요청하는 개선 작업 위주로 진행 중.
+**계획서(Phase 1~7) 로드맵 중 테스트 게이트까지 완료** (2026-07-19): Phase 6(Prometheus + Grafana 관측성)에 이어 Phase 7의 PR 테스트 워크플로(`.github/workflows/ci.yml`)까지 추가됨. 단, 계획서 §07의 Phase 7 전체 범위(ARM64 buildx → GHCR 푸시 → SSH로 라즈베리파이 배포)는 실제 배포 대상 Pi/SSH 접근/GHCR 시크릿이 아직 없어 **의도적으로 범위에서 제외**함(사용자와 합의) — 남은 로드맵 항목으로 아래 "Phase 7" 섹션에 남겨둠.
 
-이번 세션에 추가로: 포트폴리오 삭제 다이얼로그 버그 수정(`useImperativeAlertDialog` → 제어형 `AlertDialog`, 프로젝트 전체에서 이제 완전히 안 씀), 종목 세부 페이지(`/symbols/[ticker]`) 보강(뉴스/기술지표/재무링크/전일대비/회사명/1년고저/기업개요/차트 SMA오버레이/잘못된 티커 처리/뒤로가기 링크), 시세보드→종목리스트 통합(관심종목 별표 이관), 티커 이름 truncate, SMA 라인 색상 버그 수정, Prometheus/Grafana 관측성(커스텀 메트릭 4종 + 독립 Docker 컨테이너 + 대시보드), **S&P500 500종목 일봉 백필이 정체돼 보이던 문제 조사 및 수정**(진짜 원인은 yfinance가 아니라 종목마다 새 MySQL 커넥션을 여느라 커넥션당 ~10초씩 걸리던 것 — 상세는 아래 "버그 수정" 섹션)까지 전부 진행됨 — 상세는 각 섹션 참고.
+이전 세션(2026-07-18)에 추가된 것: 포트폴리오 삭제 다이얼로그 버그 수정(`useImperativeAlertDialog` → 제어형 `AlertDialog`, 프로젝트 전체에서 이제 완전히 안 씀), 종목 세부 페이지(`/symbols/[ticker]`) 보강(뉴스/기술지표/재무링크/전일대비/회사명/1년고저/기업개요/차트 SMA오버레이/잘못된 티커 처리/뒤로가기 링크), 시세보드→종목리스트 통합(관심종목 별표 이관), 티커 이름 truncate, SMA 라인 색상 버그 수정, Prometheus/Grafana 관측성(커스텀 메트릭 4종 + 독립 Docker 컨테이너 + 대시보드), S&P500 500종목 일봉 백필이 정체돼 보이던 문제 조사 및 수정(진짜 원인은 yfinance가 아니라 종목마다 새 MySQL 커넥션을 여느라 커넥션당 ~10초씩 걸리던 것) — 상세는 아래 각 섹션 참고.
 
 **바로 시작할 것 후보:**
 
-1. **Phase 7 — GitHub Actions CI/CD**: 저장소는 준비됐으니 워크플로만 추가하면 됨(`./gradlew test`, `uv run pytest`, `npx tsc --noEmit`/`eslint` 정도를 PR마다 돌리는 기본 워크플로부터 시작 권장). 계획서 로드맵(Phase 1~7) 중 유일하게 남은 항목.
+1. **(배포 준비 시점) Phase 7 나머지 — ARM64 buildx/GHCR/Pi 배포**: 실제 라즈베리파이 호스트와 SSH 접근, GHCR 푸시용 시크릿이 준비되면 진행. `docker-compose.yml` 작성(아래 항목)이 선행되어야 함.
 
 **남겨둔 확인 작업 (급하지 않음)**
 - 장 마감 후 `collector/app/rest_fallback.py`(이제 Finnhub REST가 아니라 yfinance 기반) 전체 폴백 루프 재검증 — fetch+publish 경로 자체는 확인했지만, 스테일 조건이 실제로 걸리는 장 마감 상황의 전체 루프는 아직 안 봄
@@ -35,10 +35,10 @@
 
 | 구성요소 | 상태 | 비고 |
 |---|---|---|
-| marketboardBackend (Spring Boot) | ✅ Phase 1, 3, 5 완료 + 커스텀 대시보드 + `QuoteResponse.name` + 시장지표/재무 프록시 API + 포트폴리오 백엔드 추가 | docker-compose는 의도적으로 Phase 7로 이관 |
+| marketboardBackend (Spring Boot) | ✅ Phase 1, 3, 5 완료 + 커스텀 대시보드 + `QuoteResponse.name` + 시장지표/재무 프록시 API + 포트폴리오 백엔드 추가 | docker-compose는 의도적으로 Phase 7 배포 단계로 이관 |
 | collector (Python) | ✅ Phase 2 완료, Phase 5 알림 체크 로직 추가, 뉴스/시장지표/재무/종목프로필 프록시 + S&P500 유니버스 배치 + 실시간 대상 종목 일봉 자동 갱신 루프 추가 | REST 폴백은 이제 yfinance 기반(장중 실거래로는 미검증, fetch+publish 경로만 별도 확인). S&P500 전체(503종목) 배치 완료(2026-07-18, 커넥션 재사용 버그 수정 후 91.5초·실패 0건). 실시간 WS 대상은 SPY/QQQ/DIA + 상위 10종목(13개)로 확정, 일봉은 `active_symbols_daily_refresh_loop`가 매일 자동 갱신 |
 | frontend (Next.js) | ✅ Phase 4, 5 완료 + `/dashboard` + `/stock-list`(구 시세 보드 통합, 관심종목 별표 포함) + `/market` + `/financials`(다중 종목 비교가 랜딩, 선택 시 `/financials/[ticker]` 상세로 이동) + `/portfolio` + `/symbols/[ticker]`(뉴스/기술지표/기업개요/SMA오버레이 보강) | Astryx 디자인 시스템 적용, 포트 3100 고정(아래 "참고"), 구 `/`(시세 보드)는 `/stock-list`로 리다이렉트 |
-| 인프라 (docker-compose / CI/CD / 관측성) | ✅ Phase 6(Prometheus+Grafana) 완료, ⚪ docker-compose/CI는 Phase 7 예정 | 로컬 개발은 공용 `mysql-container`/`redis-container`(다른 프로젝트와 공유) 재사용, Prometheus/Grafana는 프로젝트 스코프 독립 컨테이너(`marketboard-prometheus`/`marketboard-grafana`) |
+| 인프라 (docker-compose / CI/CD / 관측성) | ✅ Phase 6(Prometheus+Grafana) 완료, ✅ CI(GitHub Actions PR 테스트 워크플로) 완료(2026-07-19), ⚪ docker-compose/배포 파이프라인(ARM64 buildx+GHCR+Pi)은 Phase 7 잔여 항목 | 로컬 개발은 공용 `mysql-container`/`redis-container`(다른 프로젝트와 공유) 재사용, Prometheus/Grafana는 프로젝트 스코프 독립 컨테이너(`marketboard-prometheus`/`marketboard-grafana`) |
 
 ---
 
@@ -592,8 +592,14 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 - **알아둘 점**: 이 프로젝트에서 "느리다/멈춘 것 같다"는 증상을 조사할 때, 외부 API(yfinance/Yahoo)를 먼저 의심하기 쉽지만 **이번엔 진짜 원인이 우리 쪽 DB 커넥션 관리였음** — 다음에 비슷한 증상을 보면 외부 서비스보다 먼저 "커넥션을 매번 새로 여는 곳은 없는지"부터 체크할 것. `collector/main.py`의 `_refresh_active_symbols_daily_bars()`(실시간 대상 13종목 일봉 갱신 루프)도 내부적으로 `backfill.py`의 백필 함수를 종목별로 호출하는 구조라 같은 패턴의 위험이 있는지는 아직 확인 안 함(종목 수가 13개뿐이라 체감 못 했을 가능성 — 낮은 우선순위로 남겨둠).
 - 이전에 "야후 응답이 느려진다"고 잘못 추정해서 적어뒀던 메모(아래 "S&P500 배치 재실행/확장 방법" 항목)는 이 발견에 맞게 갱신함.
 
-### ⚪ Phase 7 — CI/CD (GitHub Actions)
-- Git 저장소는 이제 초기화 및 첫 푸시 완료(`github.com/parkjunss/marketboard`, Private) — GitHub Actions 워크플로 자체는 아직 없음
+### 🟡 Phase 7 — CI/CD (GitHub Actions) — 부분 완료 (2026-07-19)
+- [x] Git 저장소 초기화 및 첫 푸시 완료(`github.com/parkjunss/marketboard`, Private) (2026-07-18)
+- [x] **PR 테스트 워크플로 추가** (`.github/workflows/ci.yml`, 2026-07-19) — `pull_request`/`push`(main) 트리거로 3개 병렬 job:
+  - `backend`: `mysql:8`(DB `stockmonitordb`, 계정 `stockmonitor`/`stockmonitor1234` — `application.yaml` 기본값과 동일하게 맞춰서 env 변수 주입 없이 그대로 동작) + `redis:7`을 GitHub Actions `services:`로 띄운 뒤 `./gradlew test`(21건, `MarketboardBackendApplicationTests`가 `@SpringBootTest`라 실제 DB/Redis 접속이 필요함 — 로컬 셰어드 컨테이너와 동일 계정/DB명으로 서비스 컨테이너를 맞춘 이유)
+  - `collector`: `astral-sh/setup-uv` + `uv sync --locked --all-groups` + `uv run pytest`(10건, 순수 로직 테스트라 외부 의존성 없음)
+  - `frontend`: `npm ci` + `npx tsc --noEmit` + `npm run lint`(eslint) + `npm run build`(`next build`) — `NEXT_PUBLIC_API_BASE_URL`/`NEXT_PUBLIC_WS_URL`는 `.env.local`(gitignore)이 없어도 코드에 폴백 기본값이 있어 빌드 실패 없음(`src/lib/api.ts`, `src/lib/quote-stream-context.tsx`)
+  - 로컬에서 3개 job의 커맨드를 전부 그대로 실행해 사전 검증함(백엔드 41초/`BUILD SUCCESSFUL`, collector 10건 통과, 프론트 typecheck/lint/build 전부 통과) — CI 러너 자체(실제 GitHub Actions 실행)는 다음 푸시/PR에서 최초로 트리거될 것이므로 아직 미검증
+- **범위 결정 — ARM64 buildx / GHCR 푸시 / SSH 배포는 이번에 제외**: 계획서 §07 Phase 7의 전체 목표("main 푸시 → 몇 분 뒤 Pi에서 새 버전 자동 반영")는 실제 라즈베리파이 호스트, SSH 접근, GHCR 인증 시크릿이 필요한데 아직 그런 배포 대상 인프라가 없음(로컬 개발 환경만 존재) — 사용자와 합의하여 "PR마다 테스트를 돌리는 게이트"까지만 이번에 완료하고, 실제 배포 파이프라인(및 그 전제인 `docker-compose.yml`)은 배포 인프라가 준비되는 시점으로 미룸. 계획서 로드맵의 유일하게 남은 항목.
 
 ---
 
@@ -618,11 +624,11 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 
 ## 다음 액션 제안 (우선순위 순)
 > 상세 실행 계획은 문서 맨 위 "다음 세션 시작점" 참고.
-1. Phase 7 — GitHub Actions CI/CD 워크플로 작성 (계획서 로드맵 중 유일하게 남은 항목)
+1. 다음 푸시/PR에서 GitHub Actions `ci.yml`이 실제로 초록불 나는지 원격에서 최초 확인(로컬 사전 검증은 끝났지만 GitHub 러너 자체 실행은 아직 안 봄)
 2. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
-3. (배포 준비 시점) `docker-compose.yml`(mysql+redis+backend+collector+frontend+observability, 격리 스택) 작성 — `observability/` 설정은 이미 있으니 그대로 서비스로 편입
+3. (배포 준비 시점) `docker-compose.yml`(mysql+redis+backend+collector+frontend+observability, 격리 스택) 작성 — `observability/` 설정은 이미 있으니 그대로 서비스로 편입, 이후 Phase 7 나머지(ARM64 buildx+GHCR+Pi 배포)로 이어짐
 
-**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18), S&P500 일봉 백필 정체 문제 조사·수정(2026-07-18)
+**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18), S&P500 일봉 백필 정체 문제 조사·수정(2026-07-18), Phase 7 PR 테스트 워크플로 추가(2026-07-19)
 
 ---
 

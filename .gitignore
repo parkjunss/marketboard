@@ -3,7 +3,3 @@
 
 # Deploy secrets (docker-compose.yml reads this from the project root) — see .env.example
 .env
-
-# Let's Encrypt cert material and ACME challenge scratch space — runtime state, not source.
-nginx/letsencrypt/
-nginx/certbot-webroot/

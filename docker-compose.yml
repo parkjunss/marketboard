@@ -6,6 +6,12 @@ networks:
 volumes:
   mysql-data:
   grafana-data:
+  # Named volumes, not bind mounts: certbot runs as root inside its container, so anything
+  # it writes (e.g. renewal-hooks/) would end up root-owned on the host if bind-mounted —
+  # and the next `actions/checkout` (running as a regular user) can't clean those up,
+  # breaking the whole workspace. A named volume lives inside Docker's own storage instead.
+  letsencrypt-data:
+  certbot-webroot-data:
 
 services:
   mysql:
@@ -140,8 +146,8 @@ services:
       - frontend
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/certbot-webroot:/var/www/certbot:ro
-      - ./nginx/letsencrypt:/etc/letsencrypt:ro
+      - certbot-webroot-data:/var/www/certbot:ro
+      - letsencrypt-data:/etc/letsencrypt:ro
     ports:
       - "80:80"
       - "443:443"
@@ -159,8 +165,8 @@ services:
     depends_on:
       - nginx
     volumes:
-      - ./nginx/certbot-webroot:/var/www/certbot
-      - ./nginx/letsencrypt:/etc/letsencrypt
+      - certbot-webroot-data:/var/www/certbot
+      - letsencrypt-data:/etc/letsencrypt
     entrypoint: >-
       /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done;'
 

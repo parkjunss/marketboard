@@ -7,8 +7,14 @@
 # Not meant to run on every deploy — re-running the dummy-cert dance is pointless once a
 # real cert exists, and repeated certbot runs risk Let's Encrypt's rate limits. After this
 # script succeeds, `docker compose up -d` (what the CI deploy job runs) just reuses the
-# cert already sitting in the nginx/letsencrypt volume; the certbot service's renew-loop
+# cert already sitting in the letsencrypt-data volume; the certbot service's renew-loop
 # keeps it current from then on.
+#
+# The cert lives in a named Docker volume (letsencrypt-data), not a bind-mounted host
+# directory — certbot runs as root inside its container, and root-owned files under a
+# bind mount break the next `actions/checkout` (which runs as a regular user and can't
+# clean them up). That means every check/creation of cert files below has to go through
+# a container instead of touching the host filesystem directly.
 set -e
 
 # Same fixed path the CI deploy job uses (see .github/workflows/ci.yml) — .env lives
@@ -23,14 +29,7 @@ fi
 
 # Must match server_name in nginx/conf.d/marketboard.conf.
 DOMAIN="marketboard.duckdns.org"
-DATA_PATH="./nginx/letsencrypt"
 RSA_KEY_SIZE=4096
-
-if [ -f "$DATA_PATH/live/$DOMAIN/fullchain.pem" ]; then
-  echo "Certificate for $DOMAIN already exists in $DATA_PATH — nothing to do."
-  echo "(Delete $DATA_PATH/live/$DOMAIN if you really want to re-bootstrap.)"
-  exit 0
-fi
 
 if [ -z "$LETSENCRYPT_EMAIL" ]; then
   echo "LETSENCRYPT_EMAIL is not set in $ENV_FILE (or the file doesn't exist) — add it there, or export it, then re-run." >&2
@@ -39,13 +38,19 @@ fi
 
 COMPOSE="docker compose --env-file $ENV_FILE"
 
+if $COMPOSE run --rm --entrypoint "test -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem" certbot; then
+  echo "Certificate for $DOMAIN already exists — nothing to do."
+  echo "(Bootstrapping again means wiping the letsencrypt-data volume first: docker compose down; docker volume rm marketboard_letsencrypt-data)"
+  exit 0
+fi
+
 echo "### Creating a dummy certificate for $DOMAIN so nginx can start ..."
-mkdir -p "$DATA_PATH/live/$DOMAIN"
-$COMPOSE run --rm --entrypoint "\
+$COMPOSE run --rm --entrypoint sh certbot -c "\
+  mkdir -p '/etc/letsencrypt/live/$DOMAIN' && \
   openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
     -keyout '/etc/letsencrypt/live/$DOMAIN/privkey.pem' \
     -out '/etc/letsencrypt/live/$DOMAIN/fullchain.pem' \
-    -subj '/CN=localhost'" certbot
+    -subj '/CN=localhost'"
 
 echo "### Starting nginx ..."
 $COMPOSE up -d nginx

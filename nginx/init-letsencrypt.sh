@@ -56,17 +56,20 @@ echo "### Starting nginx ..."
 $COMPOSE up -d nginx
 
 echo "### Deleting dummy certificate for $DOMAIN ..."
-$COMPOSE run --rm --entrypoint "\
-  rm -rf /etc/letsencrypt/live/$DOMAIN /etc/letsencrypt/archive/$DOMAIN /etc/letsencrypt/renewal/$DOMAIN.conf" certbot
+$COMPOSE run --rm --entrypoint rm certbot -rf \
+  "/etc/letsencrypt/live/$DOMAIN" "/etc/letsencrypt/archive/$DOMAIN" "/etc/letsencrypt/renewal/$DOMAIN.conf"
 
+# --entrypoint as a single word + trailing args, not one embedded multi-word string —
+# the latter was unreliable for this specific call in practice (overridden by the
+# certbot service's own custom `entrypoint:` in docker-compose.yml instead of replacing
+# it as expected).
 echo "### Requesting the real certificate for $DOMAIN ..."
-$COMPOSE run --rm --entrypoint "\
-  certbot certonly --webroot -w /var/www/certbot \
-    -d $DOMAIN \
-    --rsa-key-size $RSA_KEY_SIZE \
-    --email $LETSENCRYPT_EMAIL \
-    --agree-tos \
-    --no-eff-email" certbot
+$COMPOSE run --rm --entrypoint certbot certbot certonly --webroot -w /var/www/certbot \
+  -d "$DOMAIN" \
+  --rsa-key-size "$RSA_KEY_SIZE" \
+  --email "$LETSENCRYPT_EMAIL" \
+  --agree-tos \
+  --no-eff-email
 
 echo "### Reloading nginx ..."
 $COMPOSE exec nginx nginx -s reload

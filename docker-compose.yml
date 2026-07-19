@@ -59,7 +59,11 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DB_URL: jdbc:mysql://mysql:3306/stockmonitordb?useSSL=false&serverTimezone=UTC
+      # allowPublicKeyRetrieval=true: MySQL 8's default caching_sha2_password auth needs
+      # the server's RSA public key for the initial password exchange, and Connector/J
+      # won't fetch it automatically over a non-SSL connection (useSSL=false) unless this
+      # is set explicitly — without it, login requests fail at the DB layer.
+      DB_URL: jdbc:mysql://mysql:3306/stockmonitordb?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
       DB_USERNAME: stockmonitor
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis

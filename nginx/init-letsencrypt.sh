@@ -11,6 +11,16 @@
 # keeps it current from then on.
 set -e
 
+# Same fixed path the CI deploy job uses (see .github/workflows/ci.yml) — .env lives
+# outside the (ephemeral, gitignored-inside) checkout so it persists across runs.
+ENV_FILE="/home/jun/marketboard/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+fi
+
 # Must match server_name in nginx/conf.d/marketboard.conf.
 DOMAIN="marketboard.duckdns.org"
 DATA_PATH="./nginx/letsencrypt"
@@ -23,27 +33,29 @@ if [ -f "$DATA_PATH/live/$DOMAIN/fullchain.pem" ]; then
 fi
 
 if [ -z "$LETSENCRYPT_EMAIL" ]; then
-  echo "LETSENCRYPT_EMAIL is not set — export it or make sure .env has it, then re-run." >&2
+  echo "LETSENCRYPT_EMAIL is not set in $ENV_FILE (or the file doesn't exist) — add it there, or export it, then re-run." >&2
   exit 1
 fi
 
+COMPOSE="docker compose --env-file $ENV_FILE"
+
 echo "### Creating a dummy certificate for $DOMAIN so nginx can start ..."
 mkdir -p "$DATA_PATH/live/$DOMAIN"
-docker compose run --rm --entrypoint "\
+$COMPOSE run --rm --entrypoint "\
   openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
     -keyout '/etc/letsencrypt/live/$DOMAIN/privkey.pem' \
     -out '/etc/letsencrypt/live/$DOMAIN/fullchain.pem' \
     -subj '/CN=localhost'" certbot
 
 echo "### Starting nginx ..."
-docker compose up -d nginx
+$COMPOSE up -d nginx
 
 echo "### Deleting dummy certificate for $DOMAIN ..."
-docker compose run --rm --entrypoint "\
+$COMPOSE run --rm --entrypoint "\
   rm -rf /etc/letsencrypt/live/$DOMAIN /etc/letsencrypt/archive/$DOMAIN /etc/letsencrypt/renewal/$DOMAIN.conf" certbot
 
 echo "### Requesting the real certificate for $DOMAIN ..."
-docker compose run --rm --entrypoint "\
+$COMPOSE run --rm --entrypoint "\
   certbot certonly --webroot -w /var/www/certbot \
     -d $DOMAIN \
     --rsa-key-size $RSA_KEY_SIZE \
@@ -52,6 +64,6 @@ docker compose run --rm --entrypoint "\
     --no-eff-email" certbot
 
 echo "### Reloading nginx ..."
-docker compose exec nginx nginx -s reload
+$COMPOSE exec nginx nginx -s reload
 
 echo "Done — $DOMAIN should now be serving a real Let's Encrypt certificate."

@@ -6,14 +6,13 @@
 
 ## 다음 세션 시작점
 
-**계획서(Phase 1~7) 로드맵 전체 구현 완료 + 공개 HTTPS 접속(nginx/certbot/DuckDNS) 코드까지 작성 완료, 아직 실제 첫 배포는 검증 전** (2026-07-19): Phase 6(Prometheus + Grafana 관측성)에 이어 Phase 7의 PR 테스트 워크플로 + 배포용 `Dockerfile` 3종 + `docker-compose.yml` + Pi(`rasp4`) self-hosted runner 설치 + `ci.yml`의 build/deploy job, 그리고 `marketboard.duckdns.org` 공개 HTTPS 접속용 nginx+certbot+DuckDNS까지 전부 코드로 작성됨(상세는 아래 "Phase 7" 섹션). **단, 이번 세션 마지막에 추가한 nginx/certbot/DuckDNS는 Pi 쪽 수동 준비(라우터 포트포워딩, DuckDNS 토큰, `.env` 신규 키, `nginx/init-letsencrypt.sh` 최초 실행)가 아직 하나도 안 된 상태 — 이 상태로 그냥 푸시하면 `deploy` job이 nginx 컨테이너를 띄우려다 실제 인증서 파일이 없어서 크래시루프에 빠짐. 아래 "Phase 7" 섹션의 "공개 HTTPS 접속 설정" 항목의 체크리스트를 먼저 완료한 뒤에 푸시할 것.**
+**계획서(Phase 1~7) 로드맵 전체 완료 — `https://marketboard.duckdns.org` 실제 공개 서비스 중** (2026-07-19): Phase 6(Prometheus + Grafana 관측성)에 이어 Phase 7 전체(PR 테스트 워크플로, 배포용 `Dockerfile` 3종 + `docker-compose.yml`, Pi(`rasp4`) self-hosted runner, `ci.yml` build/deploy job, nginx+certbot+DuckDNS 공개 HTTPS)까지 실제로 Pi에 배포되어 동작 확인까지 끝남. 계획서(`stock-monitor-dev-plan.html`) Phase 1~7 로드맵이 전부 완료됨 — 이제부터는 사용자가 그때그때 요청하는 개선/버그수정 위주로 진행.
 
 이전에 추가된 것(2026-07-18): 포트폴리오 삭제 다이얼로그 버그 수정(`useImperativeAlertDialog` → 제어형 `AlertDialog`, 프로젝트 전체에서 이제 완전히 안 씀), 종목 세부 페이지(`/symbols/[ticker]`) 보강(뉴스/기술지표/재무링크/전일대비/회사명/1년고저/기업개요/차트 SMA오버레이/잘못된 티커 처리/뒤로가기 링크), 시세보드→종목리스트 통합(관심종목 별표 이관), 티커 이름 truncate, SMA 라인 색상 버그 수정, Prometheus/Grafana 관측성(커스텀 메트릭 4종 + 독립 Docker 컨테이너 + 대시보드), S&P500 500종목 일봉 백필이 정체돼 보이던 문제 조사 및 수정(진짜 원인은 yfinance가 아니라 종목마다 새 MySQL 커넥션을 여느라 커넥션당 ~10초씩 걸리던 것) — 상세는 아래 각 섹션 참고.
 
 **바로 시작할 것 후보:**
 
-1. **공개 HTTPS 접속 수동 준비 체크리스트 완료 후 푸시** — 라우터 80/443 포트포워딩 → `192.168.0.174`, DuckDNS 토큰/서브도메인 확인, Pi의 `~/marketboard/.env`에 `DUCKDNS_TOKEN`/`DUCKDNS_SUBDOMAIN`/`LETSENCRYPT_EMAIL` 추가 + `CORS_ALLOWED_ORIGINS`/`NEXT_PUBLIC_*`를 `https://marketboard.duckdns.org`로 갱신, `./nginx/init-letsencrypt.sh` 최초 1회 실행(진짜 인증서 발급). 전부 끝난 뒤에야 `git push`해서 `deploy` job이 nginx를 정상적으로 띄울 수 있음. 상세는 "Phase 7" 섹션 참고.
-2. **그 다음 최신 푸시의 GitHub Actions 실행 결과 확인** — backend/collector/frontend/deploy 4개 job 전부 통과하는지, Pi(`rasp4`)에서 `docker ps`로 `marketboard-*` 컨테이너 10개(mysql/redis/backend/collector/frontend/prometheus/grafana/nginx/certbot/duckdns)가 정상 기동했는지, `https://marketboard.duckdns.org`가 실제로 응답하는지.
+1. **남겨둔 확인 작업**(급하지 않음, 아래 참고) 위주 — Phase 7 자체는 완료됨. 다음으로 만질 만한 것은 아래 "남겨둔 확인 작업" 섹션이나 사용자가 새로 요청하는 기능/버그.
 
 **남겨둔 확인 작업 (급하지 않음)**
 - 장 마감 후 `collector/app/rest_fallback.py`(이제 Finnhub REST가 아니라 yfinance 기반) 전체 폴백 루프 재검증 — fetch+publish 경로 자체는 확인했지만, 스테일 조건이 실제로 걸리는 장 마감 상황의 전체 루프는 아직 안 봄
@@ -39,7 +38,7 @@
 | marketboardBackend (Spring Boot) | ✅ Phase 1, 3, 5 완료 + 커스텀 대시보드 + `QuoteResponse.name` + 시장지표/재무 프록시 API + 포트폴리오 백엔드 추가 + 배포용 `Dockerfile` 추가(2026-07-19) | |
 | collector (Python) | ✅ Phase 2 완료, Phase 5 알림 체크 로직 추가, 뉴스/시장지표/재무/종목프로필 프록시 + S&P500 유니버스 배치 + 실시간 대상 종목 일봉 자동 갱신 루프 추가 + 배포용 `Dockerfile` 추가(2026-07-19) | REST 폴백은 이제 yfinance 기반(장중 실거래로는 미검증, fetch+publish 경로만 별도 확인). S&P500 전체(503종목) 배치 완료(2026-07-18, 커넥션 재사용 버그 수정 후 91.5초·실패 0건). 실시간 WS 대상은 SPY/QQQ/DIA + 상위 10종목(13개)로 확정, 일봉은 `active_symbols_daily_refresh_loop`가 매일 자동 갱신 |
 | frontend (Next.js) | ✅ Phase 4, 5 완료 + `/dashboard` + `/stock-list`(구 시세 보드 통합, 관심종목 별표 포함) + `/market` + `/financials`(다중 종목 비교가 랜딩, 선택 시 `/financials/[ticker]` 상세로 이동) + `/portfolio` + `/symbols/[ticker]`(뉴스/기술지표/기업개요/SMA오버레이 보강) + 배포용 `Dockerfile`(standalone output) 추가(2026-07-19) | Astryx 디자인 시스템 적용, 포트 3100 고정(아래 "참고"), 구 `/`(시세 보드)는 `/stock-list`로 리다이렉트 |
-| 인프라 (docker-compose / CI/CD / 관측성) | ✅ Phase 6(Prometheus+Grafana) 완료, ✅ CI(GitHub Actions PR 테스트 워크플로) 완료(2026-07-19), ✅ 배포용 `docker-compose.yml` + Dockerfile 3종 + Pi self-hosted runner + `ci.yml` build/deploy job 전부 완료(2026-07-19), ✅ nginx+certbot+DuckDNS 공개 HTTPS 코드 작성 완료했으나 ⚪ Pi 쪽 수동 준비(포트포워딩/토큰/인증서 최초 발급) 전이라 아직 미배포 | 로컬 개발은 공용 `mysql-container`/`redis-container`(다른 프로젝트와 공유) 재사용, Prometheus/Grafana는 프로젝트 스코프 독립 컨테이너(`marketboard-prometheus`/`marketboard-grafana`). 배포 대상 Pi(`rasp4`)는 이미 다른 프로젝트(`tradehub`)와 포트를 공유하므로 호스트 포트를 재배정함(위 "Phase 7" 섹션 참고) |
+| 인프라 (docker-compose / CI/CD / 관측성) | ✅ Phase 7 전체 완료(2026-07-19) — PR 테스트 워크플로, 배포용 `docker-compose.yml`+Dockerfile 3종, Pi self-hosted runner, `ci.yml` build/deploy job, nginx+certbot+DuckDNS 공개 HTTPS까지 `https://marketboard.duckdns.org`에서 실제 서비스 중 | 로컬 개발은 공용 `mysql-container`/`redis-container`(다른 프로젝트와 공유) 재사용, Prometheus/Grafana는 프로젝트 스코프 독립 컨테이너(`marketboard-prometheus`/`marketboard-grafana`). 배포 대상 Pi(`rasp4`)는 이미 다른 프로젝트(`tradehub`)와 포트를 공유하므로 호스트 포트를 재배정함(아래 "Phase 7" 섹션 참고) |
 
 ---
 
@@ -593,7 +592,7 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 - **알아둘 점**: 이 프로젝트에서 "느리다/멈춘 것 같다"는 증상을 조사할 때, 외부 API(yfinance/Yahoo)를 먼저 의심하기 쉽지만 **이번엔 진짜 원인이 우리 쪽 DB 커넥션 관리였음** — 다음에 비슷한 증상을 보면 외부 서비스보다 먼저 "커넥션을 매번 새로 여는 곳은 없는지"부터 체크할 것. `collector/main.py`의 `_refresh_active_symbols_daily_bars()`(실시간 대상 13종목 일봉 갱신 루프)도 내부적으로 `backfill.py`의 백필 함수를 종목별로 호출하는 구조라 같은 패턴의 위험이 있는지는 아직 확인 안 함(종목 수가 13개뿐이라 체감 못 했을 가능성 — 낮은 우선순위로 남겨둠).
 - 이전에 "야후 응답이 느려진다"고 잘못 추정해서 적어뒀던 메모(아래 "S&P500 배치 재실행/확장 방법" 항목)는 이 발견에 맞게 갱신함.
 
-### 🟡 Phase 7 — CI/CD (GitHub Actions) — 부분 완료 (2026-07-19)
+### ✅ Phase 7 — CI/CD (GitHub Actions) + 공개 HTTPS 배포 — 완료 (2026-07-19)
 - [x] Git 저장소 초기화 및 첫 푸시 완료(`github.com/parkjunss/marketboard`, Private) (2026-07-18)
 - [x] **PR 테스트 워크플로 추가** (`.github/workflows/ci.yml`, 2026-07-19) — `pull_request`/`push`(main) 트리거로 3개 병렬 job:
   - `backend`: `redis:7`을 GitHub Actions `services:`로 띄운 뒤 `./gradlew test`(28건). **처음엔 `mysql:8` 서비스 컨테이너도 같이 띄웠으나 실제 CI 실행에서 제거함** — 상세는 아래 "실제 CI 첫 실행에서 발견/수정한 문제" 참고
@@ -622,7 +621,7 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 1. **`./gradlew: Permission denied` (exit 126)** — `marketboardBackend/gradlew`가 git에 `100644`(실행권한 없음)로 커밋돼 있었음(이 Windows 개발 머신에서 커밋할 때 실행 비트가 안 잡힌 것으로 추정, 로컬에선 `gradlew.bat`을 쓰니 여태 안 드러남 — 세션 메모리 `feedback_windows_git_strips_exec_bit` 참고). `git update-index --chmod=+x`로 트래킹 모드 수정 + `ci.yml`의 backend job에 방어적으로 `chmod +x gradlew` 스텝 추가.
 2. **`MarketboardBackendApplicationTests`(`@SpringBootTest`)가 MySQL 연결 실패로 죽음** — `FlywaySqlUnableToConnectToDbException`. `mysql:8` 서비스 컨테이너의 healthcheck(`mysqladmin ping`)가 초기화 재시작 구간에서 일시적으로 "healthy"를 잘못 보고하는 것으로 추정(MySQL 공식 이미지의 잘 알려진 CI 레이스 컨디션). 근본 수정 대신 **테스트를 아예 실제 MySQL에 안 의존하게** 접근 전환 — `marketboardBackend/src/test/resources/application.yaml`(신규, 테스트 클래스패스에서 메인 `application.yaml`을 완전히 shadow함)을 추가해 datasource를 인메모리 H2(`jdbc:h2:mem:testdb;MODE=MySQL`)로, `spring.flyway.enabled: false` + `ddl-auto: create-drop`(마이그레이션 SQL이 MySQL 전용 문법이라 Flyway로 H2에 그대로 적용 불가 — Hibernate가 엔티티에서 스키마를 직접 생성하도록 우회)로 전환. `build.gradle`에 `testRuntimeOnly 'com.h2database:h2'` 추가, `ci.yml`의 backend job에서 `mysql` 서비스 컨테이너 자체를 제거(더 이상 필요 없음 — `redis`는 `AlertMirrorInitializer`가 컨텍스트 기동 시 실제로 Redis에 접속하므로 유지). 로컬에서 `./gradlew test` 재검증(28건 전부 통과, `Database JDBC URL [jdbc:h2:mem:testdb]`로 H2 사용 확인).
 
-**공개 HTTPS 접속 설정 — nginx + Let's Encrypt + DuckDNS (`marketboard.duckdns.org`, 2026-07-19, 코드 작성 완료·Pi 반영 전)**
+**공개 HTTPS 접속 설정 — nginx + Let's Encrypt + DuckDNS (`marketboard.duckdns.org`, 2026-07-19, Pi에 실제 배포·동작 확인 완료)**
 - 목표: LAN IP:포트(`192.168.0.174:3100`/`:8081`) 대신 `https://marketboard.duckdns.org` 하나로 공개 접속. Pi에 이미 떠 있던 `tradehub-nginx`가 호스트 포트 80을 점유하고 있어 충돌했는데, 사용자가 `tradehub-nginx`를 stop하고 지금은 그대로 진행 → **나중에 공유 리버스 프록시(하나의 nginx/Traefik가 Host 헤더로 tradehub/marketboard 둘 다 라우팅)로 갈 계획**이라고 확정. 이번 구현은 그 방향으로 나중에 접기 쉽게 마켓보드 전용 `nginx/` 디렉터리로 격리해서 작성함.
 - `nginx/conf.d/marketboard.conf`(신규) — `:80`은 ACME 챌린지 경로(`/.well-known/acme-challenge/`) 제외 전부 `:443`으로 301 리다이렉트. `:443`은 TLS 종료 후 `/` → frontend, `/api/` → backend(경로 재작성 없음, 컨트롤러가 이미 `/api/...`에 마운트돼 있어서), `/ws` → backend(Upgrade/Connection 헤더 + 긴 `proxy_read_timeout`, SockJS/STOMP용). `/actuator/**`는 공개 프록시하지 않음(Prometheus는 내부 도커 네트워크에서 이미 스크레이프 중이라 외부 노출 불필요). **업스트림을 `resolver 127.0.0.11 valid=30s;` + 변수 간접참조로 지연 해석**하도록 함 — 그냥 `proxy_pass http://backend:8080;`로 쓰면 nginx가 설정 로드 시점에 한 번만 DNS를 풀어서, 재부팅 후 nginx가 backend/frontend보다 먼저 뜨는 순간이 있으면 그대로 기동 실패해버림(로컬에서 `nginx -t`로 실제 재현/확인함, 아래 검증 참고).
 - `nginx/init-letsencrypt.sh`(신규, 실행권한 포함 커밋 — 아래 "Windows git 실행비트" 이슈 재발 방지로 `git update-index --chmod=+x` 사용) — 표준 certbot/nginx 부트스트랩 레시피(더미 인증서로 nginx 기동 → 더미 삭제 → certbot webroot로 진짜 인증서 발급 → nginx reload). **CI 자동배포 루프에 포함 안 시킴** — 매 배포마다 재실행하면 의미도 없고 Let's Encrypt rate limit 위험만 커짐, Pi에서 최초 1회 수동 실행 전제.
@@ -631,7 +630,13 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 - `.github/workflows/ci.yml`의 `deploy` job — `docker compose push`를 인자 없이 돌리면 nginx/certbot/duckdns의 퍼블릭 이미지까지 우리 GHCR 네임스페이스로 푸시 시도하다 실패하므로, `docker compose push backend collector frontend`로 우리가 실제로 빌드하는 서비스만 지정하도록 수정.
 - **로컬 검증**: `docker compose config`로 전체 문법/변수 보간 확인. `nginx/conf.d/marketboard.conf`는 더미 인증서(최초엔 실수로 1024비트로 만들었다가 **최신 OpenSSL이 1024비트 RSA를 거부하는 것까지 실제로 재현**해서 2048비트로 수정 — `init-letsencrypt.sh`의 더미 인증서도 동일하게 2048비트로 수정함, 원래 널리 쓰이는 레퍼런스 레시피가 1024비트를 쓰길래 그대로 따라했다가 걸린 것)를 로컬에 만들어 붙인 뒤 `nginx -t`로 문법 통과 확인, 실제로 컨테이너를 띄워서 `:80→:443` 301 리다이렉트, ACME 챌린지 경로 서빙, 그리고 (아직 backend/frontend가 없는 격리 환경이라) `:443`이 크래시 대신 502를 정상적으로 반환하는 것까지 확인(위 resolver 지연 해석 수정이 실제로 먹힌다는 증거).
 - **Windows에서 Docker 바인드 마운트 테스트 시 주의할 점**: Git Bash에서 `docker run -v $(pwd)/...:/etc/...` 실행 시 MSYS가 컨테이너 쪽 경로(`/etc/...`)까지 Windows 경로로 멋대로 변환해버려서 엉뚱한 곳에 마운트됨 — `MSYS_NO_PATHCONV=1` 환경변수를 커맨드 앞에 붙이면 방지됨. 이번 세션에 실제로 걸려서 알아냄.
-- **아직 안 끝난 것 — Pi 쪽 수동 준비 전부 남음**: (1) 홈 라우터에서 외부 80/443 → `192.168.0.174` 포트포워딩, (2) DuckDNS 토큰 확인 + `marketboard` 서브도메인 등록 확인, (3) Pi의 `~/marketboard/.env`에 `DUCKDNS_TOKEN`/`DUCKDNS_SUBDOMAIN`/`LETSENCRYPT_EMAIL` 채워 넣고 `CORS_ALLOWED_ORIGINS`/`NEXT_PUBLIC_*` 갱신, (4) `./nginx/init-letsencrypt.sh`를 Pi에서 최초 1회 실행해 진짜 인증서 발급. **이 4개를 끝내기 전에 이 커밋을 푸시하면 `deploy` job이 `docker compose up -d` 하는 순간 nginx가 존재하지 않는 인증서 파일을 참조하다 크래시루프에 빠짐** — 순서 반드시 지킬 것.
+- **Pi 쪽 수동 준비(라우터 포트포워딩/DuckDNS 토큰/`.env` 신규 키) 완료 후 실제 배포 — 그 과정에서 발견/수정한 문제 4건**:
+  1. **`actions/checkout`이 워크스페이스 정리 중 `EACCES: permission denied` (`nginx/letsencrypt/renewal-hooks` 삭제 실패)** — certbot 컨테이너가 root로 써서 host 쪽에 root 소유 파일이 남았는데, 다음 체크아웃(일반 유저 `jun`으로 실행)이 그걸 못 지움. **근본 수정**: `nginx/letsencrypt`/`nginx/certbot-webroot` bind mount를 전부 Docker named volume(`letsencrypt-data`/`certbot-webroot-data`)으로 교체 — Docker 자체 스토리지 안에만 있어서 git 작업 디렉터리와 아예 안 겹침. `init-letsencrypt.sh`의 인증서 존재 확인/생성 로직도 호스트 파일시스템 직접 접근 대신 전부 컨테이너 경유로 변경, 로컬에서 실제 named volume에 붙여 idempotency 체크(`test -f`) 양쪽 케이스(있음/없음) 다 확인함. 이미 워크스페이스에 남아있던 root 소유 잔재는 Pi에서 `sudo rm -rf`로 1회성 수동 정리. 부수적으로 `docker-compose.yml`에 `name: marketboard`도 명시(작업 디렉터리 basename에 따라 볼륨 프리픽스가 갈리는 것 방지 — 어느 경로에서 `docker compose`를 돌려도 항상 동일한 프로젝트로 취급되게).
+  2. **`init-letsencrypt.sh`가 `LETSENCRYPT_EMAIL is not set` 에러** — `.env`에 값은 있는데 스크립트가 셸 환경변수만 확인하고 `.env`는 안 읽고 있었음. `ci.yml`의 배포 job과 동일한 고정 경로(`/home/jun/marketboard/.env`)를 스크립트 안에서 직접 source하도록 수정, 이후 모든 `docker compose` 호출에도 `--env-file`을 일관되게 전달.
+  3. **Let's Encrypt 인증서 요청이 "Connection refused"로 실패** — 처음엔 라우터 포트포워딩/DuckDNS 문제로 의심했으나, `curl -4 ifconfig.me`(Pi의 실제 공인 IP)와 `nslookup marketboard.duckdns.org`가 정확히 일치하는 걸 확인해서 그쪽은 정상으로 판명. 진짜 원인은 그 시점에 `marketboard-nginx`가 인증서 없이 크래시루프 중이라(`docker ps`의 `Restarting (1)`) 80번 포트에 아무도 없었던 것 — 라우터/DNS 문제가 아니라 단순히 nginx가 안 떠 있었던 것. 사용자가 직접 nginx를 HTTP 전용으로 먼저 안정적으로 띄우고, 80번 포트/DuckDNS 접근을 재확인한 뒤 재시도해서 해결.
+  4. **`init-letsencrypt.sh`의 진짜 인증서 발급 스텝에서 certbot이 `certonly`를 실행 안 함** — `--entrypoint`에 `"certbot certonly --webroot ..."`를 통째로 문자열로 넘겼는데, `docker-compose.yml`의 `certbot` 서비스 자체에 이미 커스텀 `entrypoint:`(renew 루프)가 정의돼 있어서 그 오버라이드가 기대대로 안 먹힘. 사용자가 `--entrypoint certbot`(한 단어)로 엔트리포인트만 지정하고 `certonly --webroot ...`를 뒤에 별도 인자로 넘기는 방식으로 직접 해결 — 스크립트에도 이 방식으로 반영(더미 인증서 삭제 스텝도 동일 패턴으로 통일).
+  - 인증서 발급 성공 후 로그인 요청에서 **`Public Key Retrieval is not allowed`류 MySQL 인증 실패** 추가 발견 — MySQL 8 기본 인증 플러그인(`caching_sha2_password`)이 비-SSL 연결(`useSSL=false`)에서 서버 RSA 공개키를 자동으로 못 받아오는 것. `docker-compose.yml` backend의 `DB_URL`에 `allowPublicKeyRetrieval=true` 추가로 해결(로컬 개발용 `application.yaml` 기본값에도 사용자가 동일하게 반영해둠).
+  - **최종 확인**: `https://marketboard.duckdns.org`에서 실제 로그인까지 정상 동작 확인.
 
 ---
 
@@ -656,11 +661,11 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 
 ## 다음 액션 제안 (우선순위 순)
 > 상세 실행 계획은 문서 맨 위 "다음 세션 시작점" 참고.
-1. **nginx/certbot/DuckDNS Pi 쪽 수동 준비 완료 후 푸시** — 위 "다음 세션 시작점"의 체크리스트(라우터 포트포워딩/DuckDNS 토큰/`.env` 갱신/`init-letsencrypt.sh` 실행) 먼저 끝낼 것. 순서 어기고 그냥 푸시하면 nginx 크래시루프.
-2. 그 다음 최신 푸시의 GitHub Actions 실행 결과 확인 — 4개 테스트/빌드 job + `deploy` job 전부 통과하는지, `https://marketboard.duckdns.org` 실제 응답하는지
-3. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
+1. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
+2. (여유 있을 때) 공유 리버스 프록시 전환 검토 — `tradehub-nginx`가 stop된 채로 남아있음, 나중에 하나의 nginx/Traefik로 tradehub/marketboard 둘 다 Host 헤더 라우팅하는 방향으로 합의했었음(위 "Phase 7" 섹션 참고)
+3. 그 외엔 아래 "남겨둔 확인 작업" 항목들 참고
 
-**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18), S&P500 일봉 백필 정체 문제 조사·수정(2026-07-18), Phase 7 PR 테스트 워크플로 추가(2026-07-19), 배포용 Dockerfile 3종 + docker-compose.yml 작성 및 로컬 검증(2026-07-19), Pi self-hosted runner + ci.yml build/deploy job(2026-07-19), gradlew 실행권한/백엔드 테스트 H2 전환 CI 버그 수정(2026-07-19), nginx+certbot+DuckDNS 공개 HTTPS 코드 작성(2026-07-19, Pi 반영 전)
+**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18), S&P500 일봉 백필 정체 문제 조사·수정(2026-07-18), **Phase 7 전체(PR 테스트 워크플로, 배포용 Dockerfile 3종+docker-compose.yml, Pi self-hosted runner, ci.yml build/deploy job, nginx+certbot+DuckDNS 공개 HTTPS) — `https://marketboard.duckdns.org` 실제 배포·동작 확인까지 완료(2026-07-19)**
 
 ---
 

@@ -3,7 +3,7 @@ spring:
     name: marketboardBackend
 
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/stockmonitordb?useSSL=false&serverTimezone=UTC}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/stockmonitordb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${DB_USERNAME:stockmonitor}
     password: ${DB_PASSWORD:stockmonitor1234}
     driver-class-name: com.mysql.cj.jdbc.Driver

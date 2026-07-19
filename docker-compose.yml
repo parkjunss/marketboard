@@ -126,3 +126,46 @@ services:
     ports:
       - "3300:3000"
     networks: [marketboard]
+
+  # Public entrypoint for marketboard.duckdns.org — the only service bound to host 80/443.
+  # See nginx/init-letsencrypt.sh for the one-time cert bootstrap this depends on.
+  nginx:
+    image: nginx:alpine
+    container_name: marketboard-nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certbot-webroot:/var/www/certbot:ro
+      - ./nginx/letsencrypt:/etc/letsencrypt:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks: [marketboard]
+    # nginx caches the loaded cert in memory and won't notice certbot writing a renewed
+    # one to disk on its own — this background loop periodically reloads (cheap, a no-op
+    # when nothing changed) so a renewal actually takes effect without manual intervention.
+    command: >-
+      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+
+  certbot:
+    image: certbot/certbot
+    container_name: marketboard-certbot
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    volumes:
+      - ./nginx/certbot-webroot:/var/www/certbot
+      - ./nginx/letsencrypt:/etc/letsencrypt
+    entrypoint: >-
+      /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done;'
+
+  duckdns:
+    image: linuxserver/duckdns
+    container_name: marketboard-duckdns
+    restart: unless-stopped
+    environment:
+      TOKEN: ${DUCKDNS_TOKEN}
+      SUBDOMAINS: ${DUCKDNS_SUBDOMAIN}

@@ -112,8 +112,10 @@ jobs:
       - name: Build images
         run: docker compose --env-file /home/jun/marketboard/.env build
 
+      # Scoped to just the services we build — nginx/certbot/duckdns use public images we
+      # don't own, and `docker compose push` with no args would try (and fail) to push them.
       - name: Push images to GHCR
-        run: docker compose --env-file /home/jun/marketboard/.env push
+        run: docker compose --env-file /home/jun/marketboard/.env push backend collector frontend
 
       - name: Deploy
         run: docker compose --env-file /home/jun/marketboard/.env up -d --remove-orphans

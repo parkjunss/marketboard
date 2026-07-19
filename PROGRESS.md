@@ -6,13 +6,13 @@
 
 ## 다음 세션 시작점
 
-**계획서(Phase 1~7) 로드맵 중 테스트 게이트 + 배포 준비까지 완료** (2026-07-19): Phase 6(Prometheus + Grafana 관측성)에 이어 Phase 7의 PR 테스트 워크플로(`.github/workflows/ci.yml`), 그리고 배포용 `Dockerfile` 3종 + `docker-compose.yml` + `.env.example`까지 전부 추가됨. 배포 대상은 사용자가 이미 SSH로 연결해둔 라즈베리파이 `rasp4`(SSH 별칭 `raspberrypi`, `192.168.0.174`)로 확정 — 단, 이 Pi가 사설 IP라 GitHub 호스팅 러너가 SSH로 직접 못 들어가서, 계획서 원안(SSH 스텝)이 아니라 **Pi에 self-hosted runner를 설치하는 방식**으로 결정함(GHCR 이미지 푸시까지는 호스팅 러너, 실제 `docker compose pull && up -d`는 Pi에 상주하는 self-hosted runner가 outbound로 처리). self-hosted runner 설치 자체(GitHub 웹에서 등록 토큰 발급 필요)와 `ci.yml`의 build+deploy job 추가는 아직 안 함 — 상세는 아래 "Phase 7" 섹션의 "남은 일" 참고.
+**계획서(Phase 1~7) 로드맵 전체 구현 완료, 최초 실제 CI 실행 검증 중** (2026-07-19): Phase 6(Prometheus + Grafana 관측성)에 이어 Phase 7의 PR 테스트 워크플로 + 배포용 `Dockerfile` 3종 + `docker-compose.yml` + Pi(`rasp4`) self-hosted runner 설치 + `ci.yml`의 build/deploy job까지 전부 추가됨(상세는 아래 "Phase 7" 섹션). 이 Pi가 사설 IP(`192.168.0.174`)라 GitHub 호스팅 러너가 SSH로 못 들어가는 문제 때문에, 계획서 원안(SSH 스텝)이 아니라 **Pi에 self-hosted runner를 설치하는 방식**으로 결정함 — 덕분에 러너가 Pi 위에서 네이티브 ARM64로 직접 빌드해서 buildx/QEMU 크로스빌드조차 불필요해짐. main에 푸시해서 첫 실제 워크플로 실행을 검증하는 과정에서 버그 2건 발견/수정함(gradlew 실행권한 유실, `@SpringBootTest`가 CI의 MySQL 서비스 컨테이너에 연결 실패 → 테스트를 H2로 전환) — 상세는 "Phase 7" 섹션의 "실제 CI 첫 실행에서 발견/수정한 문제" 참고. **다음 세션 시작 시 가장 먼저 할 일: 이 수정을 반영한 푸시 이후 GitHub Actions에서 4개 job(backend/collector/frontend/deploy)이 전부 초록불인지, Pi에 실제로 컨테이너가 떠서 서비스가 살아있는지 확인.**
 
 이전 세션(2026-07-18)에 추가된 것: 포트폴리오 삭제 다이얼로그 버그 수정(`useImperativeAlertDialog` → 제어형 `AlertDialog`, 프로젝트 전체에서 이제 완전히 안 씀), 종목 세부 페이지(`/symbols/[ticker]`) 보강(뉴스/기술지표/재무링크/전일대비/회사명/1년고저/기업개요/차트 SMA오버레이/잘못된 티커 처리/뒤로가기 링크), 시세보드→종목리스트 통합(관심종목 별표 이관), 티커 이름 truncate, SMA 라인 색상 버그 수정, Prometheus/Grafana 관측성(커스텀 메트릭 4종 + 독립 Docker 컨테이너 + 대시보드), S&P500 500종목 일봉 백필이 정체돼 보이던 문제 조사 및 수정(진짜 원인은 yfinance가 아니라 종목마다 새 MySQL 커넥션을 여느라 커넥션당 ~10초씩 걸리던 것) — 상세는 아래 각 섹션 참고.
 
 **바로 시작할 것 후보:**
 
-1. **Phase 7 나머지 — Pi에 self-hosted runner 설치 + `ci.yml` build/deploy job 추가**: GitHub 저장소 웹(Settings → Actions → Runners)에서 사용자가 등록 토큰을 직접 발급받아야 진행 가능. 상세 절차는 아래 "Phase 7" 섹션 "남은 일" 참고.
+1. **최신 푸시의 GitHub Actions 실행 결과 확인** — backend/collector/frontend/deploy 4개 job 전부 통과하는지, Pi(`rasp4`)에서 `docker ps`로 `marketboard-*` 컨테이너 7개(mysql/redis/backend/collector/frontend/prometheus/grafana)가 정상 기동했는지, 실제로 `http://192.168.0.174:3100`(프론트) / `:8081/actuator/health`(백엔드)가 응답하는지. 상세는 아래 "Phase 7" 섹션 참고.
 
 **남겨둔 확인 작업 (급하지 않음)**
 - 장 마감 후 `collector/app/rest_fallback.py`(이제 Finnhub REST가 아니라 yfinance 기반) 전체 폴백 루프 재검증 — fetch+publish 경로 자체는 확인했지만, 스테일 조건이 실제로 걸리는 장 마감 상황의 전체 루프는 아직 안 봄
@@ -595,7 +595,7 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 ### 🟡 Phase 7 — CI/CD (GitHub Actions) — 부분 완료 (2026-07-19)
 - [x] Git 저장소 초기화 및 첫 푸시 완료(`github.com/parkjunss/marketboard`, Private) (2026-07-18)
 - [x] **PR 테스트 워크플로 추가** (`.github/workflows/ci.yml`, 2026-07-19) — `pull_request`/`push`(main) 트리거로 3개 병렬 job:
-  - `backend`: `mysql:8`(DB `stockmonitordb`, 계정 `stockmonitor`/`stockmonitor1234` — `application.yaml` 기본값과 동일하게 맞춰서 env 변수 주입 없이 그대로 동작) + `redis:7`을 GitHub Actions `services:`로 띄운 뒤 `./gradlew test`(21건, `MarketboardBackendApplicationTests`가 `@SpringBootTest`라 실제 DB/Redis 접속이 필요함 — 로컬 셰어드 컨테이너와 동일 계정/DB명으로 서비스 컨테이너를 맞춘 이유)
+  - `backend`: `redis:7`을 GitHub Actions `services:`로 띄운 뒤 `./gradlew test`(28건). **처음엔 `mysql:8` 서비스 컨테이너도 같이 띄웠으나 실제 CI 실행에서 제거함** — 상세는 아래 "실제 CI 첫 실행에서 발견/수정한 문제" 참고
   - `collector`: `astral-sh/setup-uv` + `uv sync --locked --all-groups` + `uv run pytest`(10건, 순수 로직 테스트라 외부 의존성 없음)
   - `frontend`: `npm ci` + `npx tsc --noEmit` + `npm run lint`(eslint) + `npm run build`(`next build`) — `NEXT_PUBLIC_API_BASE_URL`/`NEXT_PUBLIC_WS_URL`는 `.env.local`(gitignore)이 없어도 코드에 폴백 기본값이 있어 빌드 실패 없음(`src/lib/api.ts`, `src/lib/quote-stream-context.tsx`)
   - 로컬에서 3개 job의 커맨드를 전부 그대로 실행해 사전 검증함(백엔드 41초/`BUILD SUCCESSFUL`, collector 10건 통과, 프론트 typecheck/lint/build 전부 통과) — CI 러너 자체(실제 GitHub Actions 실행)는 다음 푸시/PR에서 최초로 트리거될 것이므로 아직 미검증
@@ -612,11 +612,14 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 - **로컬 검증 완료** (2026-07-19, Docker Desktop으로 amd64 빌드 — 최종 ARM64 크로스빌드 검증은 아님, 아래 "남은 일" 참고): 3개 Dockerfile 전부 `docker build` 성공. 백엔드는 실제로 컨테이너 기동까지 해서 기존 로컬 `mysql-container`/`redis-container`에 붙여 `/actuator/health` → `200`, 로그에서 Flyway/Hibernate/Tomcat 정상 기동 확인. 프론트엔드도 컨테이너 기동 후 `/`, `/login` → `200` 확인, 빌드 ARG로 넘긴 `NEXT_PUBLIC_API_BASE_URL` 값이 실제 클라이언트 번들(`*.next/static/chunks/*.js`)에 박혀 들어간 것까지 grep으로 확인. collector는 컨테이너 안에서 `main.py` import 성공 확인. `docker compose config`로 `docker-compose.yml` 문법/변수 보간도 검증함.
 - **환경 이슈 발견/해결**: 로컬 Docker Desktop이 `eclipse-temurin:17-jdk`(공개 이미지, 인증 불필요) pull 시 `401 Unauthorized: incorrect username or password`로 실패하는 현상 있었음 — Docker Desktop의 자격증명 저장소(`credsStore: desktop`)에 남아있던 상한 Docker Hub 로그인 정보가 익명 pull까지 방해한 것으로 추정(이전 세션의 "grafana/grafana:latest pull 실패" 이슈와 동일 계열 원인일 가능성). `docker logout` 한 번으로 해결됨 — 이 환경에서 앞으로 도커 이미지 pull이 뜬금없이 401로 실패하면 우선 `docker logout` 시도할 것.
 
-**남은 일 (Phase 7 완주까지)**:
-1. Pi(`rasp4`)에 GitHub Actions self-hosted runner 설치 — 사설 IP(`192.168.0.174`)라 GitHub 호스팅 러너가 SSH로 못 들어가는 문제를 우회하기 위해 SSH 스텝 대신 이 방식으로 결정함. 등록 토큰은 GitHub 웹(저장소 Settings → Actions → Runners)에서 사용자가 직접 발급받아야 함(API로 대행 불가).
-2. `ci.yml`에 build+deploy job 추가 — GitHub 호스팅 러너에서 `buildx`로 ARM64 이미지 크로스빌드 후 GHCR 푸시 → Pi의 self-hosted runner가 이어받아 `docker compose pull && up -d`(SSH 불필요, 러너가 Pi에 상주).
-3. GHCR 인증 시크릿 및 `.env.example`의 각 값(특히 `FINNHUB_API_KEY`, `JWT_SECRET`, DB 비밀번호)을 실제 값으로 채운 `.env`를 Pi에 배치(커밋 금지).
-4. 최초 배포 시 ARM64 실제 빌드/기동 검증(로컬은 amd64로만 확인함) — 특히 백엔드 Dockerfile의 `eclipse-temurin` 계열과 collector의 `astral-sh/uv` 이미지가 멀티아치 이미지인지는 확인했으나(공식 이미지라 aarch64 포함이 사실상 보장됨) 실제 Pi 위에서의 기동은 아직 미검증.
+**Pi에 self-hosted runner 설치 + `ci.yml` build/deploy job 추가 완료 (2026-07-19)**
+- Pi(`rasp4`)에 GitHub Actions self-hosted runner 설치·등록 완료 — 러너 이름 `marketboard`, 라벨 `self-hosted`/`Linux`/`ARM64`/`deploy`(커스텀 라벨 추가), `~/marketboard/actions-runner`에서 `./run.sh`로 상시 대기 중. 등록 토큰은 GitHub 웹(저장소 Settings → Actions → Runners)에서 사용자가 직접 발급받아 진행함(API로 대행 불가한 부분).
+- `ci.yml`에 `deploy` job 추가 — `runs-on: [self-hosted, Linux, ARM64, deploy]`로 위 러너를 타깃팅, `backend`/`collector`/`frontend` 테스트 job이 전부 통과한 뒤(`needs:`) `push`(main)에서만 실행. **러너가 Pi 위에서 직접 도는 것이라 `buildx`/QEMU 크로스빌드가 아예 불필요**(처음 계획했던 "호스팅 러너에서 크로스빌드 → GHCR 푸시 → self-hosted 러너가 pull"보다 단순해짐) — `docker compose build`(네이티브 ARM64) → `docker compose push`(GHCR, `docker/login-action`으로 `GITHUB_TOKEN` 인증, 워크플로에 `permissions: packages: write` 필요) → `docker compose up -d --remove-orphans` 3단계.
+- 시크릿: 실제 `.env`(FINNHUB_API_KEY/JWT_SECRET/DB 비밀번호 등 채운 것)는 Pi의 `/home/jun/marketboard/.env`에 배치(잡의 일회성 체크아웃 디렉터리 밖 — 커밋 안 되고 실행마다 유지됨), `docker compose` 커맨드에서 `--env-file`로 명시 참조. GitHub 저장소 Settings → Actions → General → Workflow permissions를 "Read and write permissions"로 변경(그래야 job의 `packages: write`가 실제로 GHCR 푸시를 허용함).
+
+**실제 CI 첫 실행에서 발견/수정한 문제 2건 (2026-07-19)**:
+1. **`./gradlew: Permission denied` (exit 126)** — `marketboardBackend/gradlew`가 git에 `100644`(실행권한 없음)로 커밋돼 있었음(이 Windows 개발 머신에서 커밋할 때 실행 비트가 안 잡힌 것으로 추정, 로컬에선 `gradlew.bat`을 쓰니 여태 안 드러남 — 세션 메모리 `feedback_windows_git_strips_exec_bit` 참고). `git update-index --chmod=+x`로 트래킹 모드 수정 + `ci.yml`의 backend job에 방어적으로 `chmod +x gradlew` 스텝 추가.
+2. **`MarketboardBackendApplicationTests`(`@SpringBootTest`)가 MySQL 연결 실패로 죽음** — `FlywaySqlUnableToConnectToDbException`. `mysql:8` 서비스 컨테이너의 healthcheck(`mysqladmin ping`)가 초기화 재시작 구간에서 일시적으로 "healthy"를 잘못 보고하는 것으로 추정(MySQL 공식 이미지의 잘 알려진 CI 레이스 컨디션). 근본 수정 대신 **테스트를 아예 실제 MySQL에 안 의존하게** 접근 전환 — `marketboardBackend/src/test/resources/application.yaml`(신규, 테스트 클래스패스에서 메인 `application.yaml`을 완전히 shadow함)을 추가해 datasource를 인메모리 H2(`jdbc:h2:mem:testdb;MODE=MySQL`)로, `spring.flyway.enabled: false` + `ddl-auto: create-drop`(마이그레이션 SQL이 MySQL 전용 문법이라 Flyway로 H2에 그대로 적용 불가 — Hibernate가 엔티티에서 스키마를 직접 생성하도록 우회)로 전환. `build.gradle`에 `testRuntimeOnly 'com.h2database:h2'` 추가, `ci.yml`의 backend job에서 `mysql` 서비스 컨테이너 자체를 제거(더 이상 필요 없음 — `redis`는 `AlertMirrorInitializer`가 컨텍스트 기동 시 실제로 Redis에 접속하므로 유지). 로컬에서 `./gradlew test` 재검증(28건 전부 통과, `Database JDBC URL [jdbc:h2:mem:testdb]`로 H2 사용 확인).
 
 ---
 

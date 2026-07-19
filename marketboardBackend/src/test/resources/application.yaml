@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: marketboardBackend
+
+  # Shadows src/main/resources/application.yaml on the test classpath. Tests use an
+  # in-memory H2 DB instead of MySQL so ./gradlew test doesn't depend on a real database
+  # being reachable/ready (the Flyway migrations themselves are MySQL-specific and are
+  # not run here — Hibernate builds the schema straight from the JPA entities instead).
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    open-in-view: false
+
+  flyway:
+    enabled: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+jwt:
+  secret: test-only-secret-not-for-production-0123456789abcdef
+  access-token-expiration-ms: 900000
+  refresh-token-expiration-ms: 604800000
+
+admin:
+  seed:
+    email: admin@marketboard.local
+    password: TestAdmin1234!
+
+app:
+  cors:
+    allowed-origins: http://localhost:3100
+
+collector:
+  base-url: http://localhost:8000
+
+indicators:
+  cron: 0 */5 * * * *

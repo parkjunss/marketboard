@@ -11,20 +11,8 @@ jobs:
     name: Backend (Gradle)
     runs-on: ubuntu-latest
     services:
-      mysql:
-        image: mysql:8
-        env:
-          MYSQL_DATABASE: stockmonitordb
-          MYSQL_USER: stockmonitor
-          MYSQL_PASSWORD: stockmonitor1234
-          MYSQL_ROOT_PASSWORD: root
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h localhost"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
+      # No mysql service here: tests run against in-memory H2 (see
+      # marketboardBackend/src/test/resources/application.yaml), not a real MySQL.
       redis:
         image: redis:7
         ports:

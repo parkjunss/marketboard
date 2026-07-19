@@ -48,7 +48,9 @@ jobs:
 
       - name: Run tests
         working-directory: marketboardBackend
-        run: ./gradlew test
+        run: |
+          chmod +x gradlew
+          ./gradlew test
 
   collector:
     name: Collector (pytest)

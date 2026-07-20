@@ -83,12 +83,24 @@ function SignupForm() {
                 isRequired
                 status={passwordMismatch ? { type: 'error', message: '비밀번호가 일치하지 않습니다' } : undefined}
               />
-              <CheckboxInput
-                label="이용약관 및 개인정보 처리방침에 동의합니다"
-                value={termsAgreed}
-                onChange={setTermsAgreed}
-                isRequired
-              />
+              <VStack gap={1}>
+                <CheckboxInput
+                  label="이용약관 및 개인정보 처리방침에 동의합니다"
+                  value={termsAgreed}
+                  onChange={setTermsAgreed}
+                  isRequired
+                />
+                <Text type="body" size="sm" color="secondary">
+                  <NextLink href="/terms" target="_blank">
+                    이용약관
+                  </NextLink>
+                  {' · '}
+                  <NextLink href="/privacy" target="_blank">
+                    개인정보 처리방침
+                  </NextLink>{' '}
+                  보기
+                </Text>
+              </VStack>
               <Button type="submit" variant="primary" label="가입하기" isLoading={isSubmitting} />
             </VStack>
           </form>

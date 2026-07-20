@@ -1,0 +1,14 @@
+apiVersion: 1
+
+# ${GRAFANA_DISCORD_WEBHOOK_URL} is expanded from the container's environment at provisioning
+# time (verified against Grafana 10.3.0 — an unset/empty var fails contact point validation and
+# crashes the whole container, not just alerting, hence the non-empty placeholder default in
+# docker-compose.yml). Set the real webhook URL in .env to actually receive alerts.
+contactPoints:
+  - orgId: 1
+    name: discord-alerts
+    receivers:
+      - uid: discord-alerts-receiver
+        type: discord
+        settings:
+          url: '${GRAFANA_DISCORD_WEBHOOK_URL}'

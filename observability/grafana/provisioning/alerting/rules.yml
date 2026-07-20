@@ -1,0 +1,103 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: marketboard-alerts
+    folder: MarketBoard
+    interval: 1m
+    rules:
+      - uid: marketboard-collector-ws-disconnected
+        title: 콜렉터 WebSocket 연결 끊김
+        condition: B
+        for: 2m
+        noDataState: NoData
+        execErrState: Error
+        annotations:
+          summary: 콜렉터가 Finnhub WebSocket에 연결되어 있지 않습니다 (2분 이상 지속).
+        labels:
+          severity: critical
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: marketboard_collector_ws_connected
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: '__expr__'
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              datasource:
+                type: __expr__
+                uid: '__expr__'
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+                  operator:
+                    type: and
+                  query:
+                    params: ['A']
+                  reducer:
+                    type: last
+                  type: query
+
+      - uid: marketboard-indicators-failure-spike
+        title: 인디케이터 계산 실패율 급증
+        condition: B
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: 지난 15분간 지표(SMA/RSI) 재계산 실패가 5건을 초과했습니다.
+        labels:
+          severity: warning
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: increase(marketboard_indicators_recompute_total{result="failure"}[15m])
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: '__expr__'
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              datasource:
+                type: __expr__
+                uid: '__expr__'
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [5]
+                  operator:
+                    type: and
+                  query:
+                    params: ['A']
+                  reducer:
+                    type: last
+                  type: query

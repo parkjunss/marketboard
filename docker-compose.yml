@@ -162,6 +162,11 @@ services:
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # Discord contact point (see observability/grafana/provisioning/alerting/). A missing/empty
+      # value here fails Grafana's contact-point validation and crashes the *entire* container on
+      # boot (verified against 10.3.0), not just alerting — hence the non-empty placeholder
+      # fallback, which just means alerts silently won't deliver until the real URL is set.
+      GRAFANA_DISCORD_WEBHOOK_URL: ${GRAFANA_DISCORD_WEBHOOK_URL:-https://discord.com/api/webhooks/0/unset}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./observability/grafana/provisioning:/etc/grafana/provisioning

@@ -12,6 +12,11 @@ volumes:
   # breaking the whole workspace. A named volume lives inside Docker's own storage instead.
   letsencrypt-data:
   certbot-webroot-data:
+  # Same reasoning as letsencrypt-data: mysqldump runs as the mysql image's default user, so a
+  # bind mount would end up owned in a way `actions/checkout` can't clean up. Off-Pi delivery
+  # (scp/rclone/etc.) is a separate follow-up — this only protects against mysql-data itself
+  # getting corrupted, not against losing the Pi.
+  mysql-backups:
 
 services:
   mysql:
@@ -33,6 +38,31 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # Daily mysqldump into the mysql-backups volume, 14-day retention. Dumps stay on the Pi for
+  # now (see mysql-backups volume comment above) — protects against a corrupted mysql-data
+  # volume or an accidental bad write, not against Pi/disk loss.
+  backup:
+    image: mysql:8.0
+    container_name: marketboard-backup
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_PWD: ${DB_PASSWORD}
+    volumes:
+      - mysql-backups:/backups
+    networks: [marketboard]
+    entrypoint: >-
+      /bin/sh -c '
+      trap exit TERM;
+      while :; do
+        FILE=/backups/stockmonitordb_$$(date +%Y%m%d_%H%M%S).sql.gz;
+        mysqldump -h mysql -u stockmonitor stockmonitordb | gzip > "$$FILE" && echo "backup: wrote $$FILE" || echo "backup: mysqldump failed" >&2;
+        find /backups -name "*.sql.gz" -mtime +14 -delete;
+        sleep 24h & wait $${!};
+      done'
 
   redis:
     image: redis:7-alpine

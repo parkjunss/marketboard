@@ -65,7 +65,13 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   return data as T;
 }
 
-export function signup(input: { email: string; password: string; username: string }): Promise<void> {
+export function signup(input: {
+  email: string;
+  password: string;
+  passwordConfirm: string;
+  username: string;
+  termsAgreed: boolean;
+}): Promise<void> {
   return request<void>('/api/auth/signup', { method: 'POST', body: input });
 }
 
@@ -156,6 +162,10 @@ export function bulkSetAdminSymbolsActive(
   return fetcher<SymbolResponse[]>('/api/admin/symbols/bulk-active', { method: 'PATCH', body: { ids, active } });
 }
 
+export function deleteAdminSymbol(fetcher: Fetcher, id: number): Promise<void> {
+  return fetcher<void>(`/api/admin/symbols/${id}`, { method: 'DELETE' });
+}
+
 export function getAdminUsers(fetcher: Fetcher): Promise<UserResponse[]> {
   return fetcher<UserResponse[]>('/api/admin/users');
 }
@@ -170,6 +180,10 @@ export function updateAdminUser(
 
 export function revokeAdminUserToken(fetcher: Fetcher, id: number): Promise<void> {
   return fetcher<void>(`/api/admin/users/${id}/revoke-token`, { method: 'POST' });
+}
+
+export function deleteAdminUser(fetcher: Fetcher, id: number): Promise<void> {
+  return fetcher<void>(`/api/admin/users/${id}`, { method: 'DELETE' });
 }
 
 export function getCollectorStatus(fetcher: Fetcher): Promise<CollectorStatusResponse> {

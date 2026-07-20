@@ -24,7 +24,13 @@ interface AuthContextValue {
   accessToken: string | null;
   isInitializing: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, username: string) => Promise<void>;
+  signup: (input: {
+    email: string;
+    password: string;
+    passwordConfirm: string;
+    username: string;
+    termsAgreed: boolean;
+  }) => Promise<void>;
   logout: () => Promise<void>;
   authFetch: <T>(path: string, options?: RequestOptions) => Promise<T>;
 }
@@ -87,9 +93,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyTokens],
   );
 
-  const signup = useCallback(async (email: string, password: string, username: string) => {
-    await api.signup({ email, password, username });
-  }, []);
+  const signup = useCallback(
+    async (input: { email: string; password: string; passwordConfirm: string; username: string; termsAgreed: boolean }) => {
+      await api.signup(input);
+    },
+    [],
+  );
 
   const logout = useCallback(async () => {
     const accessToken = accessTokenRef.current;

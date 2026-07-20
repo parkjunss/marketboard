@@ -69,7 +69,7 @@ class AuthServiceTest {
 
     @Test
     void signup_savesUserWithEncodedPasswordAndUserRole() {
-        SignupRequest request = new SignupRequest("new@example.com", "password123", "newbie");
+        SignupRequest request = new SignupRequest("new@example.com", "password123", "password123", "newbie", true);
         when(userRepository.existsByEmail(request.email())).thenReturn(false);
         when(passwordEncoder.encode(request.password())).thenReturn("encoded-pw");
 
@@ -86,7 +86,7 @@ class AuthServiceTest {
 
     @Test
     void signup_duplicateEmail_throwsAndDoesNotSave() {
-        SignupRequest request = new SignupRequest("dup@example.com", "password123", "dup");
+        SignupRequest request = new SignupRequest("dup@example.com", "password123", "password123", "dup", true);
         when(userRepository.existsByEmail(request.email())).thenReturn(true);
 
         assertThatThrownBy(() -> authService.signup(request))

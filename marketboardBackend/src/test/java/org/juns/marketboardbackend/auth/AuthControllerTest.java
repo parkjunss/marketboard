@@ -73,7 +73,7 @@ class AuthControllerTest {
 
     @Test
     void signup_validRequest_returnsCreated() throws Exception {
-        SignupRequest request = new SignupRequest("new@example.com", "password123", "newbie");
+        SignupRequest request = new SignupRequest("new@example.com", "password123", "password123", "newbie", true);
 
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -85,7 +85,31 @@ class AuthControllerTest {
 
     @Test
     void signup_invalidEmail_returnsBadRequestAndSkipsService() throws Exception {
-        SignupRequest request = new SignupRequest("not-an-email", "password123", "newbie");
+        SignupRequest request = new SignupRequest("not-an-email", "password123", "password123", "newbie", true);
+
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(authService, never()).signup(any());
+    }
+
+    @Test
+    void signup_passwordConfirmMismatch_returnsBadRequestAndSkipsService() throws Exception {
+        SignupRequest request = new SignupRequest("new@example.com", "password123", "different456", "newbie", true);
+
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(authService, never()).signup(any());
+    }
+
+    @Test
+    void signup_termsNotAgreed_returnsBadRequestAndSkipsService() throws Exception {
+        SignupRequest request = new SignupRequest("new@example.com", "password123", "password123", "newbie", false);
 
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)

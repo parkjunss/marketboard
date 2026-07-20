@@ -8,6 +8,7 @@ import { VStack } from '@astryxdesign/core/Stack';
 import { Card } from '@astryxdesign/core/Card';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { TextInput } from '@astryxdesign/core/TextInput';
+import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { Button } from '@astryxdesign/core/Button';
 import { Banner } from '@astryxdesign/core/Banner';
 import { RedirectIfAuthed } from '@/components/RedirectIfAuthed';
@@ -19,16 +20,30 @@ function SignupForm() {
   const { signup, login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [username, setUsername] = useState('');
+  const [termsAgreed, setTermsAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const passwordMismatch = passwordConfirm.length > 0 && password !== passwordConfirm;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (password !== passwordConfirm) {
+      setError('비밀번호가 일치하지 않습니다.');
+      return;
+    }
+    if (!termsAgreed) {
+      setError('약관에 동의해야 가입할 수 있습니다.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await signup(email, password, username);
+      await signup({ email, password, passwordConfirm, username, termsAgreed });
       await login(email, password);
       router.replace('/stock-list');
     } catch (err) {
@@ -59,6 +74,20 @@ function SignupForm() {
                 onChange={setPassword}
                 isRequired
                 description="8자 이상"
+              />
+              <TextInput
+                type="password"
+                label="비밀번호 확인"
+                value={passwordConfirm}
+                onChange={setPasswordConfirm}
+                isRequired
+                status={passwordMismatch ? { type: 'error', message: '비밀번호가 일치하지 않습니다' } : undefined}
+              />
+              <CheckboxInput
+                label="이용약관 및 개인정보 처리방침에 동의합니다"
+                value={termsAgreed}
+                onChange={setTermsAgreed}
+                isRequired
               />
               <Button type="submit" variant="primary" label="가입하기" isLoading={isSubmitting} />
             </VStack>

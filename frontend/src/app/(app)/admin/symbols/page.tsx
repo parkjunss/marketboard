@@ -37,6 +37,8 @@ export default function AdminSymbolsPage() {
 
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [isBulkActivating, setIsBulkActivating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SymbolRow | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     api
@@ -93,6 +95,18 @@ export default function AdminSymbolsPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await api.deleteAdminSymbol(authFetch, deleteTarget.id);
+      setSymbols((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   const { selectionConfig } = useTableSelectionState<SymbolRow>({
     data: symbols,
     idKey: (item) => String(item.id),
@@ -121,6 +135,14 @@ export default function AdminSymbolsPage() {
           isLoading={pendingId === row.id}
           changeAction={(checked) => toggleActive(row, checked)}
         />
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      width: pixel(100),
+      renderCell: (row) => (
+        <Button variant="destructive" size="sm" label="삭제" onClick={() => setDeleteTarget(row)} />
       ),
     },
   ];
@@ -174,6 +196,21 @@ export default function AdminSymbolsPage() {
         actionVariant="primary"
         isActionLoading={isBulkActivating}
         onAction={handleBulkActivate}
+      />
+
+      <AlertDialog
+        isOpen={deleteTarget !== null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="종목을 삭제할까요?"
+        description={
+          deleteTarget
+            ? `${deleteTarget.ticker} 종목과 관련된 모든 사용자의 시세 이력/지표/워치리스트/알림/포트폴리오 보유 내역이 함께 삭제됩니다. 되돌릴 수 없습니다. 잠시 비활성화하려면 삭제 대신 활성 토글을 사용하세요.`
+            : ''
+        }
+        actionLabel="삭제"
+        actionVariant="destructive"
+        isActionLoading={isDeleting}
+        onAction={handleDelete}
       />
     </VStack>
   );

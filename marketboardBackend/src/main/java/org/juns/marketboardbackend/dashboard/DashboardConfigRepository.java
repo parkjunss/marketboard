@@ -6,4 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface DashboardConfigRepository extends JpaRepository<DashboardConfig, Long> {
 
     Optional<DashboardConfig> findByUser_Id(Long userId);
+
+    void deleteByUser_Id(Long userId);
 }

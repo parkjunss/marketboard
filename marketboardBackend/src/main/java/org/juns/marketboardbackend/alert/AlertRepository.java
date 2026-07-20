@@ -11,4 +11,8 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     Optional<Alert> findByIdAndUser_Id(Long id, Long userId);
 
     List<Alert> findByTriggeredAtIsNull();
+
+    void deleteBySymbol_Id(Long symbolId);
+
+    void deleteByUser_Id(Long userId);
 }

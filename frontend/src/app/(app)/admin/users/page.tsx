@@ -6,8 +6,10 @@ import type { TableColumn } from '@astryxdesign/core/Table';
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
 import { Switch } from '@astryxdesign/core/Switch';
 import { Button } from '@astryxdesign/core/Button';
+import { HStack } from '@astryxdesign/core/Stack';
 import { Center } from '@astryxdesign/core/Center';
 import { Spinner } from '@astryxdesign/core/Spinner';
+import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import type { UserResponse } from '@/lib/types';
@@ -19,6 +21,8 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingId, setPendingId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     api
@@ -56,6 +60,18 @@ export default function AdminUsersPage() {
       await api.revokeAdminUserToken(authFetch, row.id);
     } finally {
       setPendingId(null);
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await api.deleteAdminUser(authFetch, deleteTarget.id);
+      setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -97,24 +113,52 @@ export default function AdminUsersPage() {
     {
       key: 'actions',
       header: '',
-      width: pixel(160),
+      width: pixel(280),
       renderCell: (row) => (
-        <Button
-          variant="secondary"
-          size="sm"
-          label="토큰 강제 만료"
-          isLoading={pendingId === row.id}
-          clickAction={() => revokeToken(row)}
-        />
+        <HStack gap={2}>
+          <Button
+            variant="secondary"
+            size="sm"
+            label="토큰 강제 만료"
+            isLoading={pendingId === row.id}
+            clickAction={() => revokeToken(row)}
+          />
+          <Button
+            variant="destructive"
+            size="sm"
+            label="삭제"
+            isDisabled={row.id === currentUser?.id}
+            onClick={() => setDeleteTarget(row)}
+          />
+        </HStack>
       ),
     },
   ];
 
-  return isLoading ? (
-    <Center height={240}>
-      <Spinner size="lg" label="불러오는 중" />
-    </Center>
-  ) : (
-    <Table data={users} columns={columns} idKey="id" hasHover />
+  return (
+    <>
+      {isLoading ? (
+        <Center height={240}>
+          <Spinner size="lg" label="불러오는 중" />
+        </Center>
+      ) : (
+        <Table data={users} columns={columns} idKey="id" hasHover />
+      )}
+
+      <AlertDialog
+        isOpen={deleteTarget !== null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="계정을 삭제할까요?"
+        description={
+          deleteTarget
+            ? `${deleteTarget.email} 계정과 이 계정의 워치리스트/알림/포트폴리오/대시보드 설정이 모두 삭제됩니다. 되돌릴 수 없습니다.`
+            : ''
+        }
+        actionLabel="삭제"
+        actionVariant="destructive"
+        isActionLoading={isDeleting}
+        onAction={handleDelete}
+      />
+    </>
   );
 }

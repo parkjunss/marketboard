@@ -11,4 +11,6 @@ public interface PriceHistoryRepository extends JpaRepository<PriceHistory, Long
             String ticker, String timeframe, Pageable pageable);
 
     Optional<PriceHistory> findFirstBySymbol_TickerIgnoreCaseAndTimeframeOrderByTsDesc(String ticker, String timeframe);
+
+    void deleteBySymbol_Id(Long symbolId);
 }

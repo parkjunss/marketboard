@@ -2,13 +2,18 @@ package org.juns.marketboardbackend.symbol;
 
 import java.util.Comparator;
 import java.util.List;
+import org.juns.marketboardbackend.alert.AlertRepository;
 import org.juns.marketboardbackend.collector.CollectorClient;
 import org.juns.marketboardbackend.common.exception.DuplicateSymbolException;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
+import org.juns.marketboardbackend.indicator.IndicatorRepository;
+import org.juns.marketboardbackend.portfolio.PortfolioPositionRepository;
+import org.juns.marketboardbackend.pricehistory.PriceHistoryRepository;
 import org.juns.marketboardbackend.symbol.dto.SymbolBulkActiveRequest;
 import org.juns.marketboardbackend.symbol.dto.SymbolCreateRequest;
 import org.juns.marketboardbackend.symbol.dto.SymbolResponse;
 import org.juns.marketboardbackend.symbol.dto.SymbolUpdateRequest;
+import org.juns.marketboardbackend.watchlist.WatchlistItemRepository;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,12 +26,29 @@ public class SymbolAdminService {
     private final SymbolRepository symbolRepository;
     private final CollectorClient collectorClient;
     private final SimpMessagingTemplate messagingTemplate;
+    private final PriceHistoryRepository priceHistoryRepository;
+    private final IndicatorRepository indicatorRepository;
+    private final AlertRepository alertRepository;
+    private final WatchlistItemRepository watchlistItemRepository;
+    private final PortfolioPositionRepository portfolioPositionRepository;
 
     public SymbolAdminService(
-            SymbolRepository symbolRepository, CollectorClient collectorClient, SimpMessagingTemplate messagingTemplate) {
+            SymbolRepository symbolRepository,
+            CollectorClient collectorClient,
+            SimpMessagingTemplate messagingTemplate,
+            PriceHistoryRepository priceHistoryRepository,
+            IndicatorRepository indicatorRepository,
+            AlertRepository alertRepository,
+            WatchlistItemRepository watchlistItemRepository,
+            PortfolioPositionRepository portfolioPositionRepository) {
         this.symbolRepository = symbolRepository;
         this.collectorClient = collectorClient;
         this.messagingTemplate = messagingTemplate;
+        this.priceHistoryRepository = priceHistoryRepository;
+        this.indicatorRepository = indicatorRepository;
+        this.alertRepository = alertRepository;
+        this.watchlistItemRepository = watchlistItemRepository;
+        this.portfolioPositionRepository = portfolioPositionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -76,6 +98,25 @@ public class SymbolAdminService {
             }
         }
         return symbols.stream().map(SymbolResponse::from).toList();
+    }
+
+    /**
+     * Hard-deletes a symbol and everything that references it (price history, indicators,
+     * alerts, watchlist entries, portfolio positions) for every user — not just admin-visible
+     * test data. There's no undo short of restoring from a DB backup, so this is meant for
+     * genuine junk rows (e.g. test tickers), not for symbols you might want back later —
+     * {@link #update} with {@code active=false} is the reversible option for those.
+     */
+    @Transactional
+    public void delete(Long id) {
+        Symbol symbol = symbolRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Unknown symbol id " + id));
+        priceHistoryRepository.deleteBySymbol_Id(id);
+        indicatorRepository.deleteBySymbol_Id(id);
+        alertRepository.deleteBySymbol_Id(id);
+        watchlistItemRepository.deleteBySymbol_Id(id);
+        portfolioPositionRepository.deleteBySymbol_Id(id);
+        symbolRepository.delete(symbol);
     }
 
     /**

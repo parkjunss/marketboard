@@ -2,9 +2,12 @@ package org.juns.marketboardbackend.user;
 
 import jakarta.validation.Valid;
 import java.util.List;
+import org.juns.marketboardbackend.security.AuthenticatedUser;
 import org.juns.marketboardbackend.user.dto.UserResponse;
 import org.juns.marketboardbackend.user.dto.UserUpdateRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,6 +39,12 @@ public class UserAdminController {
     @PostMapping("/{id}/revoke-token")
     public ResponseEntity<Void> revokeToken(@PathVariable Long id) {
         userAdminService.revokeToken(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id, @AuthenticationPrincipal AuthenticatedUser principal) {
+        userAdminService.delete(id, principal.id());
         return ResponseEntity.noContent().build();
     }
 }

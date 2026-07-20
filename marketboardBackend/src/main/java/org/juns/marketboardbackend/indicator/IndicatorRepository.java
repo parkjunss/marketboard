@@ -10,4 +10,6 @@ public interface IndicatorRepository extends JpaRepository<Indicator, Long> {
 
     Optional<Indicator> findBySymbol_IdAndIndicatorTypeAndTimeframe(
             Long symbolId, IndicatorType indicatorType, String timeframe);
+
+    void deleteBySymbol_Id(Long symbolId);
 }

@@ -15,4 +15,6 @@ public interface PortfolioPositionRepository extends JpaRepository<PortfolioPosi
     long countByPortfolio_Id(Long portfolioId);
 
     void deleteByPortfolio_Id(Long portfolioId);
+
+    void deleteBySymbol_Id(Long symbolId);
 }

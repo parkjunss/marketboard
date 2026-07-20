@@ -8,6 +8,7 @@ import org.juns.marketboardbackend.common.exception.DuplicateWatchlistItemExcept
 import org.juns.marketboardbackend.common.exception.InvalidCredentialsException;
 import org.juns.marketboardbackend.common.exception.InvalidTokenException;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
+import org.juns.marketboardbackend.common.exception.SelfDeleteNotAllowedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -44,6 +45,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(SelfDeleteNotAllowedException.class)
+    public ResponseEntity<ErrorResponse> handleSelfDelete(SelfDeleteNotAllowedException ex) {
+        return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
     }
 
     @ExceptionHandler({DuplicateWatchlistItemException.class, DuplicateSymbolException.class, DuplicatePortfolioPositionException.class})

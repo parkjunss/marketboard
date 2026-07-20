@@ -13,4 +13,8 @@ public interface WatchlistItemRepository extends JpaRepository<WatchlistItem, Lo
     Optional<WatchlistItem> findByIdAndUser_Id(Long id, Long userId);
 
     int countByUser_Id(Long userId);
+
+    void deleteBySymbol_Id(Long symbolId);
+
+    void deleteByUser_Id(Long userId);
 }

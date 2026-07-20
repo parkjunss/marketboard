@@ -52,6 +52,10 @@ admin:
 app:
   cors:
     allowed-origins: http://localhost:3100
+  # MockMvc requests all share one client "IP", so with the default cap they'd trip each
+  # other's buckets across unrelated tests. RateLimitFilterTest re-enables this explicitly.
+  rate-limit:
+    enabled: false
 
 collector:
   base-url: http://localhost:8000

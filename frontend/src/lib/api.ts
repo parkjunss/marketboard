@@ -1,5 +1,7 @@
 import type {
   AlertResponse,
+  BacktestRunRequest,
+  BacktestRunResponse,
   CandleResponse,
   ChartIndicatorSettingsResponse,
   CollectorStatusResponse,
@@ -227,6 +229,18 @@ export function saveChartIndicatorSettings(
   settings: ChartIndicatorSettingsResponse,
 ): Promise<ChartIndicatorSettingsResponse> {
   return fetcher<ChartIndicatorSettingsResponse>('/api/chart-indicator-settings', { method: 'PUT', body: settings });
+}
+
+export function runBacktest(fetcher: Fetcher, request: BacktestRunRequest): Promise<BacktestRunResponse> {
+  return fetcher<BacktestRunResponse>('/api/backtest/runs', { method: 'POST', body: request });
+}
+
+export function getBacktestRuns(fetcher: Fetcher): Promise<BacktestRunResponse[]> {
+  return fetcher<BacktestRunResponse[]>('/api/backtest/runs');
+}
+
+export function getBacktestRun(fetcher: Fetcher, id: number): Promise<BacktestRunResponse> {
+  return fetcher<BacktestRunResponse>(`/api/backtest/runs/${id}`);
 }
 
 export function getMarketIndices(fetcher: Fetcher): Promise<MarketIndexInfo[]> {

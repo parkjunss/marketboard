@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import date, datetime
 
 import requests
 from fastapi import FastAPI, HTTPException
@@ -11,6 +11,7 @@ from app import config, mysql_writer
 from app.aggregator import CandleAggregator
 from app.alerts import check_alerts
 from app.backfill import backfill_symbol
+from app.backtest import InsufficientDataError, run_backtest
 from app.financials import get_financials
 from app.finnhub_source import FinnhubWebSocketSource
 from app.market_indices import get_index_history, list_indices
@@ -204,6 +205,26 @@ async def symbol_profile(symbol: str):
         return await asyncio.to_thread(get_symbol_profile, symbol.upper())
     except UnknownSymbolError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+class BacktestRunPayload(BaseModel):
+    tickers: list[str]
+    startDate: date
+    endDate: date
+    initialCapital: float
+    riskFreeRate: float
+
+
+@app.post("/backtest/run")
+async def backtest_run(payload: BacktestRunPayload):
+    try:
+        return await asyncio.to_thread(
+            run_backtest, payload.tickers, payload.startDate, payload.endDate, payload.initialCapital, payload.riskFreeRate
+        )
+    except InsufficientDataError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

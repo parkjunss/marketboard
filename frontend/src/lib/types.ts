@@ -139,6 +139,51 @@ export interface ChartIndicatorSettingsResponse {
   smaOverlays: SmaOverlayConfig[];
 }
 
+export interface BacktestRunRequest {
+  name: string;
+  tickers: string[];
+  startDate: string;
+  endDate: string;
+  initialCapital: number;
+  riskFreeRate: number;
+}
+
+export interface EquityPoint {
+  date: string;
+  portfolioValue: number;
+  benchmarkValue: number;
+}
+
+export interface BacktestMetrics {
+  totalReturnPct: number;
+  cagrPct: number | null;
+  maxDrawdownPct: number;
+  volatilityPct: number | null;
+  sharpeRatio: number | null;
+}
+
+export interface BacktestEngineResult {
+  equityCurve: EquityPoint[];
+  metrics: BacktestMetrics;
+}
+
+export type BacktestRunStatus = 'PENDING' | 'DONE' | 'FAILED';
+
+export interface BacktestRunResponse {
+  id: number;
+  name: string;
+  status: BacktestRunStatus;
+  tickers: string[];
+  startDate: string;
+  endDate: string;
+  initialCapital: number;
+  riskFreeRate: number;
+  result: BacktestEngineResult | null;
+  errorMessage: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
 export type PanelType = 'CHART' | 'NEWS' | 'WATCHLIST' | 'INDICATOR';
 
 export interface PanelConfig {

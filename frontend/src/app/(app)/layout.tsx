@@ -14,6 +14,7 @@ import {
   ChartBarIcon,
   GlobeAltIcon,
   ListBulletIcon,
+  PresentationChartLineIcon,
   ShieldCheckIcon,
   Squares2X2Icon,
 } from '@heroicons/react/24/outline';
@@ -85,6 +86,12 @@ function AppNav({ children }: { children: React.ReactNode }) {
               icon={BriefcaseIcon}
               isSelected={pathname === '/portfolio'}
               href="/portfolio"
+            />
+            <SideNavItem
+              label="백테스팅"
+              icon={PresentationChartLineIcon}
+              isSelected={pathname.startsWith('/backtest')}
+              href="/backtest"
             />
           </SideNavSection>
           {user?.role === 'ADMIN' && (

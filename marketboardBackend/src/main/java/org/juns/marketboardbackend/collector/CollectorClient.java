@@ -109,6 +109,38 @@ public class CollectorClient {
         }
     }
 
+    // Deliberately bypasses RestClient, same reasoning as syncSubscriptions below: a body-carrying
+    // POST through RestClient's JdkClientHttpRequestFactory silently never reaches the collector
+    // (confirmed via collector's access log showing no corresponding request) and just eats the
+    // full read timeout -- same h2c-upgrade-attempt problem, not fixed by forcing HTTP_1_1 on the
+    // shared HttpClient the way it fixed GETs. A dedicated 30s request timeout (rather than
+    // reusing the 10s RestClient default) gives a bit more headroom for the DB read + pandas work,
+    // even though Phase 1's buy & hold math is normally well under a second.
+    public Optional<BacktestEngineResult> runBacktest(BacktestEngineRequest request) {
+        try {
+            String json = objectMapper.writeValueAsString(request);
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/backtest/run"))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                log.warn("Backtest run failed via collector: HTTP {} {}", response.statusCode(), response.body());
+                return Optional.empty();
+            }
+            return Optional.ofNullable(objectMapper.readValue(response.body(), BacktestEngineResult.class));
+        } catch (IOException ex) {
+            log.warn("Backtest run failed via collector (collector may be offline): {}", ex.getMessage());
+            return Optional.empty();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while running backtest via collector: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
     public Optional<SymbolProfileResponse> getSymbolProfile(String ticker) {
         try {
             return Optional.ofNullable(

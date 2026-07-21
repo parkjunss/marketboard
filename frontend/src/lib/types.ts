@@ -225,6 +225,14 @@ export interface PutCallRatioResponse {
   putCallRatio: number;
 }
 
+export interface SectorPerformance {
+  slug: string;
+  name: string;
+  changePct1d: number | null;
+  changePct1w: number | null;
+  changePct1m: number | null;
+}
+
 export interface MarketBreadthResponse {
   snapshotDate: string;
   advancingCount: number;

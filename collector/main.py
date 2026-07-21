@@ -14,7 +14,7 @@ from app.backfill import backfill_symbol
 from app.backtest import InsufficientDataError, run_backtest
 from app.financials import get_financials
 from app.finnhub_source import FinnhubWebSocketSource
-from app.market_indices import get_index_history, list_indices
+from app.market_indices import get_index_history, get_sector_performance, list_indices
 from app.news import get_company_news, get_general_news
 from app.redis_publisher import publish_quote
 from app.rest_fallback import rest_fallback_loop
@@ -190,6 +190,11 @@ async def market_indices_history(slug: str, period: str = "6mo"):
         return await asyncio.to_thread(get_index_history, slug.upper(), period)
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Unknown index {slug}")
+
+
+@app.get("/market-indices/sectors/performance")
+async def market_sector_performance():
+    return await asyncio.to_thread(get_sector_performance)
 
 
 @app.get("/financials/{symbol}")

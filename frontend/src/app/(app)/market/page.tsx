@@ -10,6 +10,7 @@ import { Spinner } from '@astryxdesign/core/Spinner';
 import { MarketIndexCard } from '@/components/market/MarketIndexCard';
 import { MarketBreadthPanel } from '@/components/market/MarketBreadthPanel';
 import { MarketSentimentPanel } from '@/components/market/MarketSentimentPanel';
+import { SectorRotationTable } from '@/components/market/SectorRotationTable';
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import type { MarketIndexInfo } from '@/lib/types';
@@ -43,6 +44,7 @@ export default function MarketPage() {
         <VStack gap={4}>
           <MarketSentimentPanel />
           <MarketBreadthPanel />
+          <SectorRotationTable />
 
           {indices === null ? (
             <Center height={320}>

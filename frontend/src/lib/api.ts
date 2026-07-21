@@ -16,6 +16,7 @@ import type {
   PortfolioSummaryResponse,
   PutCallRatioResponse,
   QuoteResponse,
+  SectorPerformance,
   SymbolProfileResponse,
   SymbolResponse,
   SystemStatusResponse,
@@ -252,6 +253,10 @@ export function getBacktestRun(fetcher: Fetcher, id: number): Promise<BacktestRu
 
 export function getMarketIndices(fetcher: Fetcher): Promise<MarketIndexInfo[]> {
   return fetcher<MarketIndexInfo[]>('/api/market-indices');
+}
+
+export function getSectorPerformance(fetcher: Fetcher): Promise<SectorPerformance[]> {
+  return fetcher<SectorPerformance[]>('/api/market-indices/sectors/performance');
 }
 
 export function getMarketBreadth(fetcher: Fetcher): Promise<MarketBreadthResponse> {

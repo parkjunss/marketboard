@@ -89,6 +89,16 @@ public class CollectorClient {
         }
     }
 
+    public List<SectorPerformance> getSectorPerformance() {
+        try {
+            SectorPerformance[] items = restClient.get().uri("/market-indices/sectors/performance").retrieve().body(SectorPerformance[].class);
+            return items != null ? List.of(items) : List.of();
+        } catch (RestClientException ex) {
+            log.warn("Failed to fetch sector performance from collector: {}", ex.getMessage());
+            return List.of();
+        }
+    }
+
     public List<MarketIndexCandle> getMarketIndexHistory(String slug) {
         try {
             MarketIndexCandle[] items =

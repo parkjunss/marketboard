@@ -4,6 +4,7 @@ import java.util.List;
 import org.juns.marketboardbackend.collector.CollectorClient;
 import org.juns.marketboardbackend.collector.MarketIndexCandle;
 import org.juns.marketboardbackend.collector.MarketIndexInfo;
+import org.juns.marketboardbackend.collector.SectorPerformance;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,5 +32,10 @@ public class MarketIndexController {
     @GetMapping("/{slug}/history")
     public List<MarketIndexCandle> getHistory(@PathVariable String slug) {
         return collectorClient.getMarketIndexHistory(slug);
+    }
+
+    @GetMapping("/sectors/performance")
+    public List<SectorPerformance> getSectorPerformance() {
+        return collectorClient.getSectorPerformance();
     }
 }

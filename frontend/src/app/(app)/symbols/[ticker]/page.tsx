@@ -30,6 +30,17 @@ import type { SymbolProfileResponse, WatchlistItemResponse } from '@/lib/types';
 
 const DAILY_STATS_LIMIT = 250; // ~1 trading year of daily candles, independent of chart timeframe
 
+// 일봉 차트 전용 기간 선택 — 분봉은 보관 기간이 짧아 기간 선택 없이 기본 limit(300)을 그대로 씀.
+type ChartPeriod = '1mo' | '3mo' | '6mo' | '1y' | '5y' | 'all';
+const DAILY_PERIOD_LIMITS: Record<ChartPeriod, number> = {
+  '1mo': 21,
+  '3mo': 63,
+  '6mo': 126,
+  '1y': 252,
+  '5y': 1260,
+  all: 1500,
+};
+
 // SMA is a daily-window indicator, so it's only overlaid on the 일봉 chart (see NO_OVERLAYS below).
 const DAILY_SMA_OVERLAYS: SmaOverlay[] = [
   { period: 20, color: '--color-icon-blue', label: 'SMA20' },
@@ -47,6 +58,17 @@ function InfoCard({ label, children }: { label: string; children: React.ReactNod
         {children}
       </VStack>
     </Card>
+  );
+}
+
+function ProfileStat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <VStack gap={1}>
+      <Text type="supporting" size="sm">
+        {label}
+      </Text>
+      <Text type="body">{value}</Text>
+    </VStack>
   );
 }
 
@@ -72,7 +94,9 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
   const liveQuote = quotes[ticker];
 
   const [timeframe, setTimeframe] = useState<Timeframe>('1d');
-  const { candles, isLoading: isChartLoading } = useCandles(authFetch, ticker, timeframe, liveQuote);
+  const [period, setPeriod] = useState<ChartPeriod>('1y');
+  const chartLimit = timeframe === '1d' ? DAILY_PERIOD_LIMITS[period] : undefined;
+  const { candles, isLoading: isChartLoading } = useCandles(authFetch, ticker, timeframe, liveQuote, chartLimit);
 
   // Fetched independently of the chart's selected timeframe so 전일대비/1년 고가·저가 stay
   // accurate even when the user is looking at 분봉 candles.
@@ -234,32 +258,63 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
                 <Spinner size="md" label="불러오는 중" />
               </Center>
             ) : profile ? (
-              <Grid columns={4} gap={4}>
-                <VStack gap={1}>
-                  <Text type="supporting" size="sm">
-                    거래소
+              <VStack gap={4}>
+                {profile.longBusinessSummary && (
+                  <Text type="body" color="secondary">
+                    {profile.longBusinessSummary}
                   </Text>
-                  <Text type="body">{profile.exchange ?? '—'}</Text>
-                </VStack>
-                <VStack gap={1}>
-                  <Text type="supporting" size="sm">
-                    섹터
-                  </Text>
-                  <Text type="body">{profile.sector ?? '—'}</Text>
-                </VStack>
-                <VStack gap={1}>
-                  <Text type="supporting" size="sm">
-                    업종
-                  </Text>
-                  <Text type="body">{profile.industry ?? '—'}</Text>
-                </VStack>
-                <VStack gap={1}>
-                  <Text type="supporting" size="sm">
-                    시가총액
-                  </Text>
-                  <Text type="body">{profile.marketCap != null ? `$${(profile.marketCap / 1_000_000_000).toFixed(1)}B` : '—'}</Text>
-                </VStack>
-              </Grid>
+                )}
+                <Grid columns={4} gap={4}>
+                  <ProfileStat label="거래소" value={profile.exchange ?? '—'} />
+                  <ProfileStat label="섹터" value={profile.sector ?? '—'} />
+                  <ProfileStat label="업종" value={profile.industry ?? '—'} />
+                  <ProfileStat
+                    label="시가총액"
+                    value={profile.marketCap != null ? `$${(profile.marketCap / 1_000_000_000).toFixed(1)}B` : '—'}
+                  />
+                  <ProfileStat label="PER (Trailing)" value={profile.trailingPE != null ? profile.trailingPE.toFixed(1) : '—'} />
+                  <ProfileStat label="PER (Forward)" value={profile.forwardPE != null ? profile.forwardPE.toFixed(1) : '—'} />
+                  <ProfileStat
+                    label="배당수익률"
+                    value={profile.dividendYield != null ? `${profile.dividendYield.toFixed(2)}%` : '—'}
+                  />
+                  <ProfileStat label="베타" value={profile.beta != null ? profile.beta.toFixed(2) : '—'} />
+                  <ProfileStat
+                    label="평균 거래량"
+                    value={profile.averageVolume != null ? profile.averageVolume.toLocaleString('ko-KR') : '—'}
+                  />
+                  <ProfileStat
+                    label="직원 수"
+                    value={profile.fullTimeEmployees != null ? profile.fullTimeEmployees.toLocaleString('ko-KR') : '—'}
+                  />
+                  <ProfileStat
+                    label="본사"
+                    value={[profile.city, profile.country].filter(Boolean).join(', ') || '—'}
+                  />
+                  <ProfileStat
+                    label="애널리스트 의견"
+                    value={
+                      profile.recommendationKey
+                        ? `${profile.recommendationKey.toUpperCase()}${
+                            profile.targetMeanPrice != null ? ` · 목표가 $${profile.targetMeanPrice.toFixed(2)}` : ''
+                          }${profile.numberOfAnalystOpinions != null ? ` (${profile.numberOfAnalystOpinions}명)` : ''}`
+                        : '—'
+                    }
+                  />
+                  <ProfileStat
+                    label="웹사이트"
+                    value={
+                      profile.website ? (
+                        <Link href={profile.website} isExternalLink isStandalone>
+                          {profile.website.replace(/^https?:\/\//, '')}
+                        </Link>
+                      ) : (
+                        '—'
+                      )
+                    }
+                  />
+                </Grid>
+              </VStack>
             ) : (
               <Text type="body" color="secondary">
                 기업 개요 정보를 불러올 수 없습니다
@@ -271,12 +326,24 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
             <IndicatorPanel ticker={ticker} />
           </PanelCard>
 
-          <HStack justify="between" align="center">
+          <HStack justify="between" align="center" wrap="wrap">
             <Text type="label">가격 차트</Text>
-            <SegmentedControl value={timeframe} onChange={(value) => setTimeframe(value as Timeframe)} label="차트 기간">
-              <SegmentedControlItem value="1d" label="일봉" />
-              <SegmentedControlItem value="1m" label="분봉" />
-            </SegmentedControl>
+            <HStack gap={2}>
+              {timeframe === '1d' && (
+                <SegmentedControl value={period} onChange={(value) => setPeriod(value as ChartPeriod)} label="조회 기간">
+                  <SegmentedControlItem value="1mo" label="1개월" />
+                  <SegmentedControlItem value="3mo" label="3개월" />
+                  <SegmentedControlItem value="6mo" label="6개월" />
+                  <SegmentedControlItem value="1y" label="1년" />
+                  <SegmentedControlItem value="5y" label="5년" />
+                  <SegmentedControlItem value="all" label="전체" />
+                </SegmentedControl>
+              )}
+              <SegmentedControl value={timeframe} onChange={(value) => setTimeframe(value as Timeframe)} label="차트 단위">
+                <SegmentedControlItem value="1d" label="일봉" />
+                <SegmentedControlItem value="1m" label="분봉" />
+              </SegmentedControl>
+            </HStack>
           </HStack>
 
           {isChartLoading ? (

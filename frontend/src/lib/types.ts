@@ -49,6 +49,19 @@ export interface SymbolProfileResponse {
   industry: string | null;
   currency: string | null;
   marketCap: number | null;
+  longBusinessSummary: string | null;
+  website: string | null;
+  fullTimeEmployees: number | null;
+  city: string | null;
+  country: string | null;
+  trailingPE: number | null;
+  forwardPE: number | null;
+  dividendYield: number | null;
+  beta: number | null;
+  averageVolume: number | null;
+  recommendationKey: string | null;
+  targetMeanPrice: number | null;
+  numberOfAnalystOpinions: number | null;
 }
 
 export interface UserResponse {

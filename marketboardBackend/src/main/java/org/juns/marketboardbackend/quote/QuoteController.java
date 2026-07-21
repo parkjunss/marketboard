@@ -37,7 +37,7 @@ public class QuoteController {
     public List<CandleResponse> getHistory(
             @PathVariable String ticker,
             @RequestParam(defaultValue = "1m") String timeframe,
-            @RequestParam(defaultValue = "200") @Min(1) @Max(500) int limit) {
+            @RequestParam(defaultValue = "200") @Min(1) @Max(1500) int limit) {
         return quoteService.getHistory(ticker, timeframe, limit);
     }
 }

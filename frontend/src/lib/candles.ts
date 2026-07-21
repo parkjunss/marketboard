@@ -52,10 +52,13 @@ export function useCandles(
   ticker: string,
   timeframe: Timeframe,
   liveQuote: QuoteResponse | undefined,
+  limit?: number,
 ): { candles: CandleResponse[]; isLoading: boolean } {
-  // Keyed by `${ticker}:${timeframe}` so isLoading derives from render-time comparison instead of
-  // an effect calling setState synchronously (see react-hooks/set-state-in-effect).
-  const requestKey = `${ticker}:${timeframe}`;
+  const resolvedLimit = limit ?? (timeframe === '1m' ? 300 : 200);
+
+  // Keyed by `${ticker}:${timeframe}:${limit}` so isLoading derives from render-time comparison
+  // instead of an effect calling setState synchronously (see react-hooks/set-state-in-effect).
+  const requestKey = `${ticker}:${timeframe}:${resolvedLimit}`;
   const [history, setHistory] = useState<{ key: string; candles: CandleResponse[] } | null>(null);
   const isLoading = history?.key !== requestKey;
 
@@ -63,7 +66,7 @@ export function useCandles(
     if (!ticker) return undefined;
     let cancelled = false;
     api
-      .getHistory(fetcher, ticker, timeframe, timeframe === '1m' ? 300 : 200)
+      .getHistory(fetcher, ticker, timeframe, resolvedLimit)
       .then((data) => {
         if (!cancelled) setHistory({ key: requestKey, candles: data });
       })
@@ -74,7 +77,7 @@ export function useCandles(
     return () => {
       cancelled = true;
     };
-  }, [fetcher, ticker, timeframe, requestKey]);
+  }, [fetcher, ticker, timeframe, resolvedLimit, requestKey]);
 
   const candles = useMemo(() => {
     const fetchedCandles = history?.key === requestKey ? history.candles : [];

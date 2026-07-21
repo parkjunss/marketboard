@@ -5,12 +5,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -30,14 +32,24 @@ public class CollectorClient {
     // uvicorn doesn't support the HTTP/2 cleartext (h2c) upgrade the JDK client attempts by
     // default, which it responds to with "Unsupported upgrade request" and mangles the
     // request framing; force HTTP/1.1 explicitly.
-    private final HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
+            .connectTimeout(Duration.ofSeconds(5))
+            .build();
     private final ObjectMapper objectMapper;
     private final String baseUrl;
 
     public CollectorClient(ObjectMapper objectMapper, @Value("${collector.base-url}") String baseUrl) {
         this.objectMapper = objectMapper;
         this.baseUrl = baseUrl;
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+        // No timeout by default means a hung collector call (e.g. yfinance itself hanging/rate
+        // limited upstream) blocks the caller's request thread indefinitely -- observed exactly
+        // this with /symbol-profile. A read timeout turns that into a fast, catchable
+        // RestClientException instead, so callers fall back (stale cache, empty list, etc.)
+        // rather than hanging.
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(Duration.ofSeconds(10));
+        this.restClient = RestClient.builder().baseUrl(baseUrl).requestFactory(requestFactory).build();
     }
 
     public Optional<CollectorHealth> getHealth() {

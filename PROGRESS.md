@@ -21,23 +21,41 @@
 
 전부 커밋·푸시 완료(`a2e673c`, `f61ff85`, `7bc2ba0`, `5309fac`, `5030b3d`, `64dac4e`), main 푸시마다 CI가 Pi에 자동 배포함.
 
+**2026-07-21 연장 세션 (같은 날 오후~저녁)**: 백테스팅 신규 기능 + "시장 지표" 페이지 대규모 확장. 굵직한 항목만:
+1. **백테스팅 페이지 Phase 1** — `/backtest` 신규, 여러 종목 동일비중 매수후보유 전략을 SPY 벤치마크와 비교(총수익률/CAGR/MDD/변동성/샤프비율 + 자산가치 곡선). 콜렉터에 `app/backtest.py`(pandas, `price_history` 재사용이라 yfinance 신규 호출 없음), `backtest_runs` 테이블, 이 규모(소수 종목·일봉)에서는 동기 실행으로 충분해 async job 없이 감. **빌드 중 진짜 버그 발견**: 바디 있는 POST를 `RestClient`로 추가했더니 콜렉터에 요청이 아예 안 감(access log에 안 찍힘) — `syncSubscriptions`가 이미 우회하던 h2c 업그레이드 손상 문제였는데, GET 전용으로 넣은 타임아웃 수정이 POST까지 고쳤다고 착각했던 것. `runBacktest`도 raw `HttpClient`로 우회해서 해결.
+2. 관리자 종목 관리 + 종목 리스트에 **티커/이름 검색** 추가 — 관리자 페이지가 S&P500 유니버스 500여 개를 필터 없이 그대로 렌더링하고 있던 게 이참에 드러남.
+3. **종목별 딥백필 관리자 트리거 추가** — 배포 서버에서 SPY/QQQ/DIA를 활성화했는데 종목 리스트에 안 보인다는 리포트 진단하다 발견: 새로 활성화한 종목은 `price_history`가 비어있으면 프론트가 그 행을 통째로 필터링해버림(S&P500 배치도 안 건드리고, 일일 갱신 루프도 얕은 5일치 캐치업뿐이라 신규 종목엔 깊은 히스토리가 안 쌓임). 콜렉터 `POST /backfill/{ticker}?period=`+관리자 프록시+"백필" 버튼 추가.
+4. 종목 리스트 가격 셀에 **배경 플래시 효과** 추가(기존 화살표 아이콘 플래시가 너무 약해서 더 눈에 띄게 — 상승=빨강/하락=파랑 배경 틴트, CSS transition으로 페이드아웃).
+5. **"시장 지표" 페이지 대규모 확장** — "종목명/값이 잘 보이게, 차트 줄여서 3열로, 투자에 도움되는 정보 더 생각해봐"에서 시작해 대화로 설계를 이어감:
+   - 지수 카드 리디자인(이름뿐 아니라 실제 값 표시, 전일대비를 앱 관행 색상(빨강/파랑)으로, 3열 그리드, 차트 축소) + US10Y/USDKRW 지수 추가
+   - **시장 폭 지표**(상승/하락/보합, 52주 신고가·신저가 갱신 수) — S&P500+활성 유니버스(506종목) 대상, 일 1회 cron + 날짜별 캐시 테이블(`market_breadth_snapshots`)
+   - **공포탐욕지수** — 자체 합성 지수 계획은 폐기하고 `fear-greed` 라이브러리로 **진짜 CNN 지수**(CNN 내부 API 직접 호출, 0~100점+7개 세부지표+히스토리) 사용. 비공식 엔드포인트라 실패 시 카드만 조용히 숨김
+   - **Put/Call 비율** — yfinance 옵션 체인(SPY, 근접 만기 8개 합산), open interest 기반으로 하려다 그 필드가 지금 대부분 0으로 나오는 yfinance 이슈를 발견해서 **volume 기반**으로 전환
+   - **섹터 로테이션** — `symbols.sector` 컬럼 집계 방식은 폐기하고 SPDR 섹터 ETF 11개 상대강도 랭킹(1일/1주/1개월)으로 훨씬 간단하게 구현
+   - **로그인 없이 보는 공개 페이지(`/overview`)** 신규 — 시장 데이터는 개인화 데이터가 아니라서 인증 없이 열어둠(`SecurityConfig`에 해당 GET 엔드포인트만 `permitAll`), `/market`과 컴포넌트 그대로 재사용
+6. **콜렉터 좀비 프로세스가 이번 세션에만 3번 재발** — 재시작할 때마다 이전 프로세스가 완전히 안 죽고 같은 포트(8000)에 남아서, 새 요청이 옛날 코드로 뜬 죽은 프로세스로 라우팅되는 혼란을 여러 번 겪음(`netstat`로 포트당 프로세스 2개 뜬 것 확인 후 `taskkill`로 수동 정리, 매번 재현). 근본 원인 미조사 — 아래 "남겨둔 확인 작업" 참고.
+
+전부 커밋·푸시 완료(`29945b8`~`db278d4`, 10개 커밋).
+
 **논의만 하고 미구현 — 다음에 참고**
 - **지표 확장**(볼린저밴드/MACD/DMI/Williams %R/거래량 지표) 아키텍처만 논의함, 코드는 없음. 결론: 가격 오버레이형(볼린저 등, 캔들과 같은 스케일)은 지금 SMA 오버레이 구조 그대로 확장 가능. 오실레이터/거래량형(RSI 차트화·MACD·DMI·Williams%R·거래량)은 스케일이 달라 별도 서브페인이 필요한데, **`lightweight-charts` v5.2.0(현재 설치된 버전)이 멀티페인을 네이티브로 지원**하는 것을 확인함(`chart.addPane()`, `addSeries(..., paneIndex)`) — 별도 차트 인스턴스로 크로스헤어/타임스케일을 수동 동기화할 필요 없이 페인만 추가하면 됨. 시작하려면 `CandleChart`를 "메인 페인 오버레이 목록 + 서브페인 목록" 구조로 일반화하는 것부터 필요.
-- 관리자가 지표 종류/기본값을 관리하는 카탈로그(Phase A, `indicator_definitions` 테이블 등)는 설계까지 했다가 **폐기 결정** — 유저별 커스터마이즈(위 7번)만 진행하기로 확정.
-- **백테스팅 페이지**(여러 종목 포트폴리오 백테스팅, 리스크/리턴 분석, CAPM 등 재무 모델, 지표 조건 빌더, 차트) 신규 기능으로 논의 시작 — 별도 계획을 이어서 작성 중(무거운 수치 계산이라 Java보다 Python/collector 쪽이 자연스럽다는 방향만 잠정 합의, 상세 설계는 진행 중).
+- 관리자가 지표 종류/기본값을 관리하는 카탈로그(Phase A, `indicator_definitions` 테이블 등)는 설계까지 했다가 **폐기 결정** — 유저별 커스터마이즈만 진행하기로 확정, 완료됨.
+- **백테스팅 Phase 2 이후** — 다중 종목 포트폴리오(비중배분/리밸런싱), 지표 조건 기반 전략(신호 생성), CAPM 등 재무모델. Phase 1(단일/소수 종목 buy&hold)만 완료된 상태.
+- **시장 지표 개인화 섹션**("내 종목에 미치는 영향") — 관심종목/포트폴리오 평균 등락률 vs 시장 비교, 포트폴리오 가중평균 베타, 52주 신고가·신저가 근접 종목 하이라이트. 계획만 하고 미착수.
+- **거래량 급증 스캐너 + Money Flow Index(MFI)** — S&P500 유니버스 대상, 계획만 하고 미착수. 개인화 섹션과 자연스럽게 연결됨(관심종목 중 거래량 튄 것 하이라이트).
 
 **남겨둔 확인 작업**
-- **배포 서버(Pi) DB는 아직 5년 딥백필 안 됨** — 로컬 `mysql-container`에만 `POST /sp500/sync?period=5y` 실행함. 배포 서버 반영하려면 Pi SSH 접속 후 `curl -X POST "http://localhost:8001/sp500/sync?period=5y"` 필요(이 세션에선 이 머신의 SSH 키 인증이 안 먹혀서 직접 못 함 — 비밀번호 인증만 되는 듯, `Host raspberrypi` 설정은 `~/.ssh/config`에 있음).
+- **배포 서버(Pi) DB는 아직 5년 딥백필 안 됨** — 로컬 `mysql-container`에만 실행함. Pi에서 SPY/QQQ/DIA를 관리자 화면으로 새로 만들고 "백필" 버튼을 눌렀는지(위 3번 기능) 확인 필요 — 이 기능 자체가 이 문제를 풀기 위해 이번 세션에 추가된 것이라, 배포 이후에 실제로 사용했는지가 확인 포인트.
+- **콜렉터 좀비 프로세스 재발** — 이번 세션에 3번 겪음(`uv run python main.py`를 재시작할 때 이전 프로세스가 안 죽고 같은 포트에 남는 패턴). Windows에서 `uv run`이 스폰하는 자식 프로세스를 상위 셸 종료 신호가 못 잡는 것으로 추정되나 미확정 — 재현 조건과 근본 원인 조사 필요. 증상: 특정 엔드포인트가 몇 초~수십 초 뒤 타임아웃/이상 응답, `netstat -ano | grep :8000`으로 LISTENING 프로세스가 2개면 이 문제임 — 전부 `taskkill //F //PID`로 정리 후 재기동.
 - 장 마감 후 `collector/app/rest_fallback.py` 전체 폴백 루프 재검증 — 여전히 안 함
 - `symbols` 테이블에 테스트로 넣었던 `AMZN` row가 남아있음(is_active=1) — 그대로 둬도 무방
 - `@astryxdesign/charts`(공식 차트 패키지) 설치 peer dependency 충돌로 여전히 보류 중
-- `collector` 프로세스가 이유를 알 수 없는 부모/자식 프로세스 쌍으로 뜨는 현상 — 여전히 원인 미조사
 - `IndicatorRepository.findBySymbol_TickerIgnoreCase...`도 `price_history`랑 같은 티커-JOIN 패턴이지만, `indicators` 테이블은 지금 ~1500행뿐이라 성능 영향 미미 — 지표 쪽을 다시 손볼 일이 생기면 그때 `symbol_id` 기반으로 같이 바꿀 것
 
-**세션 종료 시점 실행 상태** (2026-07-21 기준)
-- 백엔드: `gradlew bootRun`으로 직접 띄운 로컬 인스턴스(8080)가 켜진 채로 세션 종료 — `V13`(symbol_profiles)/`V14`(chart_indicator_settings) 마이그레이션 자동 적용 확인, `./gradlew test` 전부 통과 확인
+**세션 종료 시점 실행 상태** (2026-07-21 저녁 기준)
+- 백엔드: `gradlew bootRun`으로 직접 띄운 로컬 인스턴스(8080)가 켜진 채로 세션 종료 — `V15`(backtest_runs)/`V16`(market_breadth_snapshots)까지 마이그레이션 자동 적용 확인, `./gradlew test`(35건) 전부 통과 확인
 - 프론트엔드: `npm run dev`(3100) 켜진 채로 세션 종료
-- collector: `uv run python main.py`(8000) 켜진 채로 세션 종료 — 이번 세션에 코드 변경 반영 위해 여러 번 재기동함(Python은 `--reload` 없이 떠서 핫리로드 안 됨, 매번 수동 재기동 필요)
+- collector: `uv run python main.py`(8000) 켜진 채로 세션 종료 — 이번 세션에 코드 변경 반영 위해 여러 번 재기동함(Python은 `--reload` 없이 떠서 핫리로드 안 됨, 매번 수동 재기동 필요), 재기동할 때마다 위 "좀비 프로세스" 이슈 겪었으니 다음 세션에서도 `netstat`로 프로세스 1개인지 먼저 확인할 것
 - `mysql-container`/`redis-container`: 상시 구동 중
 
 ## 전체 요약
@@ -689,6 +707,59 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 - 종목 상세 페이지에 SMA 기간 추가/제거 UI 추가 — 실제 SMA 값은 여전히 `CandleChart`의 `computeSma()`로 클라이언트에서 계산(백엔드는 "몇 기간을 원하는지" 목록만 저장). 유저가 임의로 고르는 기간은 종목×지표×기간 조합이 무한해 서버에서 캐싱/사전계산이 애초에 불가능하다는 게 이 설계의 핵심 근거.
 - 검증: 백엔드 `@Min(2)/@Max(500)`, `@Size(max=5)` validation curl로 확인(400 응답), GET/PUT 왕복 확인.
 
+### ✅ 추가 기능 — 백테스팅 페이지 Phase 1: 매수후보유 vs 벤치마크 (2026-07-21)
+"여러 종목 넣고 포트폴리오 백테스팅, 리스크/리턴 분석, CAPM, 지표 조건" 요청을 별도로 계획한 뒤, 범위를 좁혀 Phase 1(동일비중 매수후보유, 단일 전략)부터 구현.
+- `collector/app/backtest.py` — `price_history`에서 종가를 읽어(yfinance 신규 호출 없음, 이미 수집된 데이터 재사용) 포트폴리오 자산가치 곡선과 SPY 벤치마크를 비교, 총수익률/CAGR/MDD/변동성/샤프비율 계산. DB I/O(`_load_closes`)와 순수 계산(`_compute_backtest`)을 분리해서 유닛테스트 5건 작성(aggregator.py와 동일한 이유).
+- `_load_closes`는 티커→symbol_id를 먼저 resolve한 뒤 `price_history`를 `symbol_id IN (...)`으로 조회 — symbols JOIN을 아예 안 써서 오늘 낮에 고친 풀스캔 함정을 처음부터 피함.
+- 백엔드: `backtest_runs` 테이블(V15, `config_json`+`result_json` 두 개의 JSON 블롭) + `BacktestService`(이 규모 — 소수 종목, 일봉만 — 에서는 동기 호출로 충분히 빨라서 async job 없이 감, `CollectorClient`의 10초 타임아웃 안에 들어옴) + `GET/POST /api/backtest/runs`, `GET /api/backtest/runs/{id}`.
+- **버그 발견/수정**: `CollectorClient.runBacktest()`를 처음엔 다른 GET 메서드들처럼 `RestClient`로 만들었는데, 실제로 호출하면 콜렉터 access log에 요청 자체가 안 찍히면서 정확히 10초(설정한 타임아웃) 후 실패함 — 이 파일에 이미 있던 주석이 경고하던 h2c 업그레이드 손상 문제(`syncSubscriptions`가 raw `HttpClient`로 우회하던 바로 그 이슈)였는데, 낮에 GET 전용으로 추가한 타임아웃 수정이 POST까지 같이 고쳤을 거라고 잘못 가정했던 것. `runBacktest`도 `syncSubscriptions`와 같은 raw `HttpClient` 패턴으로 다시 작성해 해결 — **바디 있는 POST를 콜렉터에 새로 추가할 때는 항상 이 패턴을 쓸 것, RestClient로 시도하지 말 것**.
+- 프론트 `/backtest` 신규 — 종목 다중 선택(최대 10개)/기간(`DateRangeInput`)/초기자본/무위험이자율 입력 → 실행 → `MultiLineChart`로 자산가치 곡선(포트폴리오 vs 벤치마크), KPI 카드, 지난 실행 이력 테이블.
+- 검증: collector 유닛테스트, 백엔드 `POST /api/backtest/runs` curl로 실행→`DONE` 상태+실제 계산 결과 확인, `GET` 목록/단건 조회 확인, 테스트 row 정리.
+
+### ✅ 개선 — 관리자 종목 관리 + 종목 리스트 검색 (2026-07-21)
+관리자 종목 관리 페이지가 S&P500 유니버스(500여 개)를 페이지네이션/검색 없이 통째로 렌더링하고 있던 게 드러나서 추가.
+- 둘 다 이미 프론트에 전체 데이터가 로드돼 있는 구조라 클라이언트 사이드 티커/이름 substring 필터로 구현(백엔드 변경 없음).
+- 관리자 페이지는 검색 필터링된 목록 기준으로 테이블 선택(`useTableSelectionState`)도 같이 스코프해서, 검색 중 "전체 선택"이 화면에 안 보이는 항목까지 건드리지 않게 함.
+
+### ✅ 버그 수정 — 새로 활성화한 종목이 종목 리스트에 안 보이던 문제 + 종목별 딥백필 관리자 트리거 (2026-07-21)
+배포 서버(Pi)에서 관리자 화면으로 SPY/QQQ/DIA를 새로 만들어 활성화했는데 종목 리스트에 안 보인다는 리포트.
+- **원인**: `stock-list` 페이지는 종목별 일봉 히스토리(`getHistory`)가 빈 배열이면 그 행 자체를 화면에서 필터링함(`computeStats`가 `null` 반환). 방금 활성화한 신규 종목은 `price_history`가 비어있는데, S&P500 배치는 지수 ETF를 안 건드리고(구성종목이 아님), 일일 갱신 루프(`active_symbols_daily_refresh_loop`)도 이미 깊은 히스토리가 있다고 가정하고 `period="5d"` 얕은 캐치업만 함 — 신규 활성화 종목을 깊게 채워주는 경로가 아예 없었음.
+- **수정**: 콜렉터 `POST /backfill/{ticker}?period=` 신규(기존 `backfill.py`의 `backfill_symbol` 재사용) + 관리자 프록시(`POST /api/admin/symbols/{id}/backfill`) + 관리자 종목 관리 테이블에 "백필" 버튼 추가 — 콜렉터 포트가 외부에 안 열려 있어서 배포 서버에서 실제로 쓸 수 있는 방법은 관리자 UI뿐임.
+- 검증: 로컬에서 신규 테스트 종목(IWM) 만들어 히스토리 0개 확인 → 백필 실행 → 5년치(1254개) 채워지는 것 확인, 테스트 종목 정리.
+- **배포 서버에도 실제로 이 버튼을 눌러 SPY/QQQ/DIA를 백필했는지는 다음 세션에 확인 필요** — 위 "남겨둔 확인 작업" 참고.
+
+### ✅ 개선 — 종목 리스트 가격 셀 배경 플래시 (2026-07-21)
+가격 변동 시 기존 화살표 아이콘 플래시(0.7초)가 여러 행이 동시에 바뀔 때 눈에 잘 안 띈다는 피드백. 화살표는 유지하고, 가격 셀 자체에 상승=빨강/하락=파랑 반투명 배경(`--color-background-red/blue`, 이미 반투명으로 설계된 토큰)을 추가해 CSS `transition`으로 서서히 사라지게 함.
+
+### ✅ 추가 기능 — "시장 지표" 페이지 대규모 확장: 시장 폭·공포지수·섹터 로테이션·공개 페이지 (2026-07-21)
+"종목명/값이 잘 보이게, 차트 줄여서 3열로, 투자에 도움되는 정보를 더 생각해봐"에서 시작해, 대화로 설계를 넓혀가며 진행함. CNN 진짜 공포지수/옵션 데이터를 라이브러리로 가져올 수 있다는 제안을 받고 실제로 조사·검증한 뒤 반영.
+
+**지수 카드 리디자인**
+- `MarketIndexCard`가 지수 이름과 (사실은 6개월 누적인) %변동만 보여주고 실제 값 자체가 없었던 것을 — 최신 종가(큰 숫자) + **전일대비**(기존엔 fetched 기간 전체 대비였던 걸 정정) + 이 앱의 상승=빨강/하락=파랑 관행(`PriceChangeIndicator` 재사용, 기존엔 Astryx 기본 success/error 초록/빨강을 잘못 쓰고 있었음)으로 교체. 차트 200px→130px, 그리드 2열→3열.
+- `market_indices.py` 레지스트리에 US10Y(`^TNX`, 5년/30년만 있고 제일 많이 보는 10년물이 빠져 있었음)와 USD/KRW(`KRW=X`) 추가.
+
+**시장 폭 지표 (상승/하락, 52주 신고가·신저가)**
+- `market_breadth_snapshots` 테이블(V16, 날짜별) + `MarketBreadthService` — S&P500+활성 유니버스(506종목)를 순회해 전일대비 상승/하락/보합과 52주(252거래일 윈도우) 신고가·신저가 갱신 종목 수 계산. 일 1회 cron(`market-breadth.cron`, 기본 07:00) — daily bar가 하루 한 번만 바뀌므로 그 이상 자주 돌 필요 없음, `IndicatorCalculationService`와 같은 이유로 계산과 서빙을 분리(GET은 캐시된 최신 스냅샷만 즉시 반환).
+- 관리자 수동 트리거(`POST /api/admin/market-breadth/recompute`)도 추가 — cron 기다리지 않고 테스트/강제 갱신 가능. 실측: 506종목 순회에 44초(요청 경로가 아니라 백그라운드 cron이라 문제 없음).
+- **테스트 함정**: 테스트용 `src/test/resources/application.yaml`이 메인 `application.yaml`을 완전히 shadow하는 구조라, 새 `@Scheduled(cron = "${market-breadth.cron}")`를 추가했더니 테스트 프로파일엔 이 프로퍼티가 없어서 `contextLoads()`가 즉시 실패함 — `indicators.cron`도 이미 같은 이유로 테스트 yaml에 별도로 정의돼 있었음(선례를 놓쳤던 것). **앞으로 `@Scheduled(cron = "${x.cron}")` 형태의 새 스케줄을 추가하면 반드시 `src/test/resources/application.yaml`에도 같이 넣을 것.**
+
+**공포탐욕지수**
+- 처음엔 VIX+시장폭+모멘텀을 조합한 자체 "간이 합성 지수"를 계획했다가, 사용자가 `fear-greed`(PyPI) 라이브러리를 제안해서 조사·설치·실검증 후 이 계획을 폐기하고 교체 — CNN의 내부 데이터 API를 직접 호출해 진짜 CNN 지수(0~100점+등급+7개 세부지표+1주/1개월/3개월/6개월/1년 히스토리)를 그대로 받아옴(`collector/app/sentiment.py`). 2026-07 기준 활발히 유지보수되는 패키지지만 CNN이 공식 문서화한 API가 아니라 예고 없이 바뀔 수 있어 실패를 정상 케이스로 다룸(카드를 조용히 숨김).
+- 게이지 UI는 이 앱의 빨강=상승/파랑=하락 관행과 자연스럽게 맞아떨어지도록 빨강=탐욕/파랑=공포로 매핑.
+
+**Put/Call 비율**
+- 처음 open interest 기반으로 구현했다가 yfinance의 `openInterest` 컬럼이 지금 대부분 0으로 나오는(알려진 yfinance 데이터 품질 이슈, `volume` 컬럼은 정상) 걸 실제로 확인하고 **volume 기반**으로 전환. 만기 하나만 보면 대표성이 없어서(특히 0DTE) SPY의 가까운 만기 8개를 합산 — 실측 2.2초, 비율 1.07(정상 범위).
+
+**섹터 로테이션**
+- 처음 계획은 `symbols.sector` 컬럼을 추가해 S&P500 503종목을 섹터별로 집계하는 방식이었는데, 실제로 리테일 도구들이 쓰는 방식(GICS 11개 섹터 SPDR ETF 상대강도 비교)을 조사한 뒤 **훨씬 간단한 이 방식으로 대체** — `market_indices.py`에 `SECTOR_INDICES`(11개, 메인 지수 그리드에는 안 섞음) 추가 + `get_sector_performance()`(1일/1주/1개월 % 수익률, 1개월 기준 정렬). `SectorRotationTable`로 랭킹 테이블 표시(카드 여러 개가 아니라 테이블이어야 한눈에 비교됨).
+- 조사하면서 "실제 기관 자금 흐름(달러 단위)은 Morningstar/Bloomberg 같은 유료 데이터라 무료로는 불가능"하다는 것도 확인 — 정직하게 범위 밖으로 명시.
+
+**로그인 없이 보는 공개 페이지 (`/overview`)**
+- 위 시장 데이터는 전부 유저 개인화가 아니라서 애초에 인증 뒤에 있을 필요가 없었음 — `SecurityConfig`에 `GET /api/market-indices/**`, `/api/market-breadth`, `/api/market-sentiment/**`만 `permitAll` 추가(관리자 재계산 트리거는 `/api/admin/**`로 계속 보호됨, `JwtAuthenticationFilter`는 원래 토큰 없으면 그냥 통과시키는 구조라 필터 자체는 변경 불필요).
+- 프론트 `/overview` 신규(`(app)` 라우트 그룹 밖이라 `RequireAuth` 안 걸림) — `/market`과 완전히 같은 컴포넌트 재사용(`authFetch`가 세션 없으면 Authorization 헤더를 그냥 생략하는 구조라 컴포넌트 수정 불필요). `/login` 페이지에 발견 동선 링크 추가.
+
+**콜렉터 좀비 프로세스 3회 재발**: 이 확장 세션 동안 `uv run python main.py`를 재시작할 때마다 이전 프로세스가 완전히 안 죽고 포트 8000에 같이 남아, 새 요청이 옛 코드가 떠 있는 죽은 프로세스로 라우팅되는 혼란을 3번 겪음(`GET /health`조차 응답이 없어서 처음엔 코드 버그로 오인했다가 `netstat`로 프로세스 2개인 걸 발견) — 매번 `taskkill //F //PID`로 수동 정리 후 재현 없이 정상화됨. 근본 원인은 미조사 상태.
+
 ---
 
 ## 데이터 모델 현황 (계획서 §06 대비)
@@ -710,19 +781,24 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 | `financial_statements.ticker` 컬럼 폭 | ✅ V12에서 VARCHAR(10)→VARCHAR(20)로 수정(2026-07-18) |
 | `symbol_profiles` | ✅ 생성됨 (V13, 2026-07-21), 티커별 yfinance 기업 프로필(`.info`) 캐시(24h TTL) — `financial_statements`와 동일 패턴 |
 | `chart_indicator_settings` | ✅ 생성됨 (V14, 2026-07-21), 유저별 SMA 오버레이 기간 설정(JSON 블롭) — `dashboard_configs`와 동일 패턴 |
+| `backtest_runs` | ✅ 생성됨 (V15, 2026-07-21), 백테스팅 실행 이력(설정+결과 JSON) |
+| `market_breadth_snapshots` | ✅ 생성됨 (V16, 2026-07-21), 날짜별 시장 폭(상승/하락, 52주 신고가·신저가) 스냅샷, 일 1회 cron |
 
 ---
 
 ## 다음 액션 제안 (우선순위 순)
 > 상세 실행 계획은 문서 맨 위 "다음 세션 시작점" 참고.
-1. **배포 서버(Pi) DB에도 S&P500 5년 딥백필 실행** — 로컬만 해뒀음, 위 "남겨둔 확인 작업" 참고
-2. **백테스팅 페이지 계획 마무리 후 착수** — 여러 종목 포트폴리오 백테스팅/CAPM/리스크지표/지표 조건 빌더, 별도 계획 진행 중
-3. 지표 서브페인 확장(볼린저/MACD/DMI/Williams%R/거래량) — `lightweight-charts` v5 멀티페인 지원 확인까지만 하고 미착수, 필요해지면 `CandleChart` 일반화부터
-4. (여유 있을 때) 공유 리버스 프록시 전환 검토 — `tradehub-nginx`가 stop된 채로 남아있음, 나중에 하나의 nginx/Traefik로 tradehub/marketboard 둘 다 Host 헤더 라우팅하는 방향으로 합의했었음(위 "Phase 7" 섹션 참고)
-5. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
-6. 그 외엔 위 "남겨둔 확인 작업" 항목들 참고
+1. **배포 서버(Pi) DB에도 S&P500 5년 딥백필 + SPY/QQQ/DIA 백필 확인** — 로컬만 해뒀음, 이번 세션에 추가한 관리자 "백필" 버튼으로 실제 처리했는지 확인
+2. **콜렉터 좀비 프로세스 재발 원인 조사** — 이번 세션에만 3번 겪음, 근본 원인 미조사(위 "남겨둔 확인 작업" 참고)
+3. **시장 지표 개인화 섹션** — 관심종목/포트폴리오 vs 시장 비교, 포트폴리오 베타, 52주 근접 하이라이트
+4. **거래량 급증 스캐너 + MFI** — 3번과 연결해서 진행하기 좋음
+5. 백테스팅 Phase 2 이후 — 다중 종목 포트폴리오(비중배분/리밸런싱), 지표 조건 기반 전략, CAPM
+6. 지표 서브페인 확장(볼린저/MACD/DMI/Williams%R/거래량) — `lightweight-charts` v5 멀티페인 지원 확인까지만 하고 미착수, 필요해지면 `CandleChart` 일반화부터
+7. (여유 있을 때) 공유 리버스 프록시 전환 검토 — `tradehub-nginx`가 stop된 채로 남아있음, 나중에 하나의 nginx/Traefik로 tradehub/marketboard 둘 다 Host 헤더 라우팅하는 방향으로 합의했었음(위 "Phase 7" 섹션 참고)
+8. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
+9. 그 외엔 위 "남겨둔 확인 작업" 항목들 참고
 
-**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18), S&P500 일봉 백필 정체 문제 조사·수정(2026-07-18), **Phase 7 전체(PR 테스트 워크플로, 배포용 Dockerfile 3종+docker-compose.yml, Pi self-hosted runner, ci.yml build/deploy job, nginx+certbot+DuckDNS 공개 HTTPS) — `https://marketboard.duckdns.org` 실제 배포·동작 확인까지 완료(2026-07-19)**, `UPGRADE_IDEAS.md` 후속 조치 6건(2026-07-20), 종목 상세 페이지 차트 기간 선택/기업정보 확장/유저별 SMA 커스터마이즈 + 성능 버그 2건(price_history 풀스캔, S&P500 6개월 캡) + 안정성 버그 1건(collector 호출 무한대기) 수정(2026-07-21)
+**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18), S&P500 일봉 백필 정체 문제 조사·수정(2026-07-18), **Phase 7 전체(PR 테스트 워크플로, 배포용 Dockerfile 3종+docker-compose.yml, Pi self-hosted runner, ci.yml build/deploy job, nginx+certbot+DuckDNS 공개 HTTPS) — `https://marketboard.duckdns.org` 실제 배포·동작 확인까지 완료(2026-07-19)**, `UPGRADE_IDEAS.md` 후속 조치 6건(2026-07-20), 종목 상세 페이지 차트 기간 선택/기업정보 확장/유저별 SMA 커스터마이즈 + 성능 버그 2건(price_history 풀스캔, S&P500 6개월 캡) + 안정성 버그 1건(collector 호출 무한대기) 수정(2026-07-21 오전), **백테스팅 Phase 1 + 관리자 검색/딥백필 + 가격 플래시 + 시장 지표 페이지 대규모 확장(시장폭/공포지수/Put-Call/섹터로테이션/공개 오버뷰 페이지) 완료(2026-07-21 연장 세션)**
 
 ---
 
@@ -757,7 +833,11 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 - **`CollectorClient`(백엔드→콜렉터 내부 호출)는 10초 읽기 타임아웃이 걸려 있음**(2026-07-21 추가) — 콜렉터가 멈추거나 yfinance가 응답을 안 주면 예전엔 백엔드 요청 스레드가 무한정 같이 멈췄음. 새로 콜렉터를 호출하는 코드를 추가할 때 이 타임아웃보다 오래 걸리는 작업(예: 대량 배치)은 요청-응답 경로에 넣지 말고 별도 트리거(fire-and-forget이거나 백그라운드 루프)로 뺄 것.
 - **`lightweight-charts`의 `series.setData()`는 기존 줌/타임레인지를 유지함, 자동으로 전체 범위에 맞춰지지 않음**(2026-07-21 발견) — 이미 떠 있는 차트에 크기가 많이 다른 데이터를 갈아끼우면(기간 변경 등) 화면이 안 바뀐 것처럼 보임. 새로 만든 차트의 첫 `setData()`만 자동으로 fit되므로, 데이터셋이 확 바뀌는 상황에서는 `CandleChart`에 상황을 반영한 `key`(예: `ticker:timeframe:limit`)를 걸어 강제로 리마운트시킬 것 — 실시간 틱처럼 점진적으로 갱신되는 경우는 key를 유지해 기존 줌을 보존.
 - 유저별로 값이 달라지는 설정(대시보드 레이아웃, 차트 SMA 기간 등)은 `dashboard_configs`/`chart_indicator_settings`와 동일한 패턴(`user_id UNIQUE + JSON 블롭 컬럼`)을 재사용할 것 — 엔티티/리포지토리/서비스(get-or-default, upsert)/컨트롤러 전부 거의 그대로 복붙 가능한 수준으로 통일돼 있음.
-- 백테스팅 페이지(여러 종목 포트폴리오 백테스팅, CAPM, 지표 조건 빌더)는 2026-07-21에 논의만 시작함, 별도 계획 문서/섹션으로 이어서 진행 예정 — 이 문서엔 아직 반영 안 됨.
+- 백테스팅 페이지는 2026-07-21에 Phase 1(단일/소수 종목 매수후보유 vs 벤치마크)까지 완료함 — 위 "백테스팅 페이지 Phase 1" 섹션 참고. Phase 2 이후(다중종목 포트폴리오, 지표조건 전략, CAPM)는 여전히 미착수.
+- **`CollectorClient`에 바디 있는 새 POST/PUT 메서드를 추가할 때는 처음부터 `syncSubscriptions`/`runBacktest`/`backfillTicker`와 같은 raw `HttpClient` 패턴을 쓸 것, `RestClient`로 시도하지 말 것**(2026-07-21 재확인) — uvicorn이 JDK `HttpClient`의 기본 h2c 업그레이드 시도를 지원하지 않아 바디가 있는 요청이 콜렉터에 아예 안 닿고 조용히 타임아웃까지 감(access log에 요청 자체가 안 찍힘, 응답도 없이 설정한 타임아웃만큼 걸린 뒤 실패). GET은 바디가 없어 이 문제가 없으므로 `RestClient` 그대로 써도 됨 — 구분 기준은 순수하게 "바디가 있는 요청이냐"임.
+- **새 `@Scheduled(cron = "${x.cron}")` 프로퍼티를 추가하면 `marketboardBackend/src/test/resources/application.yaml`에도 같은 키를 추가할 것**(2026-07-21 발견) — 이 파일이 메인 `application.yaml`을 완전히 shadow하는 구조라, 메인 쪽에만 새 cron 프로퍼티를 추가하면 테스트 프로파일에서 해당 값을 못 찾아 `contextLoads()`가 즉시 실패함(`indicators.cron`도 이미 이 이유로 테스트 yaml에 따로 정의돼 있었음 — 그 선례를 몰라서 한 번 겪음).
+- **yfinance 옵션 체인의 `openInterest` 컬럼은 신뢰하지 말 것**(2026-07-21 발견) — SPY 등 유동성 높은 종목에서도 대부분 0으로 나오는 게 실제로 확인된 yfinance 데이터 품질 이슈. `volume` 컬럼은 정상적으로 채워지므로, 옵션 기반 지표(Put/Call 비율 등)는 open interest 대신 거래량 기준으로 계산할 것. 또한 가장 가까운(특히 0DTE) 만기 하나만 보면 대표성이 떨어지므로 여러 만기를 합산할 것.
+- **콜렉터(`uv run python main.py`)를 재시작한 뒤 특정 엔드포인트가 응답 없이 멈추거나 이상하게 느리면, 코드 버그로 단정하기 전에 `netstat -ano | grep :8000`으로 LISTENING 프로세스가 2개 이상인지부터 확인할 것**(2026-07-21, 같은 세션에 3번 재현) — 이전 프로세스가 완전히 안 죽고 같은 포트에 남아 있으면, 새 요청이 옛 코드가 떠 있는 죽은 프로세스로 라우팅될 수 있음(`/health`처럼 순수 sync 엔드포인트조차 응답이 없어서 착각하기 쉬움). 발견되면 전부 `taskkill //F //PID <pid>`로 정리하고 재기동. 근본 원인(Windows에서 `uv run`이 스폰하는 자식 프로세스를 상위 종료 신호가 못 잡는 것으로 추정)은 아직 미조사.
 
 ---
 

@@ -229,7 +229,20 @@ export default function StockListPage() {
       renderCell: (row) => {
         const flash = flashes[row.ticker];
         return (
-          <HStack gap={1} align="center">
+          <HStack
+            gap={1}
+            align="center"
+            style={{
+              padding: 'var(--spacing-0-5) var(--spacing-1-5)',
+              borderRadius: 'var(--radius-inner)',
+              backgroundColor: flash
+                ? flash === 'up'
+                  ? 'var(--color-background-red)'
+                  : 'var(--color-background-blue)'
+                : 'transparent',
+              transition: `background-color ${FLASH_DURATION_MS}ms ease-out`,
+            }}
+          >
             {flash && (
               <span style={{ color: flash === 'up' ? 'var(--color-text-red)' : 'var(--color-text-blue)' }}>
                 <Icon icon={flash === 'up' ? 'arrowUp' : 'arrowDown'} color="inherit" size="sm" />

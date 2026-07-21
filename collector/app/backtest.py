@@ -12,8 +12,6 @@ from datetime import date
 
 import pandas as pd
 
-from . import mysql_writer
-
 BENCHMARK_TICKER = "SPY"
 TRADING_DAYS_PER_YEAR = 252
 
@@ -31,6 +29,11 @@ def _load_closes(tickers: list[str], start: date, end: date) -> pd.DataFrame:
     -- see today's PROGRESS.md note: a symbols JOIN + ORDER BY defeats the
     (symbol_id, timeframe, ts) index and forces a full table scan once price_history is large.
     """
+    # Imported lazily so importing _compute_backtest (the pure part, unit-tested without a DB)
+    # doesn't transitively pull in config.py, which hard-requires FINNHUB_API_KEY at import time
+    # -- CI's collector test job intentionally runs with no env vars/secrets set.
+    from . import mysql_writer
+
     conn = mysql_writer.connect()
     try:
         with conn.cursor() as cur:

@@ -204,6 +204,17 @@ export interface MarketIndexInfo {
   name: string;
 }
 
+export interface MarketBreadthResponse {
+  snapshotDate: string;
+  advancingCount: number;
+  decliningCount: number;
+  unchangedCount: number;
+  new52wHighCount: number;
+  new52wLowCount: number;
+  universeSize: number;
+  computedAt: string;
+}
+
 export interface FinancialsYearMetric {
   year: number;
   [metric: string]: number | null;

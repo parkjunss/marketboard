@@ -66,3 +66,9 @@ collector:
 
 indicators:
   cron: ${INDICATORS_CRON:0 */5 * * * *}
+
+market-breadth:
+  # Once a day is enough -- derived from daily bars, which only change once a day themselves.
+  # 07:00 gives the daily backfill loops (which also run once a day, no fixed time) a head start,
+  # though a stale/missing bar for a given symbol just gets skipped rather than miscounted.
+  cron: ${MARKET_BREADTH_CRON:0 0 7 * * *}

@@ -62,3 +62,6 @@ collector:
 
 indicators:
   cron: 0 */5 * * * *
+
+market-breadth:
+  cron: 0 0 7 * * *

@@ -8,6 +8,7 @@ import type {
   DashboardConfigResponse,
   FinancialsResponse,
   IndicatorResponse,
+  MarketBreadthResponse,
   MarketIndexInfo,
   NewsItem,
   PortfolioPositionResponse,
@@ -249,6 +250,10 @@ export function getBacktestRun(fetcher: Fetcher, id: number): Promise<BacktestRu
 
 export function getMarketIndices(fetcher: Fetcher): Promise<MarketIndexInfo[]> {
   return fetcher<MarketIndexInfo[]>('/api/market-indices');
+}
+
+export function getMarketBreadth(fetcher: Fetcher): Promise<MarketBreadthResponse> {
+  return fetcher<MarketBreadthResponse>('/api/market-breadth');
 }
 
 export function getMarketIndexHistory(fetcher: Fetcher, slug: string): Promise<CandleResponse[]> {

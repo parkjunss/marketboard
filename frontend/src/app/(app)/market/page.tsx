@@ -8,6 +8,7 @@ import { Heading, Text } from '@astryxdesign/core/Text';
 import { Center } from '@astryxdesign/core/Center';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { MarketIndexCard } from '@/components/market/MarketIndexCard';
+import { MarketBreadthPanel } from '@/components/market/MarketBreadthPanel';
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import type { MarketIndexInfo } from '@/lib/types';
@@ -38,17 +39,21 @@ export default function MarketPage() {
       </Section>
 
       <Section padding={4}>
-        {indices === null ? (
-          <Center height={320}>
-            <Spinner size="lg" label="불러오는 중" />
-          </Center>
-        ) : (
-          <Grid columns={3} gap={4}>
-            {indices.map((index) => (
-              <MarketIndexCard key={index.slug} slug={index.slug} name={index.name} />
-            ))}
-          </Grid>
-        )}
+        <VStack gap={4}>
+          <MarketBreadthPanel />
+
+          {indices === null ? (
+            <Center height={320}>
+              <Spinner size="lg" label="불러오는 중" />
+            </Center>
+          ) : (
+            <Grid columns={3} gap={4}>
+              {indices.map((index) => (
+                <MarketIndexCard key={index.slug} slug={index.slug} name={index.name} />
+              ))}
+            </Grid>
+          )}
+        </VStack>
       </Section>
     </VStack>
   );

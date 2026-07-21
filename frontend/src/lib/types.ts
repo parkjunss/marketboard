@@ -204,6 +204,27 @@ export interface MarketIndexInfo {
   name: string;
 }
 
+export interface FearGreedSubIndicator {
+  score: number;
+  rating: string;
+}
+
+export interface FearGreedResponse {
+  score: number;
+  rating: string;
+  timestamp: string;
+  history: Record<string, number>;
+  indicators: Record<string, FearGreedSubIndicator>;
+}
+
+export interface PutCallRatioResponse {
+  ticker: string;
+  expirationsUsed: number;
+  callVolume: number;
+  putVolume: number;
+  putCallRatio: number;
+}
+
 export interface MarketBreadthResponse {
   snapshotDate: string;
   advancingCount: number;

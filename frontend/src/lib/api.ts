@@ -6,6 +6,7 @@ import type {
   ChartIndicatorSettingsResponse,
   CollectorStatusResponse,
   DashboardConfigResponse,
+  FearGreedResponse,
   FinancialsResponse,
   IndicatorResponse,
   MarketBreadthResponse,
@@ -13,6 +14,7 @@ import type {
   NewsItem,
   PortfolioPositionResponse,
   PortfolioSummaryResponse,
+  PutCallRatioResponse,
   QuoteResponse,
   SymbolProfileResponse,
   SymbolResponse,
@@ -254,6 +256,14 @@ export function getMarketIndices(fetcher: Fetcher): Promise<MarketIndexInfo[]> {
 
 export function getMarketBreadth(fetcher: Fetcher): Promise<MarketBreadthResponse> {
   return fetcher<MarketBreadthResponse>('/api/market-breadth');
+}
+
+export function getFearGreed(fetcher: Fetcher): Promise<FearGreedResponse> {
+  return fetcher<FearGreedResponse>('/api/market-sentiment/fear-greed');
+}
+
+export function getPutCallRatio(fetcher: Fetcher, ticker = 'SPY'): Promise<PutCallRatioResponse> {
+  return fetcher<PutCallRatioResponse>(`/api/market-sentiment/put-call-ratio?ticker=${ticker}`);
 }
 
 export function getMarketIndexHistory(fetcher: Fetcher, slug: string): Promise<CandleResponse[]> {

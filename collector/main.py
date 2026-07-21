@@ -18,6 +18,7 @@ from app.market_indices import get_index_history, list_indices
 from app.news import get_company_news, get_general_news
 from app.redis_publisher import publish_quote
 from app.rest_fallback import rest_fallback_loop
+from app.sentiment import FearGreedUnavailableError, PutCallDataUnavailableError, get_fear_greed, get_put_call_ratio
 from app.sp500_universe import run_sp500_batch
 from app.state import state
 from app.symbol_profile import UnknownSymbolError, get_symbol_profile
@@ -225,6 +226,24 @@ async def backtest_run(payload: BacktestRunPayload):
         )
     except InsufficientDataError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/sentiment/fear-greed")
+async def sentiment_fear_greed():
+    try:
+        return await asyncio.to_thread(get_fear_greed)
+    except FearGreedUnavailableError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/sentiment/put-call-ratio")
+async def sentiment_put_call_ratio(ticker: str = "SPY"):
+    try:
+        return await asyncio.to_thread(get_put_call_ratio, ticker.upper())
+    except PutCallDataUnavailableError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

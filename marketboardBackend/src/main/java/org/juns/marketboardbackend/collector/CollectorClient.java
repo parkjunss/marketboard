@@ -167,6 +167,25 @@ public class CollectorClient {
         }
     }
 
+    public Optional<FearGreedResponse> getFearGreed() {
+        try {
+            return Optional.ofNullable(restClient.get().uri("/sentiment/fear-greed").retrieve().body(FearGreedResponse.class));
+        } catch (RestClientException ex) {
+            log.warn("Failed to fetch fear & greed index from collector: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public Optional<PutCallRatioResponse> getPutCallRatio(String ticker) {
+        try {
+            return Optional.ofNullable(
+                    restClient.get().uri("/sentiment/put-call-ratio?ticker={ticker}", ticker).retrieve().body(PutCallRatioResponse.class));
+        } catch (RestClientException ex) {
+            log.warn("Failed to fetch put/call ratio from collector ({}): {}", ticker, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
     public Optional<SymbolProfileResponse> getSymbolProfile(String ticker) {
         try {
             return Optional.ofNullable(

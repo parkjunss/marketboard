@@ -131,6 +131,14 @@ export interface IndicatorResponse {
   computedAt: string;
 }
 
+export interface SmaOverlayConfig {
+  period: number;
+}
+
+export interface ChartIndicatorSettingsResponse {
+  smaOverlays: SmaOverlayConfig[];
+}
+
 export type PanelType = 'CHART' | 'NEWS' | 'WATCHLIST' | 'INDICATOR';
 
 export interface PanelConfig {

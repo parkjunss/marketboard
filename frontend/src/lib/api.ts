@@ -1,6 +1,7 @@
 import type {
   AlertResponse,
   CandleResponse,
+  ChartIndicatorSettingsResponse,
   CollectorStatusResponse,
   DashboardConfigResponse,
   FinancialsResponse,
@@ -215,6 +216,17 @@ export function saveDashboardConfig(
   config: DashboardConfigResponse,
 ): Promise<DashboardConfigResponse> {
   return fetcher<DashboardConfigResponse>('/api/dashboard', { method: 'PUT', body: config });
+}
+
+export function getChartIndicatorSettings(fetcher: Fetcher): Promise<ChartIndicatorSettingsResponse> {
+  return fetcher<ChartIndicatorSettingsResponse>('/api/chart-indicator-settings');
+}
+
+export function saveChartIndicatorSettings(
+  fetcher: Fetcher,
+  settings: ChartIndicatorSettingsResponse,
+): Promise<ChartIndicatorSettingsResponse> {
+  return fetcher<ChartIndicatorSettingsResponse>('/api/chart-indicator-settings', { method: 'PUT', body: settings });
 }
 
 export function getMarketIndices(fetcher: Fetcher): Promise<MarketIndexInfo[]> {

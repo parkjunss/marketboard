@@ -7,13 +7,15 @@ import { Grid } from '@astryxdesign/core/Grid';
 import { Card } from '@astryxdesign/core/Card';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { Button } from '@astryxdesign/core/Button';
+import { IconButton } from '@astryxdesign/core/IconButton';
+import { NumberInput } from '@astryxdesign/core/NumberInput';
 import { Icon } from '@astryxdesign/core/Icon';
 import { Link } from '@astryxdesign/core/Link';
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
 import { Center } from '@astryxdesign/core/Center';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { Banner } from '@astryxdesign/core/Banner';
-import { StarIcon as StarOutlineIcon } from '@heroicons/react/24/outline';
+import { StarIcon as StarOutlineIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import { CandleChart, type SmaOverlay } from '@/components/CandleChart';
 import { AlertsPanel } from '@/components/AlertsPanel';
@@ -42,10 +44,20 @@ const DAILY_PERIOD_LIMITS: Record<ChartPeriod, number> = {
 };
 
 // SMA is a daily-window indicator, so it's only overlaid on the 일봉 chart (see NO_OVERLAYS below).
-const DAILY_SMA_OVERLAYS: SmaOverlay[] = [
-  { period: 20, color: '--color-icon-blue', label: 'SMA20' },
-  { period: 50, color: '--color-icon-purple', label: 'SMA50' },
-];
+// The actual SMA values are computed client-side (CandleChart's computeSma) from whatever candles
+// are already on screen -- only *which periods* the user wants is a saved preference (see
+// ChartIndicatorSettingsService on the backend), so any period the user types works with zero
+// backend-side precomputation.
+const DEFAULT_SMA_PERIODS = [20, 50];
+const MAX_SMA_OVERLAYS = 5;
+const SMA_OVERLAY_COLORS = ['--color-icon-blue', '--color-icon-purple', '--color-icon-teal', '--color-icon-orange', '--color-icon-green'];
+function buildSmaOverlays(periods: number[]): SmaOverlay[] {
+  return periods.map((period, index) => ({
+    period,
+    color: SMA_OVERLAY_COLORS[index % SMA_OVERLAY_COLORS.length],
+    label: `SMA${period}`,
+  }));
+}
 const NO_OVERLAYS: SmaOverlay[] = [];
 
 function InfoCard({ label, children }: { label: string; children: React.ReactNode }) {
@@ -97,6 +109,45 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
   const [period, setPeriod] = useState<ChartPeriod>('1y');
   const chartLimit = timeframe === '1d' ? DAILY_PERIOD_LIMITS[period] : undefined;
   const { candles, isLoading: isChartLoading } = useCandles(authFetch, ticker, timeframe, liveQuote, chartLimit);
+
+  // SMA overlay periods are a per-user preference (not per-ticker), loaded once on mount.
+  const [smaPeriods, setSmaPeriods] = useState<number[]>(DEFAULT_SMA_PERIODS);
+  const [newSmaPeriod, setNewSmaPeriod] = useState<number | null>(null);
+  const [isSavingSmaSettings, setIsSavingSmaSettings] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getChartIndicatorSettings(authFetch).then((settings) => {
+      if (!cancelled) setSmaPeriods(settings.smaOverlays.map((overlay) => overlay.period));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch]);
+
+  function removeSmaPeriod(periodToRemove: number) {
+    setSmaPeriods((prev) => prev.filter((p) => p !== periodToRemove));
+  }
+
+  function addSmaPeriod() {
+    if (newSmaPeriod == null) return;
+    setSmaPeriods((prev) =>
+      prev.includes(newSmaPeriod) || prev.length >= MAX_SMA_OVERLAYS ? prev : [...prev, newSmaPeriod].sort((a, b) => a - b),
+    );
+    setNewSmaPeriod(null);
+  }
+
+  async function saveSmaSettings() {
+    setIsSavingSmaSettings(true);
+    try {
+      const saved = await api.saveChartIndicatorSettings(authFetch, { smaOverlays: smaPeriods.map((p) => ({ period: p })) });
+      setSmaPeriods(saved.smaOverlays.map((overlay) => overlay.period));
+    } finally {
+      setIsSavingSmaSettings(false);
+    }
+  }
+
+  const dailySmaOverlays = buildSmaOverlays(smaPeriods);
 
   // Fetched independently of the chart's selected timeframe so 전일대비/1년 고가·저가 stay
   // accurate even when the user is looking at 분봉 candles.
@@ -346,6 +397,34 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
             </HStack>
           </HStack>
 
+          {timeframe === '1d' && (
+            <HStack justify="between" align="center" wrap="wrap">
+              <Text type="label">SMA 지표 설정</Text>
+              <HStack gap={2} align="center" wrap="wrap">
+                {smaPeriods.map((smaPeriod) => (
+                  <HStack key={smaPeriod} gap={1} align="center">
+                    <Text type="body">SMA{smaPeriod}</Text>
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      icon={<Icon icon={XMarkIcon} />}
+                      label={`SMA${smaPeriod} 제거`}
+                      clickAction={() => removeSmaPeriod(smaPeriod)}
+                    />
+                  </HStack>
+                ))}
+                <NumberInput label="기간 추가" value={newSmaPeriod} onChange={setNewSmaPeriod} />
+                <Button
+                  variant="secondary"
+                  label="추가"
+                  isDisabled={newSmaPeriod == null || smaPeriods.length >= MAX_SMA_OVERLAYS}
+                  clickAction={addSmaPeriod}
+                />
+                <Button variant="primary" label="저장" isLoading={isSavingSmaSettings} clickAction={saveSmaSettings} />
+              </HStack>
+            </HStack>
+          )}
+
           {isChartLoading ? (
             <Center height={420}>
               <Spinner size="lg" label="차트 불러오는 중" />
@@ -354,12 +433,12 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
             <CandleChart
               // lightweight-charts' setData() keeps whatever zoom/pan range was already visible
               // instead of re-fitting to the new data -- fine for live-tick merges (same key), but
-              // switching 기간/차트 단위 swaps in a very differently-sized series and needs a fresh
-              // chart instance (which fits-to-content on its first setData) or the view silently
-              // stays cropped to the old range and looks unchanged.
-              key={`${ticker}:${timeframe}:${chartLimit ?? 'default'}`}
+              // switching 기간/차트 단위/SMA 설정 swaps in a differently-shaped series and needs a
+              // fresh chart instance (which fits-to-content on its first setData) or the view
+              // silently stays cropped to the old range and looks unchanged.
+              key={`${ticker}:${timeframe}:${chartLimit ?? 'default'}:${smaPeriods.join(',')}`}
               candles={candles}
-              smaOverlays={timeframe === '1d' ? DAILY_SMA_OVERLAYS : NO_OVERLAYS}
+              smaOverlays={timeframe === '1d' ? dailySmaOverlays : NO_OVERLAYS}
             />
           )}
 

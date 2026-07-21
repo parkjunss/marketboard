@@ -64,6 +64,9 @@ function LoginForm() {
         <Text type="body" size="sm">
           계정이 없으신가요? <NextLink href="/signup">회원가입</NextLink>
         </Text>
+        <Text type="body" size="sm">
+          <NextLink href="/overview">로그인 없이 시장 개요 먼저 보기 →</NextLink>
+        </Text>
       </VStack>
     </Center>
   );

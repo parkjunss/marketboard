@@ -39,6 +39,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/refresh").permitAll()
                         .requestMatchers("/ws/**").permitAll()
+                        // Public market-overview data (indices, breadth, sentiment, sector rotation) --
+                        // none of it is user-specific, so it's shown on the unauthenticated /overview
+                        // page. No mutating endpoints live under these paths for non-admins (the admin
+                        // recompute trigger is under /api/admin/**, gated separately below).
+                        .requestMatchers("/api/market-indices/**", "/api/market-breadth", "/api/market-sentiment/**").permitAll()
                         // /actuator/prometheus is scraped by Prometheus itself (no JWT to send), so it's
                         // permitAll like health/info — order matters here, this must come before the
                         // ADMIN-gated /actuator/** rule below or it'd be shadowed by it.

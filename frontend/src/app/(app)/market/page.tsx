@@ -43,7 +43,7 @@ export default function MarketPage() {
             <Spinner size="lg" label="불러오는 중" />
           </Center>
         ) : (
-          <Grid columns={2} gap={4}>
+          <Grid columns={3} gap={4}>
             {indices.map((index) => (
               <MarketIndexCard key={index.slug} slug={index.slug} name={index.name} />
             ))}

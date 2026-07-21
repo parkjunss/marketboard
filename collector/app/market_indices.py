@@ -17,7 +17,11 @@ INDICES = [
     {"slug": "VIX", "yf_ticker": "^VIX", "name": "Volatility Index"},
     {"slug": "DXY", "yf_ticker": "DX-Y.NYB", "name": "US Dollar Index"},
     {"slug": "US5Y", "yf_ticker": "^FVX", "name": "Treasury Yield 5 Years"},
+    # 10-year is the most-watched maturity (mortgage rates, equity valuation discount rate,
+    # recession-signal inversions vs 2Y) -- 5Y/30Y alone skip right past it.
+    {"slug": "US10Y", "yf_ticker": "^TNX", "name": "Treasury Yield 10 Years"},
     {"slug": "US30Y", "yf_ticker": "^TYX", "name": "Treasury Yield 30 Years"},
+    {"slug": "USDKRW", "yf_ticker": "KRW=X", "name": "USD/KRW"},
 ]
 
 _BY_SLUG = {i["slug"]: i for i in INDICES}

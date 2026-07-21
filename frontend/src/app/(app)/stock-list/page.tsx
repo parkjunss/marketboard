@@ -5,6 +5,7 @@ import { VStack, HStack } from '@astryxdesign/core/Stack';
 import { Section } from '@astryxdesign/core/Section';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
+import { TextInput } from '@astryxdesign/core/TextInput';
 import { Table, proportional, pixel } from '@astryxdesign/core/Table';
 import type { TableColumn } from '@astryxdesign/core/Table';
 import { IconButton } from '@astryxdesign/core/IconButton';
@@ -89,6 +90,7 @@ export default function StockListPage() {
   const flashes = usePriceFlash(quotes);
 
   const [filter, setFilter] = useState<'all' | 'watchlist'>('all');
+  const [search, setSearch] = useState('');
   const [watchlist, setWatchlist] = useState<WatchlistItemResponse[]>([]);
   const [isWatchlistLoading, setIsWatchlistLoading] = useState(true);
   const [pendingTicker, setPendingTicker] = useState<string | null>(null);
@@ -173,7 +175,11 @@ export default function StockListPage() {
     })
     .filter((row): row is StockRow => row !== null);
 
-  const filteredRows = filter === 'watchlist' ? rows.filter((row) => watchlistByTicker.has(row.ticker)) : rows;
+  const filteredRows = (filter === 'watchlist' ? rows.filter((row) => watchlistByTicker.has(row.ticker)) : rows).filter((row) => {
+    const query = search.trim().toUpperCase();
+    if (!query) return true;
+    return row.ticker.toUpperCase().includes(query) || row.name.toUpperCase().includes(query);
+  });
 
   const columns: TableColumn<StockRow>[] = [
     {
@@ -301,10 +307,20 @@ export default function StockListPage() {
               확인하세요
             </Text>
           </VStack>
-          <SegmentedControl value={filter} onChange={(value) => setFilter(value as 'all' | 'watchlist')} label="보기 필터">
-            <SegmentedControlItem value="all" label="전체" />
-            <SegmentedControlItem value="watchlist" label="관심종목" />
-          </SegmentedControl>
+          <HStack gap={3} align="center">
+            <TextInput
+              label="티커/이름 검색"
+              isLabelHidden
+              placeholder="티커 또는 이름 검색"
+              value={search}
+              onChange={setSearch}
+              hasClear
+            />
+            <SegmentedControl value={filter} onChange={(value) => setFilter(value as 'all' | 'watchlist')} label="보기 필터">
+              <SegmentedControlItem value="all" label="전체" />
+              <SegmentedControlItem value="watchlist" label="관심종목" />
+            </SegmentedControl>
+          </HStack>
         </HStack>
       </Section>
 
@@ -315,8 +331,14 @@ export default function StockListPage() {
       ) : filteredRows.length === 0 ? (
         <Center height={320}>
           <EmptyState
-            title={filter === 'watchlist' ? '관심종목이 없습니다' : '표시할 종목이 없습니다'}
-            description={filter === 'watchlist' ? '전체 목록에서 별표를 눌러 관심종목에 추가하세요.' : undefined}
+            title={search.trim() ? '검색 결과가 없습니다' : filter === 'watchlist' ? '관심종목이 없습니다' : '표시할 종목이 없습니다'}
+            description={
+              search.trim()
+                ? undefined
+                : filter === 'watchlist'
+                  ? '전체 목록에서 별표를 눌러 관심종목에 추가하세요.'
+                  : undefined
+            }
           />
         </Center>
       ) : (

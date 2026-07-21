@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { VStack, HStack } from '@astryxdesign/core/Stack';
 import { Card } from '@astryxdesign/core/Card';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -34,6 +34,13 @@ export default function AdminSymbolsPage() {
   const [priority, setPriority] = useState<number | null>(0);
   const [isCreating, setIsCreating] = useState(false);
   const [pendingId, setPendingId] = useState<number | null>(null);
+
+  const [search, setSearch] = useState('');
+  const filteredSymbols = useMemo(() => {
+    const query = search.trim().toUpperCase();
+    if (!query) return symbols;
+    return symbols.filter((s) => s.ticker.toUpperCase().includes(query) || s.name.toUpperCase().includes(query));
+  }, [symbols, search]);
 
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [isBulkActivating, setIsBulkActivating] = useState(false);
@@ -108,7 +115,7 @@ export default function AdminSymbolsPage() {
   }
 
   const { selectionConfig } = useTableSelectionState<SymbolRow>({
-    data: symbols,
+    data: filteredSymbols,
     idKey: (item) => String(item.id),
     selectedKeys,
     setSelectedKeys,
@@ -171,6 +178,19 @@ export default function AdminSymbolsPage() {
         </Center>
       ) : (
         <VStack gap={3}>
+          <HStack gap={4} align="center" justify="between" wrap="wrap">
+            <TextInput
+              label="티커/이름 검색"
+              isLabelHidden
+              placeholder="티커 또는 이름 검색"
+              value={search}
+              onChange={setSearch}
+              hasClear
+            />
+            <Text type="supporting" size="sm">
+              {filteredSymbols.length}/{symbols.length}개 표시
+            </Text>
+          </HStack>
           {selectedCount > 0 && (
             <HStack gap={3} align="center">
               <Text type="body">{selectedCount}개 선택됨</Text>
@@ -183,7 +203,13 @@ export default function AdminSymbolsPage() {
               <Button variant="ghost" size="sm" label="선택 해제" onClick={() => setSelectedKeys(new Set())} />
             </HStack>
           )}
-          <Table data={symbols} columns={columns} idKey="id" hasHover plugins={{ selection: selectionPlugin }} />
+          {filteredSymbols.length === 0 ? (
+            <Text type="body" color="secondary">
+              검색 결과가 없습니다
+            </Text>
+          ) : (
+            <Table data={filteredSymbols} columns={columns} idKey="id" hasHover plugins={{ selection: selectionPlugin }} />
+          )}
         </VStack>
       )}
 

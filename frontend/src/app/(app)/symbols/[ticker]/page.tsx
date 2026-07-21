@@ -351,7 +351,16 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
               <Spinner size="lg" label="차트 불러오는 중" />
             </Center>
           ) : (
-            <CandleChart candles={candles} smaOverlays={timeframe === '1d' ? DAILY_SMA_OVERLAYS : NO_OVERLAYS} />
+            <CandleChart
+              // lightweight-charts' setData() keeps whatever zoom/pan range was already visible
+              // instead of re-fitting to the new data -- fine for live-tick merges (same key), but
+              // switching 기간/차트 단위 swaps in a very differently-sized series and needs a fresh
+              // chart instance (which fits-to-content on its first setData) or the view silently
+              // stays cropped to the old range and looks unchanged.
+              key={`${ticker}:${timeframe}:${chartLimit ?? 'default'}`}
+              candles={candles}
+              smaOverlays={timeframe === '1d' ? DAILY_SMA_OVERLAYS : NO_OVERLAYS}
+            />
           )}
 
           <AlertsPanel ticker={ticker} />

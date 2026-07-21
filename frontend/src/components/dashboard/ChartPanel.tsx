@@ -40,7 +40,9 @@ export function ChartPanel({ ticker }: { ticker: string }) {
           <Spinner size="md" label="차트 불러오는 중" />
         </Center>
       ) : (
-        <CandleChart candles={candles} height={280} />
+        // Fresh chart instance per timeframe so lightweight-charts fits the new range instead of
+        // keeping whatever zoom was visible for the old (differently-sized) dataset.
+        <CandleChart key={`${ticker}:${timeframe}`} candles={candles} height={280} />
       )}
     </VStack>
   );

@@ -64,8 +64,8 @@ public class IndicatorCalculationService {
     }
 
     private void recomputeForSymbol(Symbol symbol) {
-        List<PriceHistory> candles = priceHistoryRepository.findBySymbol_TickerIgnoreCaseAndTimeframeOrderByTsDesc(
-                symbol.getTicker(), TIMEFRAME, PageRequest.of(0, MAX_LOOKBACK));
+        List<PriceHistory> candles = priceHistoryRepository.findBySymbol_IdAndTimeframeOrderByTsDesc(
+                symbol.getId(), TIMEFRAME, PageRequest.of(0, MAX_LOOKBACK));
         if (candles.isEmpty()) {
             return;
         }

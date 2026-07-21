@@ -55,7 +55,7 @@ public class QuoteService {
         Symbol symbol = symbolRepository.findByTickerIgnoreCase(ticker)
                 .orElseThrow(() -> new ResourceNotFoundException("Unknown symbol " + ticker.toUpperCase()));
         return priceHistoryRepository
-                .findBySymbol_TickerIgnoreCaseAndTimeframeOrderByTsDesc(symbol.getTicker(), timeframe, PageRequest.of(0, limit))
+                .findBySymbol_IdAndTimeframeOrderByTsDesc(symbol.getId(), timeframe, PageRequest.of(0, limit))
                 .stream()
                 .sorted(Comparator.comparing(candle -> candle.getTs()))
                 .map(CandleResponse::from)
@@ -71,8 +71,9 @@ public class QuoteService {
         if (live.isPresent() && live.get().price() != null) {
             return Optional.of(new ResolvedPrice(live.get().price(), true));
         }
-        return priceHistoryRepository
-                .findFirstBySymbol_TickerIgnoreCaseAndTimeframeOrderByTsDesc(ticker, "1d")
+        return symbolRepository
+                .findByTickerIgnoreCase(ticker)
+                .flatMap(symbol -> priceHistoryRepository.findFirstBySymbol_IdAndTimeframeOrderByTsDesc(symbol.getId(), "1d"))
                 .map(candle -> new ResolvedPrice(candle.getClose(), false));
     }
 

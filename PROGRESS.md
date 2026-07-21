@@ -1,35 +1,44 @@
 # MarketBoard — 진행상황 추적
 
-> 최종 갱신: 2026-07-19
-> 기준 계획서: `stock-monitor-dev-plan.html` (2026-07-16 작성, Phase 1~7 로드맵)
-> 참고: `marketboard_development_plan.html`은 이전 버전의 위젯/템플릿 중심 기획서로, 현재는 `stock-monitor-dev-plan.html`이 실행 기준 문서.
+> 최종 갱신: 2026-07-21
+> 기준 계획서: `stock-monitor-dev-plan.html` (2026-07-16 작성, Phase 1~7 로드맵 — 2026-07-19에 전체 완료)
+> 참고: `marketboard_development_plan.html`은 이전 버전의 위젯/템플릿 중심 기획서로, 현재는 `stock-monitor-dev-plan.html`이 실행 기준 문서. 로드맵 완료 이후 개선 후보 목록은 `UPGRADE_IDEAS.md` 참고.
 
 ## 다음 세션 시작점
 
-**계획서(Phase 1~7) 로드맵 전체 완료 — `https://marketboard.duckdns.org` 실제 공개 서비스 중** (2026-07-19): Phase 6(Prometheus + Grafana 관측성)에 이어 Phase 7 전체(PR 테스트 워크플로, 배포용 `Dockerfile` 3종 + `docker-compose.yml`, Pi(`rasp4`) self-hosted runner, `ci.yml` build/deploy job, nginx+certbot+DuckDNS 공개 HTTPS)까지 실제로 Pi에 배포되어 동작 확인까지 끝남. 계획서(`stock-monitor-dev-plan.html`) Phase 1~7 로드맵이 전부 완료됨 — 이제부터는 사용자가 그때그때 요청하는 개선/버그수정 위주로 진행.
+**로드맵(Phase 1~7)은 2026-07-19에 이미 완료**, 이후는 사용자가 그때그때 요청하는 개선/버그수정 위주로 진행 중.
 
-이전에 추가된 것(2026-07-18): 포트폴리오 삭제 다이얼로그 버그 수정(`useImperativeAlertDialog` → 제어형 `AlertDialog`, 프로젝트 전체에서 이제 완전히 안 씀), 종목 세부 페이지(`/symbols/[ticker]`) 보강(뉴스/기술지표/재무링크/전일대비/회사명/1년고저/기업개요/차트 SMA오버레이/잘못된 티커 처리/뒤로가기 링크), 시세보드→종목리스트 통합(관심종목 별표 이관), 티커 이름 truncate, SMA 라인 색상 버그 수정, Prometheus/Grafana 관측성(커스텀 메트릭 4종 + 독립 Docker 컨테이너 + 대시보드), S&P500 500종목 일봉 백필이 정체돼 보이던 문제 조사 및 수정(진짜 원인은 yfinance가 아니라 종목마다 새 MySQL 커넥션을 여느라 커넥션당 ~10초씩 걸리던 것) — 상세는 아래 각 섹션 참고.
+**2026-07-20**: `UPGRADE_IDEAS.md`의 "바로 해볼 만한 것" 후속 조치 — 인증/관리자 API rate limit(Bucket4j), `npm audit` postcss 취약점 override로 정리, MySQL 일일 백업 서비스, 관리자 종목/유저 삭제 API를 FK 얽힌 테이블까지 cascade 정리하도록 보강, 회원가입 비밀번호 확인+약관 동의 추가(이용약관/개인정보처리방침 페이지 신설), Grafana 알림 규칙(콜렉터 연결 끊김/인디케이터 실패) 추가.
 
-**바로 시작할 것 후보:**
+**2026-07-21**: 종목 상세 페이지 개선 작업에서 시작해, 그 과정에서 성능/안정성 버그를 여러 건 발견·수정함:
+1. 차트에 조회 기간 선택(1개월~전체) 추가 — 백엔드 history 조회 `limit` 상한을 500→1500으로 상향
+2. yfinance 기업 정보 확장 — PER(trailing/forward), 배당수익률, 베타, 평균거래량, 직원수, 본사, 애널리스트 의견, 웹사이트, 기업개요 텍스트 등
+3. **버그**: S&P500 유니버스(비활성 ~490종목)는 일일 배치가 항상 `period="6mo"`로 고정 다운로드해서 6개월치 이상 절대 안 쌓이던 문제 — `run_sp500_batch()`/`POST /sp500/sync`에 `period` 파라미터 추가(자동 일일 루프는 여전히 `6mo` 기본값), 청크 타임아웃도 60→120초로 상향(5년 요청 시 60초로는 일부 청크가 타임아웃남). 로컬 DB엔 실제로 `period=5y` 트리거해서 503종목 중 500종목 5년치 확보 완료(나머지 3개는 상장 1년 미만이라 정상). **배포 서버 DB는 아직 미실행** — 아래 "남겨둔 확인 작업" 참고
+4. **버그**: 차트 기간/단위(일봉·분봉)를 바꿔도 화면이 그대로였던 문제 — `lightweight-charts`의 `series.setData()`가 기존 줌/타임레인지를 유지하는 게 원인(새로 `createChart`한 직후 첫 `setData`만 자동으로 전체 범위에 맞춰짐). `CandleChart`를 `key`(ticker+timeframe+limit+SMA설정)로 강제 리마운트하도록 수정
+5. **성능 버그(중요)**: `price_history` 조회(`findBySymbol_TickerIgnoreCase...`)가 symbols 테이블과 조인해서 정렬하는 방식이라 인덱스를 못 타고, 62만 행을 넘어서자 매 요청마다 전체 테이블 풀스캔(`EXPLAIN`으로 `type=ALL` 확인, ~0.9~1초)하고 있었음. `symbol_id` 기반 조회(`(symbol_id, timeframe, ts)` 복합 인덱스를 그대로 타는 backward index scan)로 전환해 ~10배 이상 개선(~0.07~0.09초). `IndicatorCalculationService`의 5분 cron(활성+S&P500 유니버스 500여 종목 순회)도 같은 경로라 동일하게 개선됨 — 종목 상세 차트뿐 아니라 종목 리스트/대시보드 진입이 느렸던 것도 이게 원인이었을 가능성이 큼
+6. 기업 개요(`/api/symbols/{ticker}/profile`)에 DB 캐싱 추가(`symbol_profiles` 테이블, 24h TTL, `financial_statements`/`FinancialsService`와 동일 패턴 — 이전엔 캐싱 없이 매 요청마다 yfinance를 직접 호출하고 있었음) + `CollectorClient`에 10초 읽기 타임아웃 추가(원래 타임아웃이 아예 없어서 콜렉터 호출이 멈추면 백엔드 요청 스레드도 무한정 같이 멈췄음 — 조사 중 실제로 그 시점에 yfinance/Yahoo가 응답을 안 주고 있던 것도 확인, 오늘 S&P500 배치를 두 번 무겁게 돌린 여파로 추정되는 외부 요인)
+7. 종목 상세 차트에 **유저별 SMA 오버레이 기간 커스터마이즈** 추가 — `chart_indicator_settings` 테이블(`dashboard_configs`와 동일한 `user_id UNIQUE + JSON` 패턴), SMA 값 자체는 여전히 프론트에서 클라이언트 계산(`computeSma`), 백엔드는 "몇 기간을 원하는지" 목록만 저장
 
-1. **남겨둔 확인 작업**(급하지 않음, 아래 참고) 위주 — Phase 7 자체는 완료됨. 다음으로 만질 만한 것은 아래 "남겨둔 확인 작업" 섹션이나 사용자가 새로 요청하는 기능/버그.
+전부 커밋·푸시 완료(`a2e673c`, `f61ff85`, `7bc2ba0`, `5309fac`, `5030b3d`, `64dac4e`), main 푸시마다 CI가 Pi에 자동 배포함.
 
-**남겨둔 확인 작업 (급하지 않음)**
-- 장 마감 후 `collector/app/rest_fallback.py`(이제 Finnhub REST가 아니라 yfinance 기반) 전체 폴백 루프 재검증 — fetch+publish 경로 자체는 확인했지만, 스테일 조건이 실제로 걸리는 장 마감 상황의 전체 루프는 아직 안 봄
-- `symbols` 테이블에 테스트로 넣었던 `AMZN` row가 남아있음(is_active=1) — 그대로 둬도 무방(이제 관리자 화면에서 언제든 비활성화 가능)
-- `indicators.cron`(기본 5분 주기)이 실제로 여러 번 순환하며 값이 갱신되는지는 아직 짧은 구간만 봄 — 하루 이상 켜둔 상태로 `computed_at`이 계속 최신으로 갱신되는지 다음 세션에 확인
-- `@astryxdesign/charts`(공식 차트 패키지) 설치가 peer dependency 충돌로 보류됨(canary 버전이 `@astryxdesign/core@0.1.6-canary.*`를 요구, 우리는 안정 `^0.1.6` 사용 중) — 지금은 커스텀 SVG `Sparkline`/`MultiLineChart`/`GroupedBarChart` 컴포넌트로 우회했지만, core가 canary 라인을 따라잡거나 charts가 안정 릴리스되면 재검토
-- 재무 대시보드(`/financials`)의 `Interest Coverage` KPI가 AAPL 기준 `—`(null)로 나옴 — 버그 아님: Apple은 최근 회계연도에 순이자수익(net interest income)이라 "Interest Expense" 항목 자체가 없어서(수집기 `financials.py`가 null로 정직하게 반영) 발생하는 정상 케이스. 이자비용이 실제로 있는 종목(예: 레버리지 높은 기업)으로 확인해볼 것.
-- `collector` 프로세스가 이번에도 이유를 알 수 없는 부모/자식(venv python + anaconda python) 쌍으로 뜨는 현상이 재발함(Phase 4/이전 세션에서도 관찰됨) — 기능엔 지장 없었지만 원인 미조사 상태로 남아있음.
+**논의만 하고 미구현 — 다음에 참고**
+- **지표 확장**(볼린저밴드/MACD/DMI/Williams %R/거래량 지표) 아키텍처만 논의함, 코드는 없음. 결론: 가격 오버레이형(볼린저 등, 캔들과 같은 스케일)은 지금 SMA 오버레이 구조 그대로 확장 가능. 오실레이터/거래량형(RSI 차트화·MACD·DMI·Williams%R·거래량)은 스케일이 달라 별도 서브페인이 필요한데, **`lightweight-charts` v5.2.0(현재 설치된 버전)이 멀티페인을 네이티브로 지원**하는 것을 확인함(`chart.addPane()`, `addSeries(..., paneIndex)`) — 별도 차트 인스턴스로 크로스헤어/타임스케일을 수동 동기화할 필요 없이 페인만 추가하면 됨. 시작하려면 `CandleChart`를 "메인 페인 오버레이 목록 + 서브페인 목록" 구조로 일반화하는 것부터 필요.
+- 관리자가 지표 종류/기본값을 관리하는 카탈로그(Phase A, `indicator_definitions` 테이블 등)는 설계까지 했다가 **폐기 결정** — 유저별 커스터마이즈(위 7번)만 진행하기로 확정.
+- **백테스팅 페이지**(여러 종목 포트폴리오 백테스팅, 리스크/리턴 분석, CAPM 등 재무 모델, 지표 조건 빌더, 차트) 신규 기능으로 논의 시작 — 별도 계획을 이어서 작성 중(무거운 수치 계산이라 Java보다 Python/collector 쪽이 자연스럽다는 방향만 잠정 합의, 상세 설계는 진행 중).
 
-**세션 종료 시점 실행 상태** (2026-07-18 기준, 실시간 WS 대상 종목 재구성 + 교착 버그 수정 직후 — 셋 다 켜진 채로 세션 종료함)
-- 백엔드: 사용자가 IntelliJ에서 devtools와 함께 8080으로 구동 중인 인스턴스를 그대로 사용(직접 띄운 `gradlew bootRun` 없음) — `portfolios`/`portfolio_positions`/`symbols.in_sp500_universe` 마이그레이션(V9/V10/V11) 자동 적용 확인, `SymbolAdminService`의 트랜잭션/동기화 분리 수정도 devtools 자동 재시작으로 반영됨. `./gradlew test`(21건) 전부 통과.
-- 프론트엔드: 포트 3100의 `npm run dev`를 계속 재사용 중(이번 세션에서 새로 띄우지 않음) — 이번 세션 후반부(실시간 종목 재구성)는 프론트엔드 변경 없음(백엔드/콜렉터만).
-- collector: **이번 세션에 세 번 재기동함** — `symbol_profile.py`, `sp500_universe.py`, 그리고 마지막으로 `lifespan()`이 `DEFAULT_SYMBOLS` 대신 DB의 `is_active` 집합을 읽도록 수정한 것 반영을 위해(Python은 `--reload` 없이 떠 있어 핫리로드 안 됨). 재기동 후 `uv run pytest`(10건) 통과 확인.
-- **`.env`의 `SP500_BATCH_LIMIT`가 사용자에 의해 빈 값으로 바뀌어 있어서, 마지막 재기동 시 S&P500 전체(503종목) 배치가 자동으로 시작됨** — 세션 종료 시점에 멤버십 시딩(503종목)은 끝났지만 일봉 백필(`price_history`)은 아직 진행 중(종료 시점 기준 약 40~50종목 완료, 계속 진행 중이었음 — 콜렉터가 살아있는 한 백그라운드에서 계속 진행됨, 앱 다른 기능엔 영향 없음). 다음 세션에서 진행 상황 확인 권장(위 "다음 세션 시작점" 참고).
-- **실시간 WS 대상이 SPY/QQQ/DIA + 상위 10종목(AAPL/MSFT/GOOGL/AMZN/NVDA/META/TSLA/BRK-B/AVGO/JPM), 총 13종목으로 재구성 완료** — `symbols.is_active=1`인 종목과 콜렉터 `/health`의 `subscribed_symbols`가 정확히 일치하는 것까지 확인함.
-- `mysql-container`/`redis-container`: 상시 구동 중(3306/6379) — 다음 세션 시작 시에도 Docker Desktop이 꺼져 있을 수 있으니 먼저 `docker ps`로 확인할 것
-- `financial_statements` 테이블에 캐싱된 `AAPL`/`MSFT` row가 남아있음 — 정상 캐시라 정리 안 함(24시간 TTL). `symbols` 테이블엔 이제 S&P500 유니버스 503종목(대부분 비활성) + 위 13개 실시간 활성 종목이 있음 — 전부 정상 데이터, 테스트 잔재 없음.
+**남겨둔 확인 작업**
+- **배포 서버(Pi) DB는 아직 5년 딥백필 안 됨** — 로컬 `mysql-container`에만 `POST /sp500/sync?period=5y` 실행함. 배포 서버 반영하려면 Pi SSH 접속 후 `curl -X POST "http://localhost:8001/sp500/sync?period=5y"` 필요(이 세션에선 이 머신의 SSH 키 인증이 안 먹혀서 직접 못 함 — 비밀번호 인증만 되는 듯, `Host raspberrypi` 설정은 `~/.ssh/config`에 있음).
+- 장 마감 후 `collector/app/rest_fallback.py` 전체 폴백 루프 재검증 — 여전히 안 함
+- `symbols` 테이블에 테스트로 넣었던 `AMZN` row가 남아있음(is_active=1) — 그대로 둬도 무방
+- `@astryxdesign/charts`(공식 차트 패키지) 설치 peer dependency 충돌로 여전히 보류 중
+- `collector` 프로세스가 이유를 알 수 없는 부모/자식 프로세스 쌍으로 뜨는 현상 — 여전히 원인 미조사
+- `IndicatorRepository.findBySymbol_TickerIgnoreCase...`도 `price_history`랑 같은 티커-JOIN 패턴이지만, `indicators` 테이블은 지금 ~1500행뿐이라 성능 영향 미미 — 지표 쪽을 다시 손볼 일이 생기면 그때 `symbol_id` 기반으로 같이 바꿀 것
+
+**세션 종료 시점 실행 상태** (2026-07-21 기준)
+- 백엔드: `gradlew bootRun`으로 직접 띄운 로컬 인스턴스(8080)가 켜진 채로 세션 종료 — `V13`(symbol_profiles)/`V14`(chart_indicator_settings) 마이그레이션 자동 적용 확인, `./gradlew test` 전부 통과 확인
+- 프론트엔드: `npm run dev`(3100) 켜진 채로 세션 종료
+- collector: `uv run python main.py`(8000) 켜진 채로 세션 종료 — 이번 세션에 코드 변경 반영 위해 여러 번 재기동함(Python은 `--reload` 없이 떠서 핫리로드 안 됨, 매번 수동 재기동 필요)
+- `mysql-container`/`redis-container`: 상시 구동 중
 
 ## 전체 요약
 
@@ -640,6 +649,48 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 
 ---
 
+### ✅ 개선 — `UPGRADE_IDEAS.md` 후속 조치 6건 (2026-07-20)
+로드맵 완료 후 정리한 `UPGRADE_IDEAS.md`의 "바로 해볼 만한 것" 항목을 순서대로 처리함 — 인증/관리자 API rate limit(Bucket4j), `npm audit`의 postcss XSS 취약점을 override로 정리, MySQL 일일 백업 서비스를 compose 스택에 추가, 관리자 종목/유저 삭제 API가 FK로 얽힌 테이블까지 애플리케이션 레벨에서 직접 cascade 정리하도록 보강, 회원가입에 비밀번호 확인+약관 동의 체크박스 추가(이용약관/개인정보처리방침 페이지 신설), Grafana 알림 규칙(콜렉터 연결 끊김/인디케이터 실패율) 추가. 상세는 각 커밋(`5758cb0`~`3a8019a`) 참고.
+
+### ✅ 개선 — 종목 상세 페이지 차트 조회 기간 선택 추가 (2026-07-21)
+`/symbols/[ticker]` 차트가 일봉/분봉 단위 토글만 있고 항상 고정 `limit`(200개)만 보여주던 것을, 1개월/3개월/6개월/1년/5년/전체 기간 선택으로 확장.
+- 백엔드 `QuoteController`의 `GET /api/quotes/{ticker}/history` `limit` 상한을 `@Max(500)` → `@Max(1500)`으로 상향(5년 일봉 ≈ 1260개 커버).
+- 프론트 `useCandles`가 `limit`을 옵셔널 파라미터로 받도록 확장, 종목 상세 페이지에 기간 선택 `SegmentedControl` 추가(일봉에서만 노출 — 분봉은 보관 기간이 짧아 의미 없음).
+
+### ✅ 개선 — yfinance 기업 정보 확장 (2026-07-21)
+"기업 개요" 패널이 거래소/섹터/업종/시가총액 4개뿐이었던 것을 확장 — `collector/app/symbol_profile.py`의 `get_symbol_profile()`이 yfinance `.info`에서 `longBusinessSummary`/`website`/`fullTimeEmployees`/`city`/`country`/`trailingPE`/`forwardPE`/`dividendYield`/`beta`/`averageVolume`/`recommendationKey`/`targetMeanPrice`/`numberOfAnalystOpinions`까지 추가로 반환(같은 `.info` 호출 안에 이미 다 들어있던 필드라 추가 네트워크 호출 없음). `SymbolProfileResponse`(백엔드 DTO)와 프론트 `SymbolProfileResponse` 타입, "기업 개요" 패널 UI도 같이 확장.
+
+### ✅ 버그 수정 — S&P500 유니버스가 6개월치 이상 데이터를 못 쌓던 문제 (2026-07-21)
+사용자가 종목 상세 차트에서 "5년"을 눌러도 2026년 1월부터만 나온다고 보고 — 실제로는 실시간 대상 13종목은 5년치가 있었지만, 그 외 S&P500 유니버스 ~490종목은 정확히 6개월치(125개, 2026-01-20~)만 있었음.
+- **원인**: `collector/app/sp500_universe.py`의 `_download_chunk()`가 매일 도는 자동 배치에서 **항상 `period="6mo"`로 고정** — 실시간 13종목은 예전에 `backfill.py`(기본 `period="5y"`)로 수동 백필된 이력이 있어 괜찮았지만, 나머지는 이 6개월짜리 배치가 유일한 데이터 소스라 그 이상 절대 안 쌓이는 구조였음.
+- **수정**: `run_sp500_batch(limit, period="6mo")`/`POST /sp500/sync?period=`에 `period` 파라미터 추가 — 자동 일일 루프는 기존 `6mo` 기본값 유지(안전하고 충분, `price_history`는 upsert라 나중에 더 긴 기간으로 한 번 요청해도 기존 데이터가 안 지워짐), 필요할 때 `period=5y`로 수동 트리거해서 딥백필하는 용도로 확장.
+- **부수 발견**: 5년치 요청 시 청크(40종목 단위) 다운로드가 6개월 기준으로 잡아둔 `CHUNK_TIMEOUT_SECONDS=60`을 넘겨 일부 청크가 타임아웃남(503종목 중 119종목 영향) → 120초로 상향 후 재시도해서 해결.
+- **로컬 검증**: `POST /sp500/sync?period=5y` 실행 → 503종목 중 500종목 5년치 확보(`failed_tickers: []`), 나머지 3종목(HONA/FDXF/Q)은 상장 1년 미만인 정상 케이스(yfinance에도 그만큼만 존재).
+- **미완료**: 배포 서버(Pi) DB는 아직 이 딥백필을 안 돌림 — 위 "남겨둔 확인 작업" 참고.
+
+### ✅ 버그 수정 — 차트 기간/단위를 바꿔도 화면이 안 바뀌던 문제 (2026-07-21)
+위 기간 선택 기능을 실제로 써보니 "1년"/"5년"을 눌러도 차트가 그대로라는 버그 리포트. 백엔드/DB는 정상(API로 직접 확인: 기간별로 정확한 개수·범위 반환)이라 프론트 문제로 좁혀서 발견.
+- **원인**: `lightweight-charts`의 `series.setData()`는 데이터를 통째로 교체해도 **기존에 보던 줌/타임레인지를 그대로 유지**함 — 새로 `createChart()`한 직후의 첫 `setData()`만 자동으로 전체 범위에 맞춰짐. 이미 떠 있는 차트에 훨씬 크기가 다른 데이터셋을 갈아끼워도 화면상 범위는 안 바뀌어서, 데이터는 실제로 갱신됐는데 시각적으로는 그대로처럼 보였음.
+- **수정**: `CandleChart`에 `key={ticker:timeframe:limit:smaPeriods}`를 걸어 기간/단위/SMA설정이 바뀔 때마다 컴포넌트를 강제로 새로 마운트 — 새 차트 인스턴스는 첫 `setData()`에서 자동으로 전체 범위에 맞춰짐. 실시간 틱 병합(같은 key)은 리마운트 없이 기존처럼 줌 유지한 채 동작. 대시보드 `ChartPanel`(일봉/분봉 토글)에도 동일 패턴 적용.
+
+### ✅ 성능 버그 수정 — `price_history` 조회가 풀스캔하던 문제 (2026-07-21)
+사용자가 "차트/리스트 로딩이 느린 것 같다"고 보고. `EXPLAIN`으로 실측한 결과, 종목별 히스토리 조회가 **624,185행 전체를 풀스캔 + filesort**(`type=ALL`)하고 있었음(~0.9~1초/요청).
+- **원인**: `PriceHistoryRepository.findBySymbol_TickerIgnoreCaseAndTimeframeOrderByTsDesc(...)`가 `symbols` 테이블과 JOIN해서 `ORDER BY ts DESC LIMIT`을 적용하는 구조라, MySQL이 `price_history`의 `(symbol_id, timeframe, ts)` 복합 인덱스를 못 타고 전체를 정렬함. 호출부(`QuoteService.getHistory`/`resolvePrice`, `IndicatorCalculationService.recomputeForSymbol`) 전부 이미 `Symbol` 엔티티(= `symbol_id`)를 손에 쥐고 있었는데도 굳이 티커 문자열로 다시 JOIN 조회하고 있었음. 데이터가 적을 땐(6개월치, ~7.7만 행) 안 느꼈지만, 같은 날 진행한 S&P500 5년 딥백필로 테이블이 8배(~62만 행)로 커지면서 눈에 띄게 느려짐.
+- **수정**: `findBySymbol_IdAndTimeframeOrderByTsDesc(symbolId, ...)` 신규 추가, 3개 호출부 전부 `symbol.getId()` 기반으로 전환 — `EXPLAIN`으로 `type=ref, key=uk_price_history_symbol_tf_ts, Backward index scan` 확인, 실측 ~0.9~1초 → ~0.07~0.09초(약 10배 개선). `IndicatorCalculationService`의 5분 cron(활성+S&P500 유니버스 500여 종목 순회)도 매번 이 쿼리를 500번 넘게 반복 실행하던 거라, 대시보드/리스트가 느렸던 것도 이 cron의 DB 부하가 원인이었을 가능성이 큼.
+
+### ✅ 개선 — 기업 개요 DB 캐싱 + `CollectorClient` 타임아웃 추가 (2026-07-21)
+사용자가 "기업 개요는 왜 또 느리냐, DB에 저장이 안 되어 있는 거냐"고 질문 — 정확한 지적이었음.
+- `/api/symbols/{ticker}/profile`은 `financial_statements`(재무제표)와 달리 캐싱 없이 **매 요청마다 collector→yfinance `.info`를 실시간 호출**하는 구조였음. `financial_statements`/`FinancialsService`와 동일한 read-through 캐시 패턴으로 `symbol_profiles` 테이블(24h TTL, 실패 시 오래된 캐시라도 서빙) + `SymbolProfileService` 신규 추가.
+- **부수 발견**: `CollectorClient`(백엔드→콜렉터 내부 호출)에 타임아웃이 아예 없어서, 콜렉터 호출이 멈추면 백엔드 요청 스레드도 무한정 같이 멈추는 버그가 있었음 — 실제로 조사 중 `/financials`, `/symbol-profile` 둘 다 yfinance 쪽에서 응답이 안 와서 멈춰 있는 상황을 직접 재현함(오늘 S&P500 배치를 두 번 무겁게 돌린 여파로 Yahoo 쪽에서 일시적으로 막힌 것으로 추정, 외부 요인). `RestClient`에 10초 읽기 타임아웃 추가 — 이제 콜렉터가 멈춰도 빠르게 실패하고 캐시/폴백으로 넘어감. 기존 `FinancialsService`의 스테일 캐시 폴백이 이 타임아웃과 맞물려 정상 동작하는 것도 실측 확인함(10초 후 오래된 캐시를 정상적으로 반환).
+
+### ✅ 추가 기능 — 종목 상세 차트 SMA 지표 유저별 커스터마이즈 (2026-07-21)
+지표 관리 방향을 논의하다("관리자가 지표 카탈로그를 관리" vs "유저가 차트에서 직접 기간을 커스터마이즈") 후자만 진행하기로 결정(전자는 스키마+cron 리팩터+관리자 CRUD까지 필요해 범위가 훨씬 큼, 후자는 이미 클라이언트에서 계산하던 SMA 오버레이의 저장값만 유저별로 다르게 하면 되는 훨씬 가벼운 작업).
+- `chart_indicator_settings` 테이블 신규(`dashboard_configs`와 완전히 동일한 `user_id UNIQUE + settings_json` 패턴) + `ChartIndicatorSettingsService`(GET은 없으면 기본값 `[20,50]` 반환, PUT은 upsert) + `GET/PUT /api/chart-indicator-settings`.
+- 종목 상세 페이지에 SMA 기간 추가/제거 UI 추가 — 실제 SMA 값은 여전히 `CandleChart`의 `computeSma()`로 클라이언트에서 계산(백엔드는 "몇 기간을 원하는지" 목록만 저장). 유저가 임의로 고르는 기간은 종목×지표×기간 조합이 무한해 서버에서 캐싱/사전계산이 애초에 불가능하다는 게 이 설계의 핵심 근거.
+- 검증: 백엔드 `@Min(2)/@Max(500)`, `@Size(max=5)` validation curl로 확인(400 응답), GET/PUT 왕복 확인.
+
+---
+
 ## 데이터 모델 현황 (계획서 §06 대비)
 
 | 테이블 | 상태 |
@@ -654,18 +705,24 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 | `financial_statements` | ✅ 생성됨 (V8), 티커별 yfinance 연간 재무제표 캐시(24h TTL) |
 | `portfolios` | ✅ 생성됨 (V9), 유저별 여러 포트폴리오(이름), 처음엔 빈 상태로 생성 |
 | `portfolio_positions` | ✅ 생성됨 (V10), 포트폴리오별 종목 스냅샷(수량/평단가), 거래 이력 아님 |
-| `symbols` 프로필 컬럼 확장 | ⚪ 미착수 — 콜렉터 `GET /symbol-profile/{ticker}`는 sector/industry/marketCap을 이미 반환하지만 아직 DB에 저장 안 함(task #35에서 필요해지면 추가) |
-| `symbols.in_sp500_universe` | ✅ 생성됨 (V11), 기존 `is_active`(실시간 WS)와 별개의 배치 전용 유니버스 플래그. 현재 20종목(`SP500_BATCH_LIMIT=20` 개발 안전장치, 전체 500종목은 다음 세션에 확장 예정) |
+| `symbols` 프로필 컬럼 확장(sector/industry/marketCap을 `symbols` 테이블 자체에) | ⚪ 미착수 — 대신 아래 `symbol_profiles`로 별도 캐시 테이블을 둠(`symbols`를 직접 확장하진 않음) |
+| `symbols.in_sp500_universe` | ✅ 생성됨 (V11), 기존 `is_active`(실시간 WS)와 별개의 배치 전용 유니버스 플래그. 503종목 전체로 확장 완료(2026-07-18), 그중 500종목은 5년치 일봉까지 확보(2026-07-21, 로컬 DB만 — 배포 서버는 아직) |
+| `financial_statements.ticker` 컬럼 폭 | ✅ V12에서 VARCHAR(10)→VARCHAR(20)로 수정(2026-07-18) |
+| `symbol_profiles` | ✅ 생성됨 (V13, 2026-07-21), 티커별 yfinance 기업 프로필(`.info`) 캐시(24h TTL) — `financial_statements`와 동일 패턴 |
+| `chart_indicator_settings` | ✅ 생성됨 (V14, 2026-07-21), 유저별 SMA 오버레이 기간 설정(JSON 블롭) — `dashboard_configs`와 동일 패턴 |
 
 ---
 
 ## 다음 액션 제안 (우선순위 순)
 > 상세 실행 계획은 문서 맨 위 "다음 세션 시작점" 참고.
-1. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
-2. (여유 있을 때) 공유 리버스 프록시 전환 검토 — `tradehub-nginx`가 stop된 채로 남아있음, 나중에 하나의 nginx/Traefik로 tradehub/marketboard 둘 다 Host 헤더 라우팅하는 방향으로 합의했었음(위 "Phase 7" 섹션 참고)
-3. 그 외엔 아래 "남겨둔 확인 작업" 항목들 참고
+1. **배포 서버(Pi) DB에도 S&P500 5년 딥백필 실행** — 로컬만 해뒀음, 위 "남겨둔 확인 작업" 참고
+2. **백테스팅 페이지 계획 마무리 후 착수** — 여러 종목 포트폴리오 백테스팅/CAPM/리스크지표/지표 조건 빌더, 별도 계획 진행 중
+3. 지표 서브페인 확장(볼린저/MACD/DMI/Williams%R/거래량) — `lightweight-charts` v5 멀티페인 지원 확인까지만 하고 미착수, 필요해지면 `CandleChart` 일반화부터
+4. (여유 있을 때) 공유 리버스 프록시 전환 검토 — `tradehub-nginx`가 stop된 채로 남아있음, 나중에 하나의 nginx/Traefik로 tradehub/marketboard 둘 다 Host 헤더 라우팅하는 방향으로 합의했었음(위 "Phase 7" 섹션 참고)
+5. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
+6. 그 외엔 위 "남겨둔 확인 작업" 항목들 참고
 
-**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18), S&P500 일봉 백필 정체 문제 조사·수정(2026-07-18), **Phase 7 전체(PR 테스트 워크플로, 배포용 Dockerfile 3종+docker-compose.yml, Pi self-hosted runner, ci.yml build/deploy job, nginx+certbot+DuckDNS 공개 HTTPS) — `https://marketboard.duckdns.org` 실제 배포·동작 확인까지 완료(2026-07-19)**
+**완료됨** — Git 저장소 초기화/첫 푸시(2026-07-18), 포트폴리오 삭제 다이얼로그 버그 수정(2026-07-18), Phase 6 관측성(2026-07-18), S&P500 일봉 백필 정체 문제 조사·수정(2026-07-18), **Phase 7 전체(PR 테스트 워크플로, 배포용 Dockerfile 3종+docker-compose.yml, Pi self-hosted runner, ci.yml build/deploy job, nginx+certbot+DuckDNS 공개 HTTPS) — `https://marketboard.duckdns.org` 실제 배포·동작 확인까지 완료(2026-07-19)**, `UPGRADE_IDEAS.md` 후속 조치 6건(2026-07-20), 종목 상세 페이지 차트 기간 선택/기업정보 확장/유저별 SMA 커스터마이즈 + 성능 버그 2건(price_history 풀스캔, S&P500 6개월 캡) + 안정성 버그 1건(collector 호출 무한대기) 수정(2026-07-21)
 
 ---
 
@@ -696,4 +753,12 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 - 임의 티커를 `Symbol`로 새로 만들어야 하면 `symbol/SymbolResolutionService.resolveOrFetch(ticker)`(2026-07-18 추가, 포트폴리오 포지션 추가 흐름에서 사용)를 재사용할 것 — DB에 없으면 콜렉터 `GET /symbol-profile/{ticker}`로 조회해 **비활성**(`is_active=false`) `Symbol`을 만듦(관리자 종목 추가와 달리 `syncActiveSymbols()`를 호출하지 않아 실시간 WS 구독 대상이 몰래 늘어나지 않음). 임의 티커의 현재가가 필요하면 `quote/QuoteService.resolvePrice(ticker)`(같은 날 추가)를 재사용 — Redis 실시간 캐시 우선, 없으면 `price_history` 최신 일봉 종가로 폴백, 둘 다 없으면 `Optional.empty()`.
 - **S&P500 유니버스와 실시간 WS 대상은 서로 다른 개념**: `symbols.is_active`(실시간 Finnhub WS 구독)와 `symbols.in_sp500_universe`(yfinance 배치 전용, 2026-07-18 추가)는 완전히 독립적인 두 플래그. 한 종목이 둘 다 true일 수도(예: GOOGL), 하나만 true일 수도 있음 — "이 종목이 S&P500이니까 실시간으로 봐야 한다"고 가정하지 말 것. S&P500 유니버스 종목 목록이 필요하면 `SymbolRepository`에 `findByInSp500UniverseTrue...` 계열 메서드를 추가해 재사용(현재는 `findByActiveTrueOrInSp500UniverseTrueOrderByPriorityAsc()`만 있음, `IndicatorCalculationService` 전용).
 - **S&P500 배치 재실행/확장 방법**: 콜렉터 `.env`의 `SP500_BATCH_LIMIT`을 지우거나 늘리면 다음 재시작(또는 24시간 뒤 자동 루프, 혹은 `POST /sp500/sync?limit=N` 수동 호출)부터 그만큼 반영됨 — 코드 변경 불필요. **(2026-07-18 정정)** 예전엔 여기에 "수동 트리거를 연달아 호출하면 야후 응답이 느려진다"고 적혀 있었는데 잘못된 추정이었음 — 진짜 원인은 yfinance가 아니라 `insert_candles_bulk`가 종목마다 새 MySQL 커넥션을 열던 것(커넥션 재사용으로 수정 완료, 위 "버그 수정 — S&P500 500종목 일봉 백필이 사실상 멈춰있던 문제" 참고). 수정 후 503종목 전체가 91.5초에 끝남 — 더 이상 간격을 두고 호출할 필요 없음.
-- 이 문서는 계획서(`stock-monitor-dev-plan.html`)의 로드맵을 기준으로 코드베이스를 스캔해 작성한 스냅샷입니다. 실제 작업이 진행되면 각 체크박스와 표를 갱신해 주세요.
+- **`price_history`를 조회하는 새 쿼리는 반드시 `symbol_id` 기준으로 짤 것, 티커 문자열로 JOIN하지 말 것**: `Symbol_TickerIgnoreCase` 같은 프로퍼티 경로는 Spring Data JPA가 `symbols`와 JOIN 후 `price_history.ts`로 정렬하는 쿼리를 생성하는데, MySQL이 이 형태에서 `(symbol_id, timeframe, ts)` 인덱스를 못 타고 전체 테이블을 풀스캔+filesort함(2026-07-21 발견, 62만 행 기준 ~0.9~1초). 호출부가 이미 `Symbol` 엔티티를 들고 있다면 `symbol.getId()`로 직접 조회하는 메서드(`findBySymbol_IdAnd...`)를 쓸 것 — `EXPLAIN`으로 `type=ref`/`Backward index scan`이 나오는지 확인하는 습관을 들일 것.
+- **`CollectorClient`(백엔드→콜렉터 내부 호출)는 10초 읽기 타임아웃이 걸려 있음**(2026-07-21 추가) — 콜렉터가 멈추거나 yfinance가 응답을 안 주면 예전엔 백엔드 요청 스레드가 무한정 같이 멈췄음. 새로 콜렉터를 호출하는 코드를 추가할 때 이 타임아웃보다 오래 걸리는 작업(예: 대량 배치)은 요청-응답 경로에 넣지 말고 별도 트리거(fire-and-forget이거나 백그라운드 루프)로 뺄 것.
+- **`lightweight-charts`의 `series.setData()`는 기존 줌/타임레인지를 유지함, 자동으로 전체 범위에 맞춰지지 않음**(2026-07-21 발견) — 이미 떠 있는 차트에 크기가 많이 다른 데이터를 갈아끼우면(기간 변경 등) 화면이 안 바뀐 것처럼 보임. 새로 만든 차트의 첫 `setData()`만 자동으로 fit되므로, 데이터셋이 확 바뀌는 상황에서는 `CandleChart`에 상황을 반영한 `key`(예: `ticker:timeframe:limit`)를 걸어 강제로 리마운트시킬 것 — 실시간 틱처럼 점진적으로 갱신되는 경우는 key를 유지해 기존 줌을 보존.
+- 유저별로 값이 달라지는 설정(대시보드 레이아웃, 차트 SMA 기간 등)은 `dashboard_configs`/`chart_indicator_settings`와 동일한 패턴(`user_id UNIQUE + JSON 블롭 컬럼`)을 재사용할 것 — 엔티티/리포지토리/서비스(get-or-default, upsert)/컨트롤러 전부 거의 그대로 복붙 가능한 수준으로 통일돼 있음.
+- 백테스팅 페이지(여러 종목 포트폴리오 백테스팅, CAPM, 지표 조건 빌더)는 2026-07-21에 논의만 시작함, 별도 계획 문서/섹션으로 이어서 진행 예정 — 이 문서엔 아직 반영 안 됨.
+
+---
+
+이 문서는 계획서(`stock-monitor-dev-plan.html`)의 로드맵을 기준으로 코드베이스를 스캔해 작성한 스냅샷입니다. 실제 작업이 진행되면 각 체크박스와 표를 갱신해 주세요.

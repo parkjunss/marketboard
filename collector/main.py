@@ -209,10 +209,12 @@ async def symbol_profile(symbol: str):
 
 
 @app.post("/sp500/sync")
-async def sp500_sync(limit: int | None = None):
-    """Manual trigger for the S&P 500 batch (also runs automatically, see sp500_batch_loop)."""
+async def sp500_sync(limit: int | None = None, period: str = "6mo"):
+    """Manual trigger for the S&P 500 batch (also runs automatically, see sp500_batch_loop).
+    Pass period="5y" for a one-off deep backfill of the whole universe beyond the routine 6mo
+    window (see run_sp500_batch's docstring)."""
     try:
-        return await asyncio.to_thread(run_sp500_batch, limit)
+        return await asyncio.to_thread(run_sp500_batch, limit, period)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

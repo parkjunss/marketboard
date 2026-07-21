@@ -30,7 +30,11 @@ NY_TZ = ZoneInfo("America/New_York")
 # is still kept as defense in depth: a slow/failed chunk only costs CHUNK_SIZE tickers via
 # CHUNK_TIMEOUT_SECONDS, not the whole run, and CHUNK_DELAY_SECONDS spaces out requests.
 CHUNK_SIZE = 40
-CHUNK_TIMEOUT_SECONDS = 60
+# Sized for the routine 6mo daily run (~2-4s/chunk per the comment above); a one-off deep
+# backfill (period="5y") pulls far more data per chunk and was observed timing out at 60s for
+# ~3 of 13 chunks, silently leaving those tickers on the old 6mo window. 120s gives that case
+# headroom without slowing down the fast, common case (it's a ceiling, not a fixed wait).
+CHUNK_TIMEOUT_SECONDS = 120
 CHUNK_DELAY_SECONDS = 2
 
 
@@ -77,19 +81,19 @@ def _rows_from_history(symbol_id: int, history) -> list[tuple]:
     return rows
 
 
-def _download_chunk(chunk_tickers: list[str]):
+def _download_chunk(chunk_tickers: list[str], period: str):
     return yf.download(
-        chunk_tickers, period="6mo", interval="1d", group_by="ticker", threads=True, progress=False, timeout=15
+        chunk_tickers, period=period, interval="1d", group_by="ticker", threads=True, progress=False, timeout=15
     )
 
 
-def _download_chunk_with_timeout(chunk_tickers: list[str]):
+def _download_chunk_with_timeout(chunk_tickers: list[str], period: str):
     """Runs yf.download() for one chunk with a hard wall-clock timeout. If it times out, the
     underlying thread is abandoned (Python can't forcibly kill a running thread) rather than
     blocked on -- shutdown(wait=False) lets this function return promptly so the caller can move
     on to the next chunk instead of the whole batch hanging on one bad chunk."""
     executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(_download_chunk, chunk_tickers)
+    future = executor.submit(_download_chunk, chunk_tickers, period)
     try:
         return future.result(timeout=CHUNK_TIMEOUT_SECONDS)
     except FutureTimeoutError:
@@ -102,9 +106,15 @@ def _download_chunk_with_timeout(chunk_tickers: list[str]):
         executor.shutdown(wait=False)
 
 
-def run_sp500_batch(limit: int | None = None) -> dict:
-    """Refreshes S&P 500 membership and daily bars (enough history for SMA50/RSI14). Returns a
-    summary dict for logging/manual-trigger API use."""
+def run_sp500_batch(limit: int | None = None, period: str = "6mo") -> dict:
+    """Refreshes S&P 500 membership and daily bars. Returns a summary dict for logging/manual-
+    trigger API use.
+
+    `period` defaults to "6mo" -- plenty for the routine daily run (SMA50/RSI14 only need ~50
+    trading days, and price_history upserts on (symbol_id, timeframe, ts) so old rows are never
+    pruned by a later smaller-period run). Pass a longer period (e.g. "5y") for a one-off deep
+    backfill -- once seeded, the ordinary 6mo daily run keeps it current without re-requesting it.
+    """
     constituents = get_sp500_constituents()
     if limit:
         constituents = constituents[:limit]
@@ -127,7 +137,7 @@ def run_sp500_batch(limit: int | None = None) -> dict:
             if not chunk_tickers:
                 continue
 
-            data = _download_chunk_with_timeout(chunk_tickers)
+            data = _download_chunk_with_timeout(chunk_tickers, period)
             if data is None:
                 failed_tickers.extend(chunk_tickers)
             else:

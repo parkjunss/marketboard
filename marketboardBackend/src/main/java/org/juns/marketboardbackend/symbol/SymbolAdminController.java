@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -51,6 +52,12 @@ public class SymbolAdminController {
         List<SymbolResponse> response = symbolAdminService.bulkSetActive(request);
         symbolAdminService.syncActiveSymbols();
         return response;
+    }
+
+    @PostMapping("/{id}/backfill")
+    public ResponseEntity<Void> backfill(@PathVariable Long id, @RequestParam(defaultValue = "5y") String period) {
+        boolean success = symbolAdminService.backfill(id, period);
+        return success ? ResponseEntity.accepted().build() : ResponseEntity.status(HttpStatus.BAD_GATEWAY).build();
     }
 
     @DeleteMapping("/{id}")

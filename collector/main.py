@@ -229,6 +229,23 @@ async def backtest_run(payload: BacktestRunPayload):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+@app.post("/backfill/{ticker}")
+async def backfill_ticker(ticker: str, period: str = "5y"):
+    """One-off deep backfill for a single arbitrary ticker -- for symbols outside the S&P 500
+    universe (e.g. index ETFs like SPY/QQQ/DIA) that never get touched by sp500_batch_loop, and
+    that active_symbols_daily_refresh_loop only ever catches up with a shallow period="5d" (it
+    assumes deep history already exists). A freshly-activated symbol with zero price_history rows
+    won't show up in the frontend's stock list at all (its history fetch returns empty), so this
+    is normally needed right after activating a new symbol that isn't an S&P 500 constituent."""
+    ticker = ticker.upper()
+    try:
+        symbol_ids = await asyncio.to_thread(mysql_writer.ensure_symbols, [ticker])
+        rows = await asyncio.to_thread(backfill_symbol, ticker, symbol_ids[ticker], period)
+        return {"ticker": ticker, "period": period, "rows": rows}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @app.post("/sp500/sync")
 async def sp500_sync(limit: int | None = None, period: str = "6mo"):
     """Manual trigger for the S&P 500 batch (also runs automatically, see sp500_batch_loop).

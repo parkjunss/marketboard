@@ -120,6 +120,20 @@ public class SymbolAdminService {
     }
 
     /**
+     * One-off deep price-history backfill for a single symbol via the collector -- needed after
+     * activating a symbol outside the S&P 500 universe (e.g. an index ETF like SPY/QQQ/DIA),
+     * which sp500_batch_loop never touches and which active_symbols_daily_refresh_loop only ever
+     * catches up with a shallow period="5d" (it assumes deep history already exists). Without
+     * this, a freshly-activated symbol has zero price_history rows and silently doesn't appear in
+     * the frontend's stock list (its history fetch returns empty).
+     */
+    @Transactional(readOnly = true)
+    public boolean backfill(Long id, String period) {
+        Symbol symbol = symbolRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Unknown symbol id " + id));
+        return collectorClient.backfillTicker(symbol.getTicker(), period);
+    }
+
+    /**
      * Pushes the current active-symbol set to the collector (real-time WS resubscribe) and
      * broadcasts it over STOMP. Deliberately NOT {@code @Transactional} and called by the
      * controller only after create/update/bulkSetActive's own transaction has already committed:

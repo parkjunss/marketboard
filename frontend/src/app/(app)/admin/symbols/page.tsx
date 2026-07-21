@@ -47,6 +47,9 @@ export default function AdminSymbolsPage() {
   const [deleteTarget, setDeleteTarget] = useState<SymbolRow | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [backfillingId, setBackfillingId] = useState<number | null>(null);
+  const [backfillMessage, setBackfillMessage] = useState<{ status: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
     api
       .getAdminSymbols(authFetch)
@@ -102,6 +105,22 @@ export default function AdminSymbolsPage() {
     }
   }
 
+  async function handleBackfill(symbol: SymbolRow) {
+    setBackfillingId(symbol.id);
+    setBackfillMessage(null);
+    try {
+      await api.backfillAdminSymbol(authFetch, symbol.id, '5y');
+      setBackfillMessage({ status: 'success', text: `${symbol.ticker} 5년치 일봉 백필 완료` });
+    } catch (err) {
+      setBackfillMessage({
+        status: 'error',
+        text: err instanceof ApiError ? `${symbol.ticker} 백필 실패: ${err.message}` : `${symbol.ticker} 백필에 실패했습니다`,
+      });
+    } finally {
+      setBackfillingId(null);
+    }
+  }
+
   async function handleDelete() {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -147,9 +166,18 @@ export default function AdminSymbolsPage() {
     {
       key: 'actions',
       header: '',
-      width: pixel(100),
+      width: pixel(180),
       renderCell: (row) => (
-        <Button variant="destructive" size="sm" label="삭제" onClick={() => setDeleteTarget(row)} />
+        <HStack gap={2}>
+          <Button
+            variant="secondary"
+            size="sm"
+            label="백필"
+            isLoading={backfillingId === row.id}
+            clickAction={() => handleBackfill(row)}
+          />
+          <Button variant="destructive" size="sm" label="삭제" onClick={() => setDeleteTarget(row)} />
+        </HStack>
       ),
     },
   ];
@@ -171,6 +199,14 @@ export default function AdminSymbolsPage() {
           </VStack>
         </form>
       </Card>
+
+      {backfillMessage && (
+        <Banner
+          status={backfillMessage.status === 'success' ? 'success' : 'error'}
+          title={backfillMessage.status === 'success' ? '백필 완료' : '백필 실패'}
+          description={backfillMessage.text}
+        />
+      )}
 
       {isLoading ? (
         <Center height={240}>

@@ -169,6 +169,10 @@ export function deleteAdminSymbol(fetcher: Fetcher, id: number): Promise<void> {
   return fetcher<void>(`/api/admin/symbols/${id}`, { method: 'DELETE' });
 }
 
+export function backfillAdminSymbol(fetcher: Fetcher, id: number, period = '5y'): Promise<void> {
+  return fetcher<void>(`/api/admin/symbols/${id}/backfill?period=${period}`, { method: 'POST' });
+}
+
 export function getAdminUsers(fetcher: Fetcher): Promise<UserResponse[]> {
   return fetcher<UserResponse[]>('/api/admin/users');
 }

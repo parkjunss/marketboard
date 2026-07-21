@@ -141,6 +141,32 @@ public class CollectorClient {
         }
     }
 
+    // Bodyless POST -- deliberately raw HttpClient anyway (not RestClient) for consistency with
+    // runBacktest/syncSubscriptions and to avoid re-litigating whether a bodyless POST is
+    // actually safe through RestClient's request factory.
+    public boolean backfillTicker(String ticker, String period) {
+        try {
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/backfill/" + ticker + "?period=" + period))
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build();
+            HttpResponse<Void> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.discarding());
+            if (response.statusCode() >= 400) {
+                log.warn("Backfill failed for {}: HTTP {}", ticker, response.statusCode());
+                return false;
+            }
+            return true;
+        } catch (IOException ex) {
+            log.warn("Backfill failed for {} (collector may be offline): {}", ticker, ex.getMessage());
+            return false;
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while backfilling {}: {}", ticker, ex.getMessage());
+            return false;
+        }
+    }
+
     public Optional<SymbolProfileResponse> getSymbolProfile(String ticker) {
         try {
             return Optional.ofNullable(

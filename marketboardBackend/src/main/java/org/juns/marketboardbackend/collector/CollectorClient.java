@@ -9,9 +9,11 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.juns.marketboardbackend.config.CacheConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -79,6 +81,7 @@ public class CollectorClient {
         }
     }
 
+    @Cacheable(value = CacheConfig.MARKET_INDICES, unless = "#result.isEmpty()")
     public List<MarketIndexInfo> getMarketIndices() {
         try {
             MarketIndexInfo[] items = restClient.get().uri("/market-indices").retrieve().body(MarketIndexInfo[].class);
@@ -89,6 +92,7 @@ public class CollectorClient {
         }
     }
 
+    @Cacheable(value = CacheConfig.SECTOR_PERFORMANCE, unless = "#result.isEmpty()")
     public List<SectorPerformance> getSectorPerformance() {
         try {
             SectorPerformance[] items = restClient.get().uri("/market-indices/sectors/performance").retrieve().body(SectorPerformance[].class);
@@ -99,6 +103,7 @@ public class CollectorClient {
         }
     }
 
+    @Cacheable(value = CacheConfig.MARKET_INDEX_HISTORY, key = "#slug", unless = "#result.isEmpty()")
     public List<MarketIndexCandle> getMarketIndexHistory(String slug) {
         try {
             MarketIndexCandle[] items =
@@ -177,6 +182,7 @@ public class CollectorClient {
         }
     }
 
+    @Cacheable(value = CacheConfig.FEAR_GREED, unless = "#result.isEmpty()")
     public Optional<FearGreedResponse> getFearGreed() {
         try {
             return Optional.ofNullable(restClient.get().uri("/sentiment/fear-greed").retrieve().body(FearGreedResponse.class));
@@ -186,6 +192,7 @@ public class CollectorClient {
         }
     }
 
+    @Cacheable(value = CacheConfig.PUT_CALL_RATIO, key = "#ticker", unless = "#result.isEmpty()")
     public Optional<PutCallRatioResponse> getPutCallRatio(String ticker) {
         try {
             return Optional.ofNullable(

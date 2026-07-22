@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
+import org.juns.marketboardbackend.config.CacheConfig;
 import org.juns.marketboardbackend.marketbreadth.dto.MarketBreadthResponse;
 import org.juns.marketboardbackend.pricehistory.PriceHistory;
 import org.juns.marketboardbackend.pricehistory.PriceHistoryRepository;
@@ -12,6 +13,8 @@ import org.juns.marketboardbackend.symbol.Symbol;
 import org.juns.marketboardbackend.symbol.SymbolRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -45,6 +48,7 @@ public class MarketBreadthService {
 
     @Scheduled(cron = "${market-breadth.cron}")
     @Transactional
+    @CacheEvict(value = CacheConfig.MARKET_BREADTH, allEntries = true)
     public void recompute() {
         List<Symbol> universe = symbolRepository.findByActiveTrueOrInSp500UniverseTrueOrderByPriorityAsc();
 
@@ -106,6 +110,7 @@ public class MarketBreadthService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(CacheConfig.MARKET_BREADTH)
     public MarketBreadthResponse getLatest() {
         return marketBreadthSnapshotRepository
                 .findTopByOrderBySnapshotDateDesc()

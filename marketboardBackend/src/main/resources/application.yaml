@@ -10,6 +10,16 @@ spring:
     username: ${DB_USERNAME:stockmonitor}
     password: ${DB_PASSWORD:stockmonitor1234}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # Kept small on purpose: MySQL runs on the same Raspberry Pi as everything else in the
+      # compose stack (this backend, the collector, frontend, Redis, Prometheus, Grafana, nginx,
+      # ...), all sharing a handful of CPU cores -- more connections just means more contention
+      # for MySQL's own threads, not more throughput. Requests beyond this queue on Hikari's own
+      # wait queue (connection-timeout, left at Hikari's 30s default) instead of each opening a
+      # new connection.
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:8}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      pool-name: marketboard-hikari
 
   jpa:
     hibernate:
@@ -36,6 +46,14 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  tomcat:
+    threads:
+      # Boot's defaults (200 max / 10 min-spare) assume a dedicated app server; on the Pi, each
+      # idle thread's stack is memory taken away from MySQL/Redis/the other containers for no
+      # benefit -- this app's real concurrency is nowhere near 200. Traffic beyond this queues
+      # (server.tomcat.accept-count, left at its default of 100) rather than failing outright.
+      max: ${TOMCAT_MAX_THREADS:50}
+      min-spare: ${TOMCAT_MIN_SPARE_THREADS:5}
 
 management:
   endpoints:

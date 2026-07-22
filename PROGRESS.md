@@ -1,6 +1,6 @@
 # MarketBoard — 진행상황 추적
 
-> 최종 갱신: 2026-07-21
+> 최종 갱신: 2026-07-22
 > 기준 계획서: `stock-monitor-dev-plan.html` (2026-07-16 작성, Phase 1~7 로드맵 — 2026-07-19에 전체 완료)
 > 참고: `marketboard_development_plan.html`은 이전 버전의 위젯/템플릿 중심 기획서로, 현재는 `stock-monitor-dev-plan.html`이 실행 기준 문서. 로드맵 완료 이후 개선 후보 목록은 `UPGRADE_IDEAS.md` 참고.
 
@@ -37,12 +37,31 @@
 
 전부 커밋·푸시 완료(`29945b8`~`db278d4`, 10개 커밋).
 
+**2026-07-22**: "Redis 캐싱 적용돼있나?"로 시작해서 백엔드 전반 성능/안정성 점검 + 시장 지표 데이터를 실시간 계산에서 배치+DB스냅샷 구조로 전환하는 큰 세션. 굵직한 항목만(총 15개 커밋, `67eefab`~`bad7c6d`):
+
+1. **Redis 캐싱 도입 + 캐시 직렬화 버그 3연타 발견/수정** — `market-indices`/`sectors/performance`/`fear-greed`/`put-call-ratio`에 `@Cacheable` 처음 적용하면서 이 순서로 버그를 만남: (a) `Optional<T>` 리턴 메서드의 `unless` SpEL에서 `#result`가 캐싱 추상화에 의해 이미 언래핑돼 있다는 걸 몰라서 `SpelEvaluationException`, (b) `GenericJacksonJsonRedisSerializer`가 커스텀 `ObjectMapper`를 받으면 기본 타입 정보를 안 남겨서 읽을 때 `LinkedHashMap`으로 돌아오는 `ClassCastException`(→ 빌더의 `enableDefaultTyping()`으로 해결), (c) `List.of()`가 리턴하는 불변 리스트 구현체가 `java.util` 패키지의 final 클래스라 Jackson의 "잘 알려진 타입은 태깅 생략" 룰에 걸려서 리스트만 타입 정보 없이 저장(→ `ArrayList`로 교체). 실제 Redis 캐시로 왕복시키는 `CacheConfigTest` 추가 — 이 과정에서 "PUT 직후 GET"이 컨텍스트 기동 직후엔 30~40% 확률로 실패하는 Lettuce 타이밍 이슈도 재현해서 짧은 재시도로 고침(운영 코드와는 무관, 테스트만의 문제).
+2. **프로덕션 403 사건 조사** — 배포 직후 `/api/market-indices` 등이 403 나는 걸 보고 SecurityConfig/배포 지연을 의심하며 파다가, 실은 위 1번 캐시 버그(SpelEvaluationException 등)가 원인이었던 것으로 판명. 조사 과정에서 Spring Security가 인증 실패를 401 대신 403으로 응답하는 이 앱의 특성(세션리스 JWT + AuthenticationEntryPoint 미설정)도 확인해둠.
+3. **백엔드 전수 점검(fork 서브에이전트) → 7건 발견, 전부 수정**:
+   - `IndicatorCalculationService`(5분 cron, 506종목)가 종목당 4개 쿼리씩 N+1로 돌던 것 → 벌크 IN절 쿼리 2번으로 재작성, 실측 506종목 **18ms**(기존엔 초 단위 추정)
+   - HikariCP(기본 10)/Tomcat(기본 200) 풀이 미설정 — 라즈베리파이 한 대에 MySQL/Redis/collector/frontend/Prometheus/Grafana/nginx가 다 같이 뜨는 환경에 안 맞아서 각각 8/50으로 축소(env 오버라이드 가능)
+   - `MarketBreadthService`도 같은 N+1 패턴이라 동일하게 벌크 재작성
+   - `@Scheduled` 잡 3개(인디케이터/시장폭/collector헬스체크)가 기본 단일 스레드를 공유해서 서로 밀릴 수 있던 것 → 3스레드 풀(`SchedulingConfig`) 분리
+   - `RateLimitFilter`의 IP별 버킷이 평범한 `ConcurrentHashMap`이라 무한 증가 가능(`/overview` 공개 이후 봇 트래픽 노출) → Caffeine(최대 1만개, 10분 미접근시 삭제)로 교체
+   - `PortfolioService`가 포지션별로 시세를 개별 조회하던 것 → `QuoteService.resolvePrices()` 벌크 메서드로 교체
+   - 뉴스 엔드포인트가 매 요청마다 collector를 직접 블로킹 호출하던 것 → Redis 캐싱 추가(이후 4번에서 다시 한 번 구조 전환)
+4. **모바일 지수 차트 그리드 반응형 수정** — 고정 3열이던 걸 Astryx `columns={{minWidth, max}}`로 바꿔서 모바일 1열/태블릿 2열/데스크톱 3열.
+5. **시장 지표 데이터를 "요청 시 계산"에서 "배치+MySQL 스냅샷" 구조로 순차 전환** — 섹터 로테이션(하루 1회 07:10) → SPY Put/Call비율(10분 주기) → 지수 차트 히스토리(하루 1회 07:30, 종목별 1행) → 일반 뉴스(10분 주기) 순으로 하나씩 옮김. 전부 같은 패턴: `@Scheduled` 갱신 + MySQL 스냅샷 테이블(`sector_performance_snapshot`/`put_call_ratio_snapshot`/`market_index_history_snapshot`/`news_snapshot`, V17~V20 마이그레이션) + 그 위에 얇은 Redis 캐시(`@CacheEvict`로 갱신 시점에 무효화) + 기동 시 즉시 1회 계산하는 `ApplicationRunner`(빈 상태로 배포되는 것 방지, `AlertMirrorInitializer`와 같은 패턴, 별도 빈으로 분리 — 같은 클래스 자기 자신 호출은 프록시를 안 타서 `@Transactional`/`@CacheEvict`가 씹힘). 검증 중 `MarketIndexCard`/`NewsPanel` 프론트 컴포넌트에 원래부터 `.catch()`가 없어서 스냅샷이 없을 때 무한 로딩에 빠질 수 있던 잠재 버그도 같이 발견/수정.
+6. **개별 종목 Put/Call 비율 신규 기능** — `put_call_ratio_snapshot`에 `ticker` 컬럼 추가(V21, 기존 SPY 행은 마이그레이션으로 보존)해서 SPY(스케줄 갱신)와 개별 종목(요청 시 지연 계산, 30분 TTL, 실패 시 이전 데이터 유지 — `SymbolProfileService`와 동일 패턴)을 같은 테이블에서 다르게 서빙. 종목 상세 페이지에 패널 추가.
+7. **옵션 지지/저항(맥스페인) 신규 기능 — 이번 세션 최대 조사 항목**: "옵션 물량으로 지지/저항 구할 수 있나"에서 시작, yfinance의 `openInterest`/`bid`/`ask`가 전부 0으로 나오는 걸 발견 → 처음엔 "장 시간대 문제"로 오판했다가 사용자가 재확인 요청 → raw Yahoo JSON까지 까봐도 0(파싱 버그 아님) → **CBOE의 공개 지연시세 API(`cdn.cboe.com/api/global/delayed_quotes/options/{ticker}.json`)로 같은 strike를 교차검증하니 실제 bid/ask/OI/그릭스가 다 있고 volume은 Yahoo와 정확히 일치** — Yahoo 비공식 API가 그 필드들만 비워서 주는 것으로 결론. CBOE는 티커 1개당 요청 1번으로 전체 만기(~3,500계약)를 다 주는 것도 확인(yfinance는 만기당 1회 호출 필요). collector에 `app/options_levels.py`(맥스페인 계산 + strike별 OI 랭킹, 단위테스트 5건) 신규, Java 쪽은 6번과 동일한 지연+TTL 캐시 패턴(`options_levels_snapshot`, V22). 종목 상세 페이지에 패널 추가.
+8. **투자 기능 브레인스토밍 + 세부 설계 문서 2건 신규**(`INVESTING_FEATURE_IDEAS.md`, `INVESTING_FEATURES_DESIGN.md`) — 19개 후보(감마 익스포저·52주 신고가 리스트·포트폴리오 베타·거래 이력 기반 실현손익·S&P500 스크리너 등)를 정리하고, 각각 성능/부하/안정성 관점 세부 설계까지 작성. 핵심 결론: N개 심볼을 다루는 기능은 전부 "요청 시 계산" 대신 "배치로 미리 계산 + MySQL 스냅샷"이 정답(이번 세션 내내 실제로 증명한 패턴), 차트 오버레이류(MACD/볼린저 등)는 반대로 서버 저장 없이 클라이언트 계산이 맞음, 스크리너는 `symbol_profiles`(JSON 블롭, 상세페이지용)와 별개로 필터링용 구조화 컬럼 테이블을 새로 둬야 함. **아직 코드 구현은 없음 — 다음 세션에 이어서 할 항목**.
+
+전부 커밋·푸시 완료(`67eefab`~`bad7c6d`, 15개 커밋). `INVESTING_FEATURE_IDEAS.md`/`INVESTING_FEATURES_DESIGN.md`는 이 PROGRESS.md 갱신과 함께 커밋.
+
 **논의만 하고 미구현 — 다음에 참고**
 - **지표 확장**(볼린저밴드/MACD/DMI/Williams %R/거래량 지표) 아키텍처만 논의함, 코드는 없음. 결론: 가격 오버레이형(볼린저 등, 캔들과 같은 스케일)은 지금 SMA 오버레이 구조 그대로 확장 가능. 오실레이터/거래량형(RSI 차트화·MACD·DMI·Williams%R·거래량)은 스케일이 달라 별도 서브페인이 필요한데, **`lightweight-charts` v5.2.0(현재 설치된 버전)이 멀티페인을 네이티브로 지원**하는 것을 확인함(`chart.addPane()`, `addSeries(..., paneIndex)`) — 별도 차트 인스턴스로 크로스헤어/타임스케일을 수동 동기화할 필요 없이 페인만 추가하면 됨. 시작하려면 `CandleChart`를 "메인 페인 오버레이 목록 + 서브페인 목록" 구조로 일반화하는 것부터 필요.
 - 관리자가 지표 종류/기본값을 관리하는 카탈로그(Phase A, `indicator_definitions` 테이블 등)는 설계까지 했다가 **폐기 결정** — 유저별 커스터마이즈만 진행하기로 확정, 완료됨.
 - **백테스팅 Phase 2 이후** — 다중 종목 포트폴리오(비중배분/리밸런싱), 지표 조건 기반 전략(신호 생성), CAPM 등 재무모델. Phase 1(단일/소수 종목 buy&hold)만 완료된 상태.
-- **시장 지표 개인화 섹션**("내 종목에 미치는 영향") — 관심종목/포트폴리오 평균 등락률 vs 시장 비교, 포트폴리오 가중평균 베타, 52주 신고가·신저가 근접 종목 하이라이트. 계획만 하고 미착수.
-- **거래량 급증 스캐너 + Money Flow Index(MFI)** — S&P500 유니버스 대상, 계획만 하고 미착수. 개인화 섹션과 자연스럽게 연결됨(관심종목 중 거래량 튄 것 하이라이트).
+- **투자 기능 19종 세부 설계 완료, 구현 미착수** — 위 8번 참고, `INVESTING_FEATURE_IDEAS.md`(후보 목록)/`INVESTING_FEATURES_DESIGN.md`(성능·부하·안정성 관점 세부 설계)에 정리돼있음. 시장 지표 개인화 섹션(관심종목 vs 시장 비교, 포트폴리오 베타 등)·거래량 급증 스캐너+MFI도 이 문서 안에 포함됨(각각 3·9·10·16번 항목). **다음 세션은 이 문서에서 어느 항목부터 시작할지 고르는 것으로 시작하면 됨** — `INVESTING_FEATURES_DESIGN.md` 맨 아래 "종합 메모"에 우선순위 힌트 있음(감마 익스포저가 신규 API 호출 없이 바로 붙일 수 있어 가장 가벼움).
 
 **남겨둔 확인 작업**
 - **배포 서버(Pi) DB는 아직 5년 딥백필 안 됨** — 로컬 `mysql-container`에만 실행함. Pi에서 SPY/QQQ/DIA를 관리자 화면으로 새로 만들고 "백필" 버튼을 눌렀는지(위 3번 기능) 확인 필요 — 이 기능 자체가 이 문제를 풀기 위해 이번 세션에 추가된 것이라, 배포 이후에 실제로 사용했는지가 확인 포인트.
@@ -52,11 +71,10 @@
 - `@astryxdesign/charts`(공식 차트 패키지) 설치 peer dependency 충돌로 여전히 보류 중
 - `IndicatorRepository.findBySymbol_TickerIgnoreCase...`도 `price_history`랑 같은 티커-JOIN 패턴이지만, `indicators` 테이블은 지금 ~1500행뿐이라 성능 영향 미미 — 지표 쪽을 다시 손볼 일이 생기면 그때 `symbol_id` 기반으로 같이 바꿀 것
 
-**세션 종료 시점 실행 상태** (2026-07-21 저녁 기준)
-- 백엔드: `gradlew bootRun`으로 직접 띄운 로컬 인스턴스(8080)가 켜진 채로 세션 종료 — `V15`(backtest_runs)/`V16`(market_breadth_snapshots)까지 마이그레이션 자동 적용 확인, `./gradlew test`(35건) 전부 통과 확인
-- 프론트엔드: `npm run dev`(3100) 켜진 채로 세션 종료
-- collector: `uv run python main.py`(8000) 켜진 채로 세션 종료 — 이번 세션에 코드 변경 반영 위해 여러 번 재기동함(Python은 `--reload` 없이 떠서 핫리로드 안 됨, 매번 수동 재기동 필요), 재기동할 때마다 위 "좀비 프로세스" 이슈 겪었으니 다음 세션에서도 `netstat`로 프로세스 1개인지 먼저 확인할 것
-- `mysql-container`/`redis-container`: 상시 구동 중
+**세션 종료 시점 실행 상태** (2026-07-22 기준)
+- 백엔드/프론트엔드/collector 전부 종료함(로컬 스모크테스트용으로 여러 번 껐다 켰던 것들 세션 마무리하며 전부 `taskkill`로 정리) — 다음 세션은 전부 새로 기동해야 함. 최신 마이그레이션은 `V22`(options_levels_snapshot)까지, 백엔드 `./gradlew test` 전체 통과 확인된 상태에서 종료.
+- `mysql-container`/`redis-container`: 상시 구동 중(다른 프로젝트와 공유, 계속 켜둠)
+- **배포(Pi)는 이번 세션 커밋 15개가 전부 push 시점에 CI로 자동 배포됨** — 다음 세션 시작하면 `https://marketboard.duckdns.org`에서 새 스케줄 잡들(섹터로테이션 07:10/Put-Call 10분/지수히스토리 07:30/뉴스 10분)이 실제로 도는지, `V17`~`V22` 마이그레이션이 배포 DB에도 적용됐는지 한 번 확인해볼 것(로컬에서는 전부 실측 검증 완료, Pi에서는 배포만 됐고 아직 재확인 안 함).
 
 ## 전체 요약
 

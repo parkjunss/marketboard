@@ -271,6 +271,10 @@ export function getPutCallRatio(fetcher: Fetcher): Promise<PutCallRatioResponse>
   return fetcher<PutCallRatioResponse>('/api/market-sentiment/put-call-ratio');
 }
 
+export function getPutCallRatioForTicker(fetcher: Fetcher, ticker: string): Promise<PutCallRatioResponse> {
+  return fetcher<PutCallRatioResponse>(`/api/market-sentiment/put-call-ratio/${ticker}`);
+}
+
 export function getMarketIndexHistory(fetcher: Fetcher, slug: string): Promise<CandleResponse[]> {
   return fetcher<CandleResponse[]>(`/api/market-indices/${slug}/history`);
 }

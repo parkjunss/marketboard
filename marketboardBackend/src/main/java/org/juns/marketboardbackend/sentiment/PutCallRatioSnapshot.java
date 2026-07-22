@@ -13,8 +13,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * A single global row holding the most recently computed SPY put/call volume ratio, refreshed by
- * {@link PutCallRatioService} on a schedule rather than per-request -- see that class for why.
+ * A cached copy of one ticker's most recently computed put/call volume ratio -- SPY is refreshed
+ * on a schedule (the market-wide sentiment card), everything else lazily on request (individual
+ * stock detail pages). See {@link PutCallRatioService} for both.
  */
 @Entity
 @Table(name = "put_call_ratio_snapshot")
@@ -26,6 +27,9 @@ public class PutCallRatioSnapshot {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false, unique = true, length = 20)
+    private String ticker;
+
     @Column(name = "payload_json", nullable = false, columnDefinition = "TEXT")
     private String payloadJson;
 
@@ -33,7 +37,8 @@ public class PutCallRatioSnapshot {
     private Instant computedAt;
 
     @Builder
-    public PutCallRatioSnapshot(String payloadJson) {
+    public PutCallRatioSnapshot(String ticker, String payloadJson) {
+        this.ticker = ticker;
         this.payloadJson = payloadJson;
         this.computedAt = Instant.now();
     }

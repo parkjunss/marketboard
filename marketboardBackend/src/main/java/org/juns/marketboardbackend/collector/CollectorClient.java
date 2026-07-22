@@ -182,7 +182,10 @@ public class CollectorClient {
         }
     }
 
-    @Cacheable(value = CacheConfig.FEAR_GREED, unless = "#result.isEmpty()")
+    // Optional<T> return values are unwrapped by the caching abstraction before #result is bound
+    // for unless/condition SpEL -- #result is a bare FearGreedResponse (or null), not an Optional,
+    // so isEmpty() would fail with a SpelEvaluationException (as isEmpty() did before this fix).
+    @Cacheable(value = CacheConfig.FEAR_GREED, unless = "#result == null")
     public Optional<FearGreedResponse> getFearGreed() {
         try {
             return Optional.ofNullable(restClient.get().uri("/sentiment/fear-greed").retrieve().body(FearGreedResponse.class));
@@ -192,7 +195,9 @@ public class CollectorClient {
         }
     }
 
-    @Cacheable(value = CacheConfig.PUT_CALL_RATIO, key = "#ticker", unless = "#result.isEmpty()")
+    // Same Optional-unwrapping caveat as getFearGreed() above -- #result is a bare
+    // PutCallRatioResponse (or null), not an Optional.
+    @Cacheable(value = CacheConfig.PUT_CALL_RATIO, key = "#ticker", unless = "#result == null")
     public Optional<PutCallRatioResponse> getPutCallRatio(String ticker) {
         try {
             return Optional.ofNullable(

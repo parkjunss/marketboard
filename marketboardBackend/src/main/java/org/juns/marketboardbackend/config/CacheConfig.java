@@ -38,6 +38,8 @@ public class CacheConfig {
     public static final String FEAR_GREED = "fear-greed";
     public static final String PUT_CALL_RATIO = "put-call-ratio";
     public static final String MARKET_BREADTH = "market-breadth";
+    public static final String NEWS_GENERAL = "news-general";
+    public static final String NEWS_COMPANY = "news-company";
 
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
@@ -56,7 +58,13 @@ public class CacheConfig {
                 SECTOR_PERFORMANCE, base.entryTtl(Duration.ofMinutes(15)),
                 FEAR_GREED, base.entryTtl(Duration.ofMinutes(5)),
                 PUT_CALL_RATIO, base.entryTtl(Duration.ofMinutes(5)),
-                MARKET_BREADTH, base.entryTtl(Duration.ofMinutes(30)));
+                MARKET_BREADTH, base.entryTtl(Duration.ofMinutes(30)),
+                // News is the one collector-backed read left with no cache at all (financials and
+                // symbol-profile already have their own DB-backed read-through cache) -- every
+                // request blocked a Tomcat thread on the collector for up to ~10s. Short TTL since
+                // headlines churn faster than market data.
+                NEWS_GENERAL, base.entryTtl(Duration.ofMinutes(5)),
+                NEWS_COMPANY, base.entryTtl(Duration.ofMinutes(5)));
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(base)

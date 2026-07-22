@@ -64,10 +64,12 @@ public class CollectorClient {
         }
     }
 
+    @Cacheable(value = CacheConfig.NEWS_GENERAL, unless = "#result.isEmpty()")
     public List<NewsItem> getGeneralNews() {
         return getNews("/news");
     }
 
+    @Cacheable(value = CacheConfig.NEWS_COMPANY, key = "#ticker", unless = "#result.isEmpty()")
     public List<NewsItem> getCompanyNews(String ticker) {
         return getNews("/news/{ticker}", ticker);
     }
@@ -75,7 +77,7 @@ public class CollectorClient {
     private List<NewsItem> getNews(String uri, Object... uriVariables) {
         try {
             NewsItem[] items = restClient.get().uri(uri, uriVariables).retrieve().body(NewsItem[].class);
-            return items != null ? List.of(items) : List.of();
+            return items != null ? new ArrayList<>(List.of(items)) : List.of();
         } catch (RestClientException ex) {
             log.warn("Failed to fetch news from collector ({}): {}", uri, ex.getMessage());
             return List.of();

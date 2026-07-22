@@ -31,6 +31,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-flyway'
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
     implementation 'com.bucket4j:bucket4j-core:8.10.1'
+    // Bounds RateLimitFilter's per-IP bucket maps -- see the comment there for why a plain
+    // ConcurrentHashMap wasn't safe once /overview made these endpoints reachable by anyone.
+    implementation 'com.github.ben-manes.caffeine:caffeine'
     compileOnly 'org.projectlombok:lombok'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     runtimeOnly 'com.mysql:mysql-connector-j'

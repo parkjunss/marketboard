@@ -1,5 +1,7 @@
 package org.juns.marketboardbackend.security;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import tools.jackson.databind.ObjectMapper;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
@@ -9,9 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import org.juns.marketboardbackend.common.ErrorResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -27,9 +27,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
             Set.of("/api/auth/login", "/api/auth/signup", "/api/auth/refresh");
     private static final String ADMIN_PREFIX = "/api/admin/";
 
+    // Plain ConcurrentHashMaps here would grow forever -- every distinct client IP that ever hits
+    // a rate-limited path mints a permanent entry that's never removed. /api/auth/login in
+    // particular is a common bot/scanner target, and /overview being public now means arbitrary
+    // internet traffic reaches this filter. A bucket that hasn't been touched in 10 minutes is
+    // safe to drop: its owner would get a fresh, full bucket on their next request anyway, same as
+    // if we'd kept the (already fully refilled) old one around.
     private final ObjectMapper objectMapper;
-    private final Map<String, Bucket> authBuckets = new ConcurrentHashMap<>();
-    private final Map<String, Bucket> adminBuckets = new ConcurrentHashMap<>();
+    private final Cache<String, Bucket> authBuckets =
+            Caffeine.newBuilder().maximumSize(10_000).expireAfterAccess(Duration.ofMinutes(10)).build();
+    private final Cache<String, Bucket> adminBuckets =
+            Caffeine.newBuilder().maximumSize(10_000).expireAfterAccess(Duration.ofMinutes(10)).build();
 
     @Value("${app.rate-limit.enabled:true}")
     private boolean enabled;
@@ -64,10 +72,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private Bucket resolveBucket(String path, String clientIp) {
         if (AUTH_PATHS.contains(path)) {
-            return authBuckets.computeIfAbsent(clientIp, ip -> newBucket(authCapacity, Duration.ofMinutes(1)));
+            return authBuckets.get(clientIp, ip -> newBucket(authCapacity, Duration.ofMinutes(1)));
         }
         if (path.startsWith(ADMIN_PREFIX)) {
-            return adminBuckets.computeIfAbsent(clientIp, ip -> newBucket(adminCapacity, Duration.ofMinutes(1)));
+            return adminBuckets.get(clientIp, ip -> newBucket(adminCapacity, Duration.ofMinutes(1)));
         }
         return null;
     }

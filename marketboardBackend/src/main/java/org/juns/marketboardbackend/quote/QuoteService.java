@@ -2,11 +2,19 @@ package org.juns.marketboardbackend.quote;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
+import org.juns.marketboardbackend.pricehistory.PriceHistory;
 import org.juns.marketboardbackend.pricehistory.PriceHistoryRepository;
 import org.juns.marketboardbackend.quote.dto.CandleResponse;
 import org.juns.marketboardbackend.quote.dto.QuoteResponse;
@@ -75,6 +83,56 @@ public class QuoteService {
                 .findByTickerIgnoreCase(ticker)
                 .flatMap(symbol -> priceHistoryRepository.findFirstBySymbol_IdAndTimeframeOrderByTsDesc(symbol.getId(), "1d"))
                 .map(candle -> new ResolvedPrice(candle.getClose(), false));
+    }
+
+    /**
+     * Bulk version of {@link #resolvePrice(String)} for a whole portfolio's positions at once --
+     * avoids the DB fallback's symbol + price-history lookups running once per position. The
+     * per-ticker Redis read stays as-is (it's an in-memory HGETALL, not a relational query, and a
+     * portfolio's position count is small enough that pipelining it wouldn't be worth the added
+     * complexity); only the DB fallback path for tickers with no live tick is batched.
+     *
+     * @return a map containing only the tickers a price could be resolved for -- missing tickers
+     *     mean the same "no price available" case {@link #resolvePrice(String)} signals with an
+     *     empty Optional.
+     */
+    public Map<String, ResolvedPrice> resolvePrices(Collection<String> tickers) {
+        Set<String> normalizedTickers = tickers.stream().map(String::toUpperCase).collect(Collectors.toCollection(LinkedHashSet::new));
+
+        Map<String, ResolvedPrice> resolved = new HashMap<>();
+        List<String> missing = new ArrayList<>();
+        for (String ticker : normalizedTickers) {
+            Optional<QuoteResponse> live = readQuote(ticker);
+            if (live.isPresent() && live.get().price() != null) {
+                resolved.put(ticker, new ResolvedPrice(live.get().price(), true));
+            } else {
+                missing.add(ticker);
+            }
+        }
+        if (missing.isEmpty()) {
+            return resolved;
+        }
+
+        List<Symbol> symbols = symbolRepository.findByTickerIn(missing);
+        Map<Long, String> tickerBySymbolId = symbols.stream().collect(Collectors.toMap(Symbol::getId, Symbol::getTicker));
+        if (tickerBySymbolId.isEmpty()) {
+            return resolved;
+        }
+
+        Map<Long, PriceHistory> latestCandleBySymbolId = priceHistoryRepository
+                .findBySymbol_IdInAndTimeframeAndTsGreaterThanEqual(
+                        tickerBySymbolId.keySet(), "1d", Instant.now().minus(10, ChronoUnit.DAYS))
+                .stream()
+                .collect(Collectors.toMap(
+                        candle -> candle.getSymbol().getId(),
+                        candle -> candle,
+                        (a, b) -> a.getTs().isAfter(b.getTs()) ? a : b));
+
+        latestCandleBySymbolId.forEach((symbolId, candle) -> {
+            String ticker = tickerBySymbolId.get(symbolId);
+            resolved.put(ticker, new ResolvedPrice(candle.getClose(), false));
+        });
+        return resolved;
     }
 
     private Optional<QuoteResponse> readQuote(String ticker) {

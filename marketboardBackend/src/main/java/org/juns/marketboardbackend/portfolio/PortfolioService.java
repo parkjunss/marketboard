@@ -1,6 +1,7 @@
 package org.juns.marketboardbackend.portfolio;
 
 import java.util.List;
+import java.util.Map;
 import org.juns.marketboardbackend.common.exception.DuplicatePortfolioPositionException;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
 import org.juns.marketboardbackend.portfolio.dto.PortfolioPositionRequest;
@@ -8,6 +9,7 @@ import org.juns.marketboardbackend.portfolio.dto.PortfolioPositionResponse;
 import org.juns.marketboardbackend.portfolio.dto.PortfolioPositionUpdateRequest;
 import org.juns.marketboardbackend.portfolio.dto.PortfolioSummaryResponse;
 import org.juns.marketboardbackend.quote.QuoteService;
+import org.juns.marketboardbackend.quote.ResolvedPrice;
 import org.juns.marketboardbackend.symbol.Symbol;
 import org.juns.marketboardbackend.symbol.SymbolResolutionService;
 import org.juns.marketboardbackend.user.User;
@@ -115,9 +117,12 @@ public class PortfolioService {
     }
 
     private List<PortfolioPositionResponse> buildPositionResponses(Long portfolioId) {
-        return portfolioPositionRepository.findByPortfolio_IdOrderByIdAsc(portfolioId).stream()
-                .map(position ->
-                        PortfolioPositionResponse.from(position, quoteService.resolvePrice(position.getSymbol().getTicker()).orElse(null)))
+        List<PortfolioPosition> positions = portfolioPositionRepository.findByPortfolio_IdOrderByIdAsc(portfolioId);
+        List<String> tickers = positions.stream().map(position -> position.getSymbol().getTicker()).toList();
+        Map<String, ResolvedPrice> prices = quoteService.resolvePrices(tickers);
+        return positions.stream()
+                .map(position -> PortfolioPositionResponse.from(
+                        position, prices.get(position.getSymbol().getTicker().toUpperCase())))
                 .toList();
     }
 }

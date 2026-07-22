@@ -65,3 +65,6 @@ indicators:
 
 market-breadth:
   cron: 0 0 7 * * *
+
+sector-performance:
+  cron: 0 */15 * * * *

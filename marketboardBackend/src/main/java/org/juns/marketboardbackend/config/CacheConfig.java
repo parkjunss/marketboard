@@ -18,11 +18,13 @@ import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import tools.jackson.databind.jsontype.PolymorphicTypeValidator;
 
 /**
- * Read-through cache for data that's identical for every visitor: market indices/history/sector
- * performance and fear-greed/put-call-ratio (proxied from the Python collector's yfinance/CNN
- * calls, see CollectorClient) and the daily market-breadth snapshot (see MarketBreadthService).
- * Both /market (authenticated) and /overview (public, no login) render the same panels, so
- * without caching every page view re-triggers the full set of collector round trips. Boot 4.1
+ * Read-through cache for data that's identical for every visitor: market indices/history and
+ * fear-greed/put-call-ratio (proxied from the Python collector's yfinance/CNN calls, see
+ * CollectorClient), plus the daily market-breadth snapshot and the sector-rotation ranking, both
+ * of which are scheduled-refresh + MySQL snapshots (see MarketBreadthService,
+ * SectorPerformanceService) with this cache as a thin layer in front of that DB read. Both
+ * /market (authenticated) and /overview (public, no login) render the same panels, so without
+ * caching every page view re-triggers the full set of collector round trips. Boot 4.1
  * dropped the RedisCacheManager autoconfiguration + RedisCacheManagerBuilderCustomizer hook that
  * older Spring Boot versions provided (confirmed absent from spring-boot-autoconfigure-4.1.0's
  * cache package, which now only has CacheType left) -- so the manager is built by hand here
@@ -52,10 +54,13 @@ public class CacheConfig {
 
         // Daily-cadence market data tolerates a longer TTL than the sentiment endpoints, which are
         // best-effort scrapes (CNN Fear & Greed, yfinance options) that can move intraday.
+        // SECTOR_PERFORMANCE and MARKET_BREADTH are both backed by a scheduled-refresh + MySQL
+        // snapshot with @CacheEvict on write (see SectorPerformanceService/MarketBreadthService),
+        // so their TTL here is just a safety-net upper bound, not what actually keeps them fresh.
         Map<String, RedisCacheConfiguration> perCache = Map.of(
                 MARKET_INDICES, base.entryTtl(Duration.ofMinutes(15)),
                 MARKET_INDEX_HISTORY, base.entryTtl(Duration.ofMinutes(15)),
-                SECTOR_PERFORMANCE, base.entryTtl(Duration.ofMinutes(15)),
+                SECTOR_PERFORMANCE, base.entryTtl(Duration.ofMinutes(30)),
                 FEAR_GREED, base.entryTtl(Duration.ofMinutes(5)),
                 PUT_CALL_RATIO, base.entryTtl(Duration.ofMinutes(5)),
                 MARKET_BREADTH, base.entryTtl(Duration.ofMinutes(30)),

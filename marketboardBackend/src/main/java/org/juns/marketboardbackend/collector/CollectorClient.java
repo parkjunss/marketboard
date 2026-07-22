@@ -99,7 +99,9 @@ public class CollectorClient {
         }
     }
 
-    @Cacheable(value = CacheConfig.SECTOR_PERFORMANCE, unless = "#result.isEmpty()")
+    // Not @Cacheable here -- only SectorPerformanceService.refresh() calls this now (on a
+    // schedule, writing the result to MySQL), and CacheConfig.SECTOR_PERFORMANCE caches its
+    // getLatest() DB read instead. See SectorPerformanceService for why.
     public List<SectorPerformance> getSectorPerformance() {
         try {
             SectorPerformance[] items = restClient.get().uri("/market-indices/sectors/performance").retrieve().body(SectorPerformance[].class);

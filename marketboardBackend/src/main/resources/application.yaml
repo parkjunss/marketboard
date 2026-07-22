@@ -97,3 +97,9 @@ market-breadth:
   # 07:00 gives the daily backfill loops (which also run once a day, no fixed time) a head start,
   # though a stale/missing bar for a given symbol just gets skipped rather than miscounted.
   cron: ${MARKET_BREADTH_CRON:0 0 7 * * *}
+
+sector-performance:
+  # Matches the old Redis TTL this replaced -- frequent enough that the ranking doesn't feel
+  # stale, infrequent enough that 11 sequential yfinance calls (one per sector ETF) stay well
+  # clear of being a noticeable load source.
+  cron: ${SECTOR_PERFORMANCE_CRON:0 */15 * * * *}

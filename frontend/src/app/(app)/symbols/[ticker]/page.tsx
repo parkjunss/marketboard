@@ -22,6 +22,7 @@ import { AlertsPanel } from '@/components/AlertsPanel';
 import { PriceChangeIndicator } from '@/components/PriceChangeIndicator';
 import { IndicatorPanel } from '@/components/dashboard/IndicatorPanel';
 import { NewsPanel } from '@/components/dashboard/NewsPanel';
+import { OptionsLevelsPanel } from '@/components/dashboard/OptionsLevelsPanel';
 import { PutCallRatioPanel } from '@/components/dashboard/PutCallRatioPanel';
 import { useAuth } from '@/lib/auth-context';
 import { resolvePrevClose } from '@/lib/priceChange';
@@ -380,6 +381,10 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
 
           <PanelCard title="옵션 Put/Call 비율">
             <PutCallRatioPanel ticker={ticker} />
+          </PanelCard>
+
+          <PanelCard title="옵션 지지/저항 (맥스페인)">
+            <OptionsLevelsPanel ticker={ticker} />
           </PanelCard>
 
           <HStack justify="between" align="center" wrap="wrap">

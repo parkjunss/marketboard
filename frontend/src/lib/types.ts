@@ -225,6 +225,20 @@ export interface PutCallRatioResponse {
   putCallRatio: number;
 }
 
+export interface OptionsLevel {
+  strike: number;
+  openInterest: number;
+}
+
+export interface OptionsLevelsResponse {
+  ticker: string;
+  expiration: string;
+  spotPrice: number | null;
+  maxPain: number | null;
+  resistanceLevels: OptionsLevel[];
+  supportLevels: OptionsLevel[];
+}
+
 export interface SectorPerformance {
   slug: string;
   name: string;

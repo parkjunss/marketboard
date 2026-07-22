@@ -221,6 +221,16 @@ public class CollectorClient {
         }
     }
 
+    public Optional<OptionsLevelsResponse> getOptionsLevels(String ticker) {
+        try {
+            return Optional.ofNullable(
+                    restClient.get().uri("/sentiment/options-levels/{ticker}", ticker).retrieve().body(OptionsLevelsResponse.class));
+        } catch (RestClientException ex) {
+            log.warn("Failed to fetch options levels from collector ({}): {}", ticker, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
     public Optional<SymbolProfileResponse> getSymbolProfile(String ticker) {
         try {
             return Optional.ofNullable(

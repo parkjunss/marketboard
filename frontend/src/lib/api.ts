@@ -12,6 +12,7 @@ import type {
   MarketBreadthResponse,
   MarketIndexInfo,
   NewsItem,
+  OptionsLevelsResponse,
   PortfolioPositionResponse,
   PortfolioSummaryResponse,
   PutCallRatioResponse,
@@ -273,6 +274,10 @@ export function getPutCallRatio(fetcher: Fetcher): Promise<PutCallRatioResponse>
 
 export function getPutCallRatioForTicker(fetcher: Fetcher, ticker: string): Promise<PutCallRatioResponse> {
   return fetcher<PutCallRatioResponse>(`/api/market-sentiment/put-call-ratio/${ticker}`);
+}
+
+export function getOptionsLevels(fetcher: Fetcher, ticker: string): Promise<OptionsLevelsResponse> {
+  return fetcher<OptionsLevelsResponse>(`/api/market-sentiment/options-levels/${ticker}`);
 }
 
 export function getMarketIndexHistory(fetcher: Fetcher, slug: string): Promise<CandleResponse[]> {

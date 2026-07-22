@@ -16,6 +16,7 @@ from app.financials import get_financials
 from app.finnhub_source import FinnhubWebSocketSource
 from app.market_indices import get_index_history, get_sector_performance, list_indices
 from app.news import get_company_news, get_general_news
+from app.options_levels import OptionsLevelsUnavailableError, get_options_levels
 from app.redis_publisher import publish_quote
 from app.rest_fallback import rest_fallback_loop
 from app.sentiment import FearGreedUnavailableError, PutCallDataUnavailableError, get_fear_greed, get_put_call_ratio
@@ -250,6 +251,14 @@ async def sentiment_put_call_ratio(ticker: str = "SPY"):
     except PutCallDataUnavailableError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/sentiment/options-levels/{ticker}")
+async def sentiment_options_levels(ticker: str):
+    try:
+        return await asyncio.to_thread(get_options_levels, ticker.upper())
+    except OptionsLevelsUnavailableError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 

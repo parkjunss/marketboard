@@ -13,6 +13,9 @@ import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializ
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import tools.jackson.databind.jsontype.PolymorphicTypeValidator;
 
 /**
  * Read-through cache for data that's identical for every visitor: market indices/history/sector
@@ -43,7 +46,7 @@ public class CacheConfig {
                 .disableCachingNullValues()
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(StringRedisSerializer.UTF_8))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(
-                        new GenericJacksonJsonRedisSerializer(objectMapper)));
+                        cacheValueSerializer(objectMapper)));
 
         // Daily-cadence market data tolerates a longer TTL than the sentiment endpoints, which are
         // best-effort scrapes (CNN Fear & Greed, yfinance options) that can move intraday.
@@ -58,6 +61,33 @@ public class CacheConfig {
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(base)
                 .withInitialCacheConfigurations(perCache)
+                .build();
+    }
+
+    /**
+     * GenericJacksonJsonRedisSerializer always serializes/deserializes with a static type of
+     * Object (RedisCache only ever asks for "the value back", never a concrete class). Plain
+     * {@code ObjectMapper.rebuild().activateDefaultTyping(...)} does NOT cover this: Jackson's
+     * DefaultTyping policies only add type info when a *property's declared type* (per bean
+     * introspection) is Object/non-concrete -- a bare root call like
+     * {@code mapper.writeValueAsBytes(value)} has no such enclosing property, so it resolves the
+     * "declared type" as value.getClass() and writes plain JSON with no type info. The read side
+     * then asks for Object.class explicitly, expects type info to be there, and either throws
+     * (WRAPPER_ARRAY: "expected START_ARRAY") or silently returns a LinkedHashMap instead of the
+     * real DTO (surfacing later as a ClassCastException at the @Cacheable call site). The
+     * serializer's own builder + enableDefaultTyping() sidesteps this with a root-aware
+     * TypeResolverBuilder built for exactly this "always Object" scenario. Its mapper is rebuilt
+     * from the app's shared ObjectMapper (not a fresh JsonMapper) so it keeps every module Boot
+     * already configured; the type validator is scoped to our own DTO package plus java.util (the
+     * List/Map wrapper types those DTOs are cached inside).
+     */
+    private static GenericJacksonJsonRedisSerializer cacheValueSerializer(ObjectMapper objectMapper) {
+        PolymorphicTypeValidator typeValidator = BasicPolymorphicTypeValidator.builder()
+                .allowIfSubType("org.juns.marketboardbackend.")
+                .allowIfSubType("java.util.")
+                .build();
+        return GenericJacksonJsonRedisSerializer.builder(() -> ((JsonMapper) objectMapper).rebuild())
+                .enableDefaultTyping(typeValidator)
                 .build();
     }
 }

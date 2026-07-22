@@ -13,18 +13,24 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Broad market indices (S&P 500, NASDAQ, VIX, Treasury yields, ...) — daily-only via yfinance,
- * unlike tracked stocks these aren't on Finnhub's realtime feed so there's no WS/DB path here.
- * Sector performance is the exception: see {@link SectorPerformanceService}.
+ * unlike tracked stocks these aren't on Finnhub's realtime feed. The index list itself is static
+ * (no I/O on the collector side); history and sector performance are DB-backed on a schedule --
+ * see {@link MarketIndexHistoryService}, {@link SectorPerformanceService}.
  */
 @RestController
 @RequestMapping("/api/market-indices")
 public class MarketIndexController {
 
     private final CollectorClient collectorClient;
+    private final MarketIndexHistoryService marketIndexHistoryService;
     private final SectorPerformanceService sectorPerformanceService;
 
-    public MarketIndexController(CollectorClient collectorClient, SectorPerformanceService sectorPerformanceService) {
+    public MarketIndexController(
+            CollectorClient collectorClient,
+            MarketIndexHistoryService marketIndexHistoryService,
+            SectorPerformanceService sectorPerformanceService) {
         this.collectorClient = collectorClient;
+        this.marketIndexHistoryService = marketIndexHistoryService;
         this.sectorPerformanceService = sectorPerformanceService;
     }
 
@@ -35,7 +41,7 @@ public class MarketIndexController {
 
     @GetMapping("/{slug}/history")
     public List<MarketIndexCandle> getHistory(@PathVariable String slug) {
-        return collectorClient.getMarketIndexHistory(slug);
+        return marketIndexHistoryService.getHistory(slug);
     }
 
     @GetMapping("/sectors/performance")

@@ -13,14 +13,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class NewsController {
 
     private final CollectorClient collectorClient;
+    private final NewsService newsService;
 
-    public NewsController(CollectorClient collectorClient) {
+    public NewsController(CollectorClient collectorClient, NewsService newsService) {
         this.collectorClient = collectorClient;
+        this.newsService = newsService;
     }
 
     @GetMapping
     public List<NewsItem> getGeneralNews() {
-        return collectorClient.getGeneralNews();
+        return newsService.getGeneralNews();
     }
 
     @GetMapping("/{ticker}")

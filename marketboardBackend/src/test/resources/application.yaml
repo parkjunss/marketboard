@@ -71,3 +71,9 @@ sector-performance:
 
 put-call-ratio:
   cron: 0 */10 * * * *
+
+market-index-history:
+  cron: 0 30 7 * * *
+
+news:
+  cron: 0 */10 * * * *

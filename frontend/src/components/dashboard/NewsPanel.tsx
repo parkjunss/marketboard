@@ -22,9 +22,15 @@ export function NewsPanel({ ticker }: { ticker?: string }) {
   useEffect(() => {
     let cancelled = false;
     const fetchNews = ticker ? api.getCompanyNews(authFetch, ticker) : api.getGeneralNews(authFetch);
-    fetchNews.then((data) => {
-      if (!cancelled) setResult({ key: requestKey, items: data.slice(0, 8) });
-    });
+    fetchNews
+      .then((data) => {
+        if (!cancelled) setResult({ key: requestKey, items: data.slice(0, 8) });
+      })
+      .catch(() => {
+        // Best-effort external data -- degrade to "뉴스가 없습니다" rather than spin forever,
+        // e.g. right after a fresh deploy before the first scheduled refresh has landed.
+        if (!cancelled) setResult({ key: requestKey, items: [] });
+      });
     return () => {
       cancelled = true;
     };

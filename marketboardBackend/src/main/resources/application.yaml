@@ -110,3 +110,13 @@ put-call-ratio:
   # this stays on a repeating interval rather than moving to once a day -- 10 minutes roughly
   # matches the old Redis TTL's freshness while keeping the ~2s/8-yfinance-call cost infrequent.
   cron: ${PUT_CALL_RATIO_CRON:0 */10 * * * *}
+
+market-index-history:
+  # Once a day like market-breadth/sector-performance -- daily OHLC bars, so nothing to gain from
+  # recomputing before the next close. 07:30, after sector-performance's 07:10.
+  cron: ${MARKET_INDEX_HISTORY_CRON:0 30 7 * * *}
+
+news:
+  # Headlines are the most time-sensitive thing cached in this app -- every 10 minutes like
+  # put/call ratio, not once a day.
+  cron: ${NEWS_CRON:0 */10 * * * *}

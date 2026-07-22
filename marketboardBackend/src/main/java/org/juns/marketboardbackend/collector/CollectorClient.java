@@ -64,7 +64,9 @@ public class CollectorClient {
         }
     }
 
-    @Cacheable(value = CacheConfig.NEWS_GENERAL, unless = "#result.isEmpty()")
+    // Not @Cacheable here -- only NewsService.refresh() calls this now (on a schedule, writing
+    // the result to MySQL), and CacheConfig.NEWS_GENERAL caches its getGeneralNews() DB read
+    // instead. See NewsService for why.
     public List<NewsItem> getGeneralNews() {
         return getNews("/news");
     }
@@ -112,7 +114,9 @@ public class CollectorClient {
         }
     }
 
-    @Cacheable(value = CacheConfig.MARKET_INDEX_HISTORY, key = "#slug", unless = "#result.isEmpty()")
+    // Not @Cacheable here -- only MarketIndexHistoryService.refresh() calls this now (on a
+    // schedule, writing the result to MySQL), and CacheConfig.MARKET_INDEX_HISTORY caches its
+    // getHistory() DB read instead. See MarketIndexHistoryService for why.
     public List<MarketIndexCandle> getMarketIndexHistory(String slug) {
         try {
             MarketIndexCandle[] items =

@@ -23,9 +23,17 @@ export function MarketIndexCard({ slug, name }: { slug: string; name: string }) 
 
   useEffect(() => {
     let cancelled = false;
-    api.getMarketIndexHistory(authFetch, slug).then((candles) => {
-      if (!cancelled) setResult({ key: slug, candles });
-    });
+    api
+      .getMarketIndexHistory(authFetch, slug)
+      .then((candles) => {
+        if (!cancelled) setResult({ key: slug, candles });
+      })
+      .catch(() => {
+        // Best-effort external data (yfinance via the collector) -- degrade to an empty chart
+        // rather than leave the card spinning forever, e.g. right after a fresh deploy before the
+        // first scheduled refresh has landed.
+        if (!cancelled) setResult({ key: slug, candles: [] });
+      });
     return () => {
       cancelled = true;
     };

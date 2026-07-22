@@ -19,12 +19,12 @@ import tools.jackson.databind.jsontype.PolymorphicTypeValidator;
 
 /**
  * Read-through cache for data that's identical for every visitor: market indices/history and
- * fear-greed/put-call-ratio (proxied from the Python collector's yfinance/CNN calls, see
- * CollectorClient), plus the daily market-breadth snapshot and the sector-rotation ranking, both
- * of which are scheduled-refresh + MySQL snapshots (see MarketBreadthService,
- * SectorPerformanceService) with this cache as a thin layer in front of that DB read. Both
- * /market (authenticated) and /overview (public, no login) render the same panels, so without
- * caching every page view re-triggers the full set of collector round trips. Boot 4.1
+ * fear-greed (proxied from the Python collector's yfinance/CNN calls, see CollectorClient), plus
+ * the market-breadth snapshot, sector-rotation ranking, and put/call ratio, all three of which are
+ * scheduled-refresh + MySQL snapshots (see MarketBreadthService, SectorPerformanceService,
+ * PutCallRatioService) with this cache as a thin layer in front of that DB read. Both /market
+ * (authenticated) and /overview (public, no login) render the same panels, so without caching
+ * every page view re-triggers the full set of collector round trips. Boot 4.1
  * dropped the RedisCacheManager autoconfiguration + RedisCacheManagerBuilderCustomizer hook that
  * older Spring Boot versions provided (confirmed absent from spring-boot-autoconfigure-4.1.0's
  * cache package, which now only has CacheType left) -- so the manager is built by hand here
@@ -52,17 +52,17 @@ public class CacheConfig {
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(
                         cacheValueSerializer(objectMapper)));
 
-        // Daily-cadence market data tolerates a longer TTL than the sentiment endpoints, which are
-        // best-effort scrapes (CNN Fear & Greed, yfinance options) that can move intraday.
-        // SECTOR_PERFORMANCE and MARKET_BREADTH are both backed by a scheduled-refresh + MySQL
-        // snapshot with @CacheEvict on write (see SectorPerformanceService/MarketBreadthService),
-        // so their TTL here is just a safety-net upper bound, not what actually keeps them fresh.
+        // Daily-cadence market data tolerates a longer TTL than fear-greed, a best-effort scrape
+        // that can move intraday. SECTOR_PERFORMANCE, PUT_CALL_RATIO, and MARKET_BREADTH are all
+        // backed by a scheduled-refresh + MySQL snapshot with @CacheEvict on write (see
+        // SectorPerformanceService/PutCallRatioService/MarketBreadthService), so their TTL here is
+        // just a safety-net upper bound, not what actually keeps them fresh.
         Map<String, RedisCacheConfiguration> perCache = Map.of(
                 MARKET_INDICES, base.entryTtl(Duration.ofMinutes(15)),
                 MARKET_INDEX_HISTORY, base.entryTtl(Duration.ofMinutes(15)),
                 SECTOR_PERFORMANCE, base.entryTtl(Duration.ofMinutes(30)),
                 FEAR_GREED, base.entryTtl(Duration.ofMinutes(5)),
-                PUT_CALL_RATIO, base.entryTtl(Duration.ofMinutes(5)),
+                PUT_CALL_RATIO, base.entryTtl(Duration.ofMinutes(30)),
                 MARKET_BREADTH, base.entryTtl(Duration.ofMinutes(30)),
                 // News is the one collector-backed read left with no cache at all (financials and
                 // symbol-profile already have their own DB-backed read-through cache) -- every

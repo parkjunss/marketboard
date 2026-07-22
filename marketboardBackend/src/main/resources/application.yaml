@@ -104,3 +104,9 @@ sector-performance:
   # 07:10, ten minutes after market-breadth's 07:00, just so the two don't both fire in the same
   # tick (no actual dependency between them -- sector performance pulls its own yfinance data).
   cron: ${SECTOR_PERFORMANCE_CRON:0 10 7 * * *}
+
+put-call-ratio:
+  # Unlike sector performance, options volume genuinely accumulates through the trading day, so
+  # this stays on a repeating interval rather than moving to once a day -- 10 minutes roughly
+  # matches the old Redis TTL's freshness while keeping the ~2s/8-yfinance-call cost infrequent.
+  cron: ${PUT_CALL_RATIO_CRON:0 */10 * * * *}

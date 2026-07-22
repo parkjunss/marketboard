@@ -267,8 +267,8 @@ export function getFearGreed(fetcher: Fetcher): Promise<FearGreedResponse> {
   return fetcher<FearGreedResponse>('/api/market-sentiment/fear-greed');
 }
 
-export function getPutCallRatio(fetcher: Fetcher, ticker = 'SPY'): Promise<PutCallRatioResponse> {
-  return fetcher<PutCallRatioResponse>(`/api/market-sentiment/put-call-ratio?ticker=${ticker}`);
+export function getPutCallRatio(fetcher: Fetcher): Promise<PutCallRatioResponse> {
+  return fetcher<PutCallRatioResponse>('/api/market-sentiment/put-call-ratio');
 }
 
 export function getMarketIndexHistory(fetcher: Fetcher, slug: string): Promise<CandleResponse[]> {

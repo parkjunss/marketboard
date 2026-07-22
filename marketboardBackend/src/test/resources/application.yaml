@@ -68,3 +68,6 @@ market-breadth:
 
 sector-performance:
   cron: 0 10 7 * * *
+
+put-call-ratio:
+  cron: 0 */10 * * * *

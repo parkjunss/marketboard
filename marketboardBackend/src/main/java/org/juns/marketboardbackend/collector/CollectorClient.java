@@ -204,9 +204,9 @@ public class CollectorClient {
         }
     }
 
-    // Same Optional-unwrapping caveat as getFearGreed() above -- #result is a bare
-    // PutCallRatioResponse (or null), not an Optional.
-    @Cacheable(value = CacheConfig.PUT_CALL_RATIO, key = "#ticker", unless = "#result == null")
+    // Not @Cacheable here -- only PutCallRatioService.refresh() calls this now (on a schedule,
+    // writing the result to MySQL), and CacheConfig.PUT_CALL_RATIO caches its getLatest() DB read
+    // instead. See PutCallRatioService for why.
     public Optional<PutCallRatioResponse> getPutCallRatio(String ticker) {
         try {
             return Optional.ofNullable(

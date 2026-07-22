@@ -83,7 +83,7 @@ export default function OverviewPage() {
               <Spinner size="lg" label="불러오는 중" />
             </Center>
           ) : (
-            <Grid columns={3} gap={4}>
+            <Grid columns={{ minWidth: 280, max: 3 }} gap={4}>
               {indices.map((index) => (
                 <MarketIndexCard key={index.slug} slug={index.slug} name={index.name} />
               ))}

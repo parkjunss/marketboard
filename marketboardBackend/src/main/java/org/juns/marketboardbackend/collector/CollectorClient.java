@@ -6,6 +6,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -81,11 +82,15 @@ public class CollectorClient {
         }
     }
 
+    // Cached results must be a plain ArrayList, not List.of()'s immutable impl -- the latter is a
+    // final class in java.util, which Redis's default-typing serializer treats as a "well-known"
+    // type and skips tagging with type info, so a cache hit comes back untyped (and, read back as
+    // the root Object.class RedisCache always requests, throws deserializing). See CacheConfig.
     @Cacheable(value = CacheConfig.MARKET_INDICES, unless = "#result.isEmpty()")
     public List<MarketIndexInfo> getMarketIndices() {
         try {
             MarketIndexInfo[] items = restClient.get().uri("/market-indices").retrieve().body(MarketIndexInfo[].class);
-            return items != null ? List.of(items) : List.of();
+            return items != null ? new ArrayList<>(List.of(items)) : List.of();
         } catch (RestClientException ex) {
             log.warn("Failed to fetch market indices from collector: {}", ex.getMessage());
             return List.of();
@@ -96,7 +101,7 @@ public class CollectorClient {
     public List<SectorPerformance> getSectorPerformance() {
         try {
             SectorPerformance[] items = restClient.get().uri("/market-indices/sectors/performance").retrieve().body(SectorPerformance[].class);
-            return items != null ? List.of(items) : List.of();
+            return items != null ? new ArrayList<>(List.of(items)) : List.of();
         } catch (RestClientException ex) {
             log.warn("Failed to fetch sector performance from collector: {}", ex.getMessage());
             return List.of();
@@ -108,7 +113,7 @@ public class CollectorClient {
         try {
             MarketIndexCandle[] items =
                     restClient.get().uri("/market-indices/{slug}/history", slug).retrieve().body(MarketIndexCandle[].class);
-            return items != null ? List.of(items) : List.of();
+            return items != null ? new ArrayList<>(List.of(items)) : List.of();
         } catch (RestClientException ex) {
             log.warn("Failed to fetch market index history from collector ({}): {}", slug, ex.getMessage());
             return List.of();

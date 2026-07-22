@@ -99,7 +99,8 @@ market-breadth:
   cron: ${MARKET_BREADTH_CRON:0 0 7 * * *}
 
 sector-performance:
-  # Matches the old Redis TTL this replaced -- frequent enough that the ranking doesn't feel
-  # stale, infrequent enough that 11 sequential yfinance calls (one per sector ETF) stay well
-  # clear of being a noticeable load source.
-  cron: ${SECTOR_PERFORMANCE_CRON:0 */15 * * * *}
+  # Once a day like market-breadth -- the 1d/1w/1m returns it ranks by are all derived from daily
+  # bars anyway, so recomputing intraday wouldn't change the ranking until the next day's close.
+  # 07:10, ten minutes after market-breadth's 07:00, just so the two don't both fire in the same
+  # tick (no actual dependency between them -- sector performance pulls its own yfinance data).
+  cron: ${SECTOR_PERFORMANCE_CRON:0 10 7 * * *}

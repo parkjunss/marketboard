@@ -1,5 +1,7 @@
 package org.juns.marketboardbackend.pricehistory;
 
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +17,13 @@ public interface PriceHistoryRepository extends JpaRepository<PriceHistory, Long
     List<PriceHistory> findBySymbol_IdAndTimeframeOrderByTsDesc(Long symbolId, String timeframe, Pageable pageable);
 
     Optional<PriceHistory> findFirstBySymbol_IdAndTimeframeOrderByTsDesc(Long symbolId, String timeframe);
+
+    // One bulk range scan for every symbol's recent candles, used by IndicatorCalculationService
+    // to avoid a per-symbol round trip (503 symbols x 1 query used to run every 5 minutes). Still
+    // an index range scan on (symbol_id, timeframe, ts) per symbol_id in the IN-list, just all
+    // sent as one statement instead of one round trip each.
+    List<PriceHistory> findBySymbol_IdInAndTimeframeAndTsGreaterThanEqual(
+            Collection<Long> symbolIds, String timeframe, Instant since);
 
     void deleteBySymbol_Id(Long symbolId);
 }

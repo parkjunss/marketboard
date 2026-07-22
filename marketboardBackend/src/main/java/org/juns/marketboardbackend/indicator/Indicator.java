@@ -40,7 +40,11 @@ public class Indicator {
     @Column(nullable = false, length = 10)
     private String timeframe;
 
-    @Column(nullable = false, precision = 18, scale = 4)
+    // Backtick-quoted so Hibernate emits a dialect-native quoted identifier (backticks on MySQL,
+    // double quotes on H2) -- "value" is an H2 reserved word, and unquoted DDL generation for this
+    // column fails there (harmless against MySQL prod, which validates against an already-Flyway
+    // -migrated table, but broke H2's create-drop schema for any test that touches this table).
+    @Column(name = "`value`", nullable = false, precision = 18, scale = 4)
     private BigDecimal value;
 
     @Column(name = "computed_at", nullable = false)

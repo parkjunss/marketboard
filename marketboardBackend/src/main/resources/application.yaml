@@ -3,7 +3,10 @@ spring:
     name: marketboardBackend
 
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/stockmonitordb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    # rewriteBatchedStatements folds Hibernate's batched UPDATE/INSERT into fewer multi-row
+    # statements -- without it, MySQL Connector/J still sends them one at a time regardless of
+    # hibernate.jdbc.batch_size below.
+    url: ${DB_URL:jdbc:mysql://localhost:3306/stockmonitordb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&rewriteBatchedStatements=true}
     username: ${DB_USERNAME:stockmonitor}
     password: ${DB_PASSWORD:stockmonitor1234}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -16,6 +19,10 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        jdbc:
+          batch_size: 50
+        order_updates: true
+        order_inserts: true
 
   flyway:
     enabled: true

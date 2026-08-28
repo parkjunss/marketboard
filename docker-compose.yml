@@ -14,7 +14,7 @@ volumes:
 
 services:
   mysql:
-    image: mysql:8.0
+    image: mysql:8.4
     container_name: marketboard-mysql
     restart: unless-stopped
     environment:
@@ -37,7 +37,7 @@ services:
   # now (see mysql-backups volume comment above) — protects against a corrupted mysql-data
   # volume or an accidental bad write, not against Pi/disk loss.
   backup:
-    image: mysql:8.0
+    image: mysql:8.4
     container_name: marketboard-backup
     restart: unless-stopped
     depends_on:

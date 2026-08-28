@@ -6,13 +6,7 @@ networks:
 volumes:
   mysql-data:
   grafana-data:
-  # Named volumes, not bind mounts: certbot runs as root inside its container, so anything
-  # it writes (e.g. renewal-hooks/) would end up root-owned on the host if bind-mounted —
-  # and the next `actions/checkout` (running as a regular user) can't clean those up,
-  # breaking the whole workspace. A named volume lives inside Docker's own storage instead.
-  letsencrypt-data:
-  certbot-webroot-data:
-  # Same reasoning as letsencrypt-data: mysqldump runs as the mysql image's default user, so a
+  # Named volume, not a bind mount: mysqldump runs as the mysql image's default user, so a
   # bind mount would end up owned in a way `actions/checkout` can't clean up. Off-Pi delivery
   # (scp/rclone/etc.) is a separate follow-up — this only protects against mysql-data itself
   # getting corrupted, not against losing the Pi.
@@ -174,45 +168,3 @@ services:
       - "3300:3000"
     networks: [marketboard]
 
-  # Public entrypoint for marketboard.duckdns.org — the only service bound to host 80/443.
-  # See nginx/init-letsencrypt.sh for the one-time cert bootstrap this depends on.
-  nginx:
-    image: nginx:alpine
-    container_name: marketboard-nginx
-    restart: unless-stopped
-    depends_on:
-      - backend
-      - frontend
-    volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - certbot-webroot-data:/var/www/certbot:ro
-      - letsencrypt-data:/etc/letsencrypt:ro
-    ports:
-      - "80:80"
-      - "443:443"
-    networks: [marketboard]
-    # nginx caches the loaded cert in memory and won't notice certbot writing a renewed
-    # one to disk on its own — this background loop periodically reloads (cheap, a no-op
-    # when nothing changed) so a renewal actually takes effect without manual intervention.
-    command: >-
-      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
-
-  certbot:
-    image: certbot/certbot
-    container_name: marketboard-certbot
-    restart: unless-stopped
-    depends_on:
-      - nginx
-    volumes:
-      - certbot-webroot-data:/var/www/certbot
-      - letsencrypt-data:/etc/letsencrypt
-    entrypoint: >-
-      /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done;'
-
-  duckdns:
-    image: linuxserver/duckdns
-    container_name: marketboard-duckdns
-    restart: unless-stopped
-    environment:
-      TOKEN: ${DUCKDNS_TOKEN}
-      SUBDOMAINS: ${DUCKDNS_SUBDOMAIN}

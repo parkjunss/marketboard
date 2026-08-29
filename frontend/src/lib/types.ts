@@ -139,6 +139,9 @@ export interface ChartIndicatorSettingsResponse {
   smaOverlays: SmaOverlayConfig[];
 }
 
+export type BacktestStrategyType = 'BUY_AND_HOLD' | 'SMA_CROSSOVER' | 'PERIODIC_REBALANCE' | 'VOLATILITY_TARGET';
+export type RebalanceFrequency = 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+
 export interface BacktestRunRequest {
   name: string;
   tickers: string[];
@@ -146,6 +149,12 @@ export interface BacktestRunRequest {
   endDate: string;
   initialCapital: number;
   riskFreeRate: number;
+  strategyType?: BacktestStrategyType;
+  smaShortWindow?: number;
+  smaLongWindow?: number;
+  rebalanceFrequency?: RebalanceFrequency;
+  targetVolatilityPct?: number;
+  vixThreshold?: number;
 }
 
 export interface EquityPoint {
@@ -162,9 +171,25 @@ export interface BacktestMetrics {
   sharpeRatio: number | null;
 }
 
+export interface TickerStat {
+  ticker: string;
+  returnPct: number;
+  volatilityPct: number | null;
+}
+
+export interface BenchmarkStats {
+  ticker: string;
+  returnPct: number;
+  volatilityPct: number | null;
+}
+
 export interface BacktestEngineResult {
   equityCurve: EquityPoint[];
   metrics: BacktestMetrics;
+  // Null for runs recorded before this backend supported per-ticker/benchmark stats -- their
+  // stored result JSON simply doesn't have these fields.
+  tickerStats: TickerStat[] | null;
+  benchmarkStats: BenchmarkStats | null;
 }
 
 export type BacktestRunStatus = 'PENDING' | 'DONE' | 'FAILED';
@@ -178,11 +203,19 @@ export interface BacktestRunResponse {
   endDate: string;
   initialCapital: number;
   riskFreeRate: number;
+  strategyType: BacktestStrategyType | null;
+  smaShortWindow: number | null;
+  smaLongWindow: number | null;
+  rebalanceFrequency: RebalanceFrequency | null;
+  targetVolatilityPct: number | null;
+  vixThreshold: number | null;
   result: BacktestEngineResult | null;
   errorMessage: string | null;
   createdAt: string;
   completedAt: string | null;
 }
+
+// Screener request/response/template types live in ./screener-types, not here -- see that file.
 
 export type PanelType = 'CHART' | 'NEWS' | 'WATCHLIST' | 'INDICATOR';
 

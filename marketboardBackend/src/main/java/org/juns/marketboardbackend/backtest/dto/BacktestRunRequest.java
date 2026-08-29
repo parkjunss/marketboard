@@ -17,5 +17,14 @@ public record BacktestRunRequest(
         @NotNull LocalDate startDate,
         @NotNull LocalDate endDate,
         @NotNull @Positive BigDecimal initialCapital,
-        @NotNull @DecimalMin("0.0") @DecimalMax("1.0") BigDecimal riskFreeRate) {
+        @NotNull @DecimalMin("0.0") @DecimalMax("1.0") BigDecimal riskFreeRate,
+        // "BUY_AND_HOLD" (default when blank) | "SMA_CROSSOVER" | "PERIODIC_REBALANCE" |
+        // "VOLATILITY_TARGET" -- validated against the actual param requirements by the
+        // collector's engine, not here, since which fields are required depends on which type this is.
+        String strategyType,
+        Integer smaShortWindow,
+        Integer smaLongWindow,
+        String rebalanceFrequency,
+        BigDecimal targetVolatilityPct,
+        BigDecimal vixThreshold) {
 }

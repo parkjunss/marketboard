@@ -41,10 +41,11 @@ public class BacktestService {
     }
 
     @Transactional
-    public BacktestRunResponse run(Long userId, BacktestRunRequest request) {
-        if (request.endDate().isBefore(request.startDate())) {
+    public BacktestRunResponse run(Long userId, BacktestRunRequest rawRequest) {
+        if (rawRequest.endDate().isBefore(rawRequest.startDate())) {
             throw new IllegalArgumentException("종료일은 시작일보다 빠를 수 없습니다");
         }
+        BacktestRunRequest request = withDefaultStrategy(rawRequest);
 
         User user = userRepository.getReferenceById(userId);
         String configJson = objectMapper.writeValueAsString(request);
@@ -52,7 +53,17 @@ public class BacktestService {
         backtestRunRepository.save(run);
 
         BacktestEngineRequest engineRequest = new BacktestEngineRequest(
-                request.tickers(), request.startDate(), request.endDate(), request.initialCapital(), request.riskFreeRate());
+                request.tickers(),
+                request.startDate(),
+                request.endDate(),
+                request.initialCapital(),
+                request.riskFreeRate(),
+                request.strategyType(),
+                request.smaShortWindow(),
+                request.smaLongWindow(),
+                request.rebalanceFrequency(),
+                request.targetVolatilityPct(),
+                request.vixThreshold());
         Optional<BacktestEngineResult> result = collectorClient.runBacktest(engineRequest);
 
         if (result.isEmpty()) {
@@ -80,7 +91,9 @@ public class BacktestService {
     }
 
     private BacktestRunResponse toResponse(BacktestRun run) {
-        BacktestRunRequest config = objectMapper.readValue(run.getConfigJson(), BacktestRunRequest.class);
+        // Pre-strategy-type rows have no strategyType/params in their stored configJson --
+        // withDefaultStrategy fills BUY_AND_HOLD in for them so old history entries still display.
+        BacktestRunRequest config = withDefaultStrategy(objectMapper.readValue(run.getConfigJson(), BacktestRunRequest.class));
         BacktestEngineResult result =
                 run.getResultJson() != null ? objectMapper.readValue(run.getResultJson(), BacktestEngineResult.class) : null;
         return toResponse(run, config, result);
@@ -96,9 +109,34 @@ public class BacktestService {
                 config.endDate(),
                 config.initialCapital(),
                 config.riskFreeRate(),
+                config.strategyType(),
+                config.smaShortWindow(),
+                config.smaLongWindow(),
+                config.rebalanceFrequency(),
+                config.targetVolatilityPct(),
+                config.vixThreshold(),
                 result,
                 run.getErrorMessage(),
                 run.getCreatedAt(),
                 run.getCompletedAt());
+    }
+
+    private BacktestRunRequest withDefaultStrategy(BacktestRunRequest request) {
+        if (request.strategyType() != null && !request.strategyType().isBlank()) {
+            return request;
+        }
+        return new BacktestRunRequest(
+                request.name(),
+                request.tickers(),
+                request.startDate(),
+                request.endDate(),
+                request.initialCapital(),
+                request.riskFreeRate(),
+                "BUY_AND_HOLD",
+                request.smaShortWindow(),
+                request.smaLongWindow(),
+                request.rebalanceFrequency(),
+                request.targetVolatilityPct(),
+                request.vixThreshold());
     }
 }

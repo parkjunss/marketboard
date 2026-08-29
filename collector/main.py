@@ -11,14 +11,16 @@ from app import config, mysql_writer
 from app.aggregator import CandleAggregator
 from app.alerts import check_alerts
 from app.backfill import backfill_symbol
-from app.backtest import InsufficientDataError, run_backtest
+from app.backtest import InsufficientDataError, InvalidStrategyParamsError, run_backtest
 from app.financials import get_financials
 from app.finnhub_source import FinnhubWebSocketSource
 from app.market_indices import get_index_history, get_sector_performance, list_indices
 from app.news import get_company_news, get_general_news
 from app.options_levels import OptionsLevelsUnavailableError, get_options_levels
+from app.quant_analysis import InvalidAnalysisParamsError, analyze_stock
 from app.redis_publisher import publish_quote
 from app.rest_fallback import rest_fallback_loop
+from app.screener import InsufficientScreenerDataError, InvalidScreenerParamsError, run_screener
 from app.sentiment import FearGreedUnavailableError, PutCallDataUnavailableError, get_fear_greed, get_put_call_ratio
 from app.sp500_universe import run_sp500_batch
 from app.state import state
@@ -222,15 +224,84 @@ class BacktestRunPayload(BaseModel):
     endDate: date
     initialCapital: float
     riskFreeRate: float
+    strategyType: str = "BUY_AND_HOLD"
+    smaShortWindow: int | None = None
+    smaLongWindow: int | None = None
+    rebalanceFrequency: str | None = None
+    targetVolatilityPct: float | None = None
+    vixThreshold: float | None = None
 
 
 @app.post("/backtest/run")
 async def backtest_run(payload: BacktestRunPayload):
+    strategy_params = {
+        "smaShortWindow": payload.smaShortWindow,
+        "smaLongWindow": payload.smaLongWindow,
+        "rebalanceFrequency": payload.rebalanceFrequency,
+        "targetVolatilityPct": payload.targetVolatilityPct,
+        "vixThreshold": payload.vixThreshold,
+    }
     try:
         return await asyncio.to_thread(
-            run_backtest, payload.tickers, payload.startDate, payload.endDate, payload.initialCapital, payload.riskFreeRate
+            run_backtest,
+            payload.tickers,
+            payload.startDate,
+            payload.endDate,
+            payload.initialCapital,
+            payload.riskFreeRate,
+            payload.strategyType,
+            strategy_params,
         )
-    except InsufficientDataError as exc:
+    except (InsufficientDataError, InvalidStrategyParamsError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/screener/momentum")
+async def screener_momentum(
+    topN: int = 10,
+    momentumWindowDays: int | None = None,
+    trendMaWindow: int | None = None,
+    correlationThreshold: float | None = None,
+    minMomentumPct: float | None = None,
+    maxRsi: float | None = None,
+    minMarketCap: float | None = None,
+    minRevenue: float | None = None,
+):
+    kwargs = {}
+    if momentumWindowDays is not None:
+        kwargs["momentum_window_days"] = momentumWindowDays
+    if trendMaWindow is not None:
+        kwargs["trend_ma_window"] = trendMaWindow
+    if correlationThreshold is not None:
+        kwargs["correlation_threshold"] = correlationThreshold
+    if minMomentumPct is not None:
+        kwargs["min_momentum_pct"] = minMomentumPct
+    if maxRsi is not None:
+        kwargs["max_rsi"] = maxRsi
+    if minMarketCap is not None:
+        kwargs["min_market_cap"] = minMarketCap
+    if minRevenue is not None:
+        kwargs["min_revenue"] = minRevenue
+    try:
+        return await asyncio.to_thread(run_screener, topN, **kwargs)
+    except (InsufficientScreenerDataError, InvalidScreenerParamsError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/analysis/{ticker}")
+async def stock_analysis(
+    ticker: str,
+    lookbackDays: int = 504,
+    monteCarloHorizonDays: int = 252,
+    monteCarloPaths: int = 2000,
+):
+    try:
+        return await asyncio.to_thread(analyze_stock, ticker, lookbackDays, monteCarloHorizonDays, monteCarloPaths)
+    except (InsufficientDataError, InvalidAnalysisParamsError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

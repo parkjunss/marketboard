@@ -25,6 +25,8 @@ import type {
   UserResponse,
   WatchlistItemResponse,
 } from './types';
+import type { MomentumScreenerParams, MomentumScreenerResult } from './screener-types';
+import type { StockAnalysisResult } from './analysis-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
 
@@ -114,6 +116,21 @@ export function getHistory(
 
 export function getSymbolProfile(fetcher: Fetcher, ticker: string): Promise<SymbolProfileResponse> {
   return fetcher<SymbolProfileResponse>(`/api/symbols/${ticker}/profile`);
+}
+
+export interface StockAnalysisParams {
+  lookbackDays?: number;
+  monteCarloHorizonDays?: number;
+  monteCarloPaths?: number;
+}
+
+export function getStockAnalysis(fetcher: Fetcher, ticker: string, params: StockAnalysisParams = {}): Promise<StockAnalysisResult> {
+  const query = new URLSearchParams();
+  if (params.lookbackDays != null) query.set('lookbackDays', String(params.lookbackDays));
+  if (params.monteCarloHorizonDays != null) query.set('monteCarloHorizonDays', String(params.monteCarloHorizonDays));
+  if (params.monteCarloPaths != null) query.set('monteCarloPaths', String(params.monteCarloPaths));
+  const qs = query.toString();
+  return fetcher<StockAnalysisResult>(`/api/analysis/${ticker}${qs ? `?${qs}` : ''}`);
 }
 
 export function getWatchlist(fetcher: Fetcher): Promise<WatchlistItemResponse[]> {
@@ -254,6 +271,24 @@ export function getBacktestRun(fetcher: Fetcher, id: number): Promise<BacktestRu
 
 export function getMarketIndices(fetcher: Fetcher): Promise<MarketIndexInfo[]> {
   return fetcher<MarketIndexInfo[]>('/api/market-indices');
+}
+
+// Slow (~15-30s): scans the whole S&P 500 universe, then fetches live fundamentals/news sentiment
+// for the shortlist. No client-side timeout here on purpose -- the backend's collector call itself
+// has a generous 60s timeout (see CollectorClient.getMomentumScreener), so the fetcher should just
+// wait it out rather than aborting early. Any omitted param falls back to the collector's default
+// screening condition (see app/screener.py).
+export function getMomentumScreener(fetcher: Fetcher, params: MomentumScreenerParams = {}): Promise<MomentumScreenerResult> {
+  const query = new URLSearchParams();
+  if (params.topN != null) query.set('topN', String(params.topN));
+  if (params.momentumWindowDays != null) query.set('momentumWindowDays', String(params.momentumWindowDays));
+  if (params.trendMaWindow != null) query.set('trendMaWindow', String(params.trendMaWindow));
+  if (params.correlationThreshold != null) query.set('correlationThreshold', String(params.correlationThreshold));
+  if (params.minMomentumPct != null) query.set('minMomentumPct', String(params.minMomentumPct));
+  if (params.maxRsi != null) query.set('maxRsi', String(params.maxRsi));
+  if (params.minMarketCap != null) query.set('minMarketCap', String(params.minMarketCap));
+  if (params.minRevenue != null) query.set('minRevenue', String(params.minRevenue));
+  return fetcher<MomentumScreenerResult>(`/api/screener/momentum?${query.toString()}`);
 }
 
 export function getSectorPerformance(fetcher: Fetcher): Promise<SectorPerformance[]> {

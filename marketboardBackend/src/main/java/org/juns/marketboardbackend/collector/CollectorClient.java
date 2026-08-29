@@ -169,6 +169,76 @@ public class CollectorClient {
         }
     }
 
+    // Bodyless GET -- deliberately raw HttpClient anyway (not RestClient's shared 10s default) for
+    // a generous timeout: the collector loads the whole S&P 500 universe from price_history, ranks
+    // it, then fetches live fundamentals + news sentiment for an oversampled shortlist pool (up to
+    // 2x topN, to backfill candidates a market-cap/revenue filter knocks out -- see
+    // app/screener.py's ENRICHMENT_POOL_MULTIPLIER) (observed ~15-20s end-to-end for topN=10 with
+    // no fundamental filters in dev). 90s gives real headroom above the oversampled worst case.
+    public Optional<MomentumScreenerResult> getMomentumScreener(MomentumScreenerRequest request) {
+        StringBuilder query = new StringBuilder("?topN=").append(request.topN());
+        appendIfPresent(query, "momentumWindowDays", request.momentumWindowDays());
+        appendIfPresent(query, "trendMaWindow", request.trendMaWindow());
+        appendIfPresent(query, "correlationThreshold", request.correlationThreshold());
+        appendIfPresent(query, "minMomentumPct", request.minMomentumPct());
+        appendIfPresent(query, "maxRsi", request.maxRsi());
+        appendIfPresent(query, "minMarketCap", request.minMarketCap());
+        appendIfPresent(query, "minRevenue", request.minRevenue());
+        try {
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/screener/momentum" + query))
+                    .timeout(Duration.ofSeconds(90))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                log.warn("Momentum screener failed via collector: HTTP {} {}", response.statusCode(), response.body());
+                return Optional.empty();
+            }
+            return Optional.ofNullable(objectMapper.readValue(response.body(), MomentumScreenerResult.class));
+        } catch (IOException ex) {
+            log.warn("Momentum screener failed via collector (collector may be offline): {}", ex.getMessage());
+            return Optional.empty();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while running momentum screener via collector: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    // Bodyless GET -- deliberately raw HttpClient anyway (not RestClient's shared 10s default): a
+    // 2-ticker (target + SPY) price_history read plus a vectorized Monte Carlo simulation, both
+    // fast, but this dev machine's localhost DB connect alone has been observed taking ~10s (see
+    // screener.py's ENRICHMENT_POOL_MULTIPLIER comment for the same finding) -- 30s gives headroom.
+    public Optional<StockAnalysisResult> getStockAnalysis(
+            String ticker, Integer lookbackDays, Integer monteCarloHorizonDays, Integer monteCarloPaths) {
+        List<String> params = new ArrayList<>();
+        if (lookbackDays != null) params.add("lookbackDays=" + lookbackDays);
+        if (monteCarloHorizonDays != null) params.add("monteCarloHorizonDays=" + monteCarloHorizonDays);
+        if (monteCarloPaths != null) params.add("monteCarloPaths=" + monteCarloPaths);
+        String query = params.isEmpty() ? "" : "?" + String.join("&", params);
+        try {
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/analysis/" + ticker + query))
+                    .timeout(Duration.ofSeconds(30))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                log.warn("Stock analysis failed via collector ({}): HTTP {} {}", ticker, response.statusCode(), response.body());
+                return Optional.empty();
+            }
+            return Optional.ofNullable(objectMapper.readValue(response.body(), StockAnalysisResult.class));
+        } catch (IOException ex) {
+            log.warn("Stock analysis failed via collector ({}, collector may be offline): {}", ticker, ex.getMessage());
+            return Optional.empty();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while running stock analysis via collector ({}): {}", ticker, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
     // Bodyless POST -- deliberately raw HttpClient anyway (not RestClient) for consistency with
     // runBacktest/syncSubscriptions and to avoid re-litigating whether a bodyless POST is
     // actually safe through RestClient's request factory.
@@ -263,6 +333,12 @@ public class CollectorClient {
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             log.warn("Interrupted while syncing collector subscriptions: {}", ex.getMessage());
+        }
+    }
+
+    private static void appendIfPresent(StringBuilder query, String param, Object value) {
+        if (value != null) {
+            query.append('&').append(param).append('=').append(value);
         }
     }
 }

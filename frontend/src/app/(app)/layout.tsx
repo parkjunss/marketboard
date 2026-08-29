@@ -14,6 +14,7 @@ import {
   ChartBarIcon,
   GlobeAltIcon,
   ListBulletIcon,
+  MagnifyingGlassIcon,
   PresentationChartLineIcon,
   ShieldCheckIcon,
   Squares2X2Icon,
@@ -92,6 +93,12 @@ function AppNav({ children }: { children: React.ReactNode }) {
               icon={PresentationChartLineIcon}
               isSelected={pathname.startsWith('/backtest')}
               href="/backtest"
+            />
+            <SideNavItem
+              label="종목 스크리너"
+              icon={MagnifyingGlassIcon}
+              isSelected={pathname.startsWith('/screener')}
+              href="/screener"
             />
           </SideNavSection>
           {user?.role === 'ADMIN' && (

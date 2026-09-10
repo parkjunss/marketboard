@@ -42,10 +42,23 @@ function PnlText({ value, pct }: { value: number | null; pct: number | null }) {
   );
 }
 
-function PriceSourceBadge({ source }: { source: PortfolioPositionResponse['priceSource'] }) {
-  if (source === 'LIVE') return null;
-  if (source === 'CLOSE') return <Badge variant="neutral" label="전일 종가" />;
-  return <Badge variant="warning" label="가격 없음" />;
+function PriceSourceBadge({ row }: { row: PortfolioPositionResponse }) {
+  const label = row.priceStatus === 'UNAVAILABLE' ? '가격 없음'
+    : row.priceStatus === 'STALE' ? '오래된 관측 가격'
+    : row.priceStatus === 'RECENT' ? '최근 관측 가격' : '최신성 미확인';
+  return (
+    <VStack gap={1}>
+      <Badge variant={row.priceStatus === 'RECENT' ? 'neutral' : 'warning'} label={label} />
+      <Text type="supporting" size="sm">
+        {row.priceSource === 'CLOSE' ? `${row.priceSessionDate ?? '날짜 미상'} 일봉 종가 (미국 동부)`
+          : row.priceAsOf ? `${new Date(row.priceAsOf).toLocaleString('ko-KR')} 관측` : '관측 시각 미확인'}
+      </Text>
+      <Text type="supporting" size="sm">
+        {row.priceProvider === 'UNKNOWN' ? '원천 미확인' : row.priceProvider}
+        {row.priceFetchedAt ? ` · ${new Date(row.priceFetchedAt).toLocaleString('ko-KR')} 수집` : ''}
+      </Text>
+    </VStack>
+  );
 }
 
 interface PositionRow extends PortfolioPositionResponse, Record<string, unknown> {}
@@ -70,6 +83,8 @@ export default function PortfolioPage() {
   const [avgCost, setAvgCost] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [positionError, setPositionError] = useState<{ key: number; message: string } | null>(null);
 
   // No portfolio explicitly selected yet -> default to the first one, derived at render time
   // rather than set via an effect (avoids a second setState cascading off the initial fetch).
@@ -79,18 +94,25 @@ export default function PortfolioPage() {
   async function refreshPortfolios(): Promise<PortfolioSummaryResponse[]> {
     const data = await api.getPortfolios(authFetch);
     setPortfolios(data);
+    setLoadError(null);
     return data;
   }
 
   async function refreshPositions(portfolioId: number) {
     const data = await api.getPortfolioPositions(authFetch, portfolioId);
     setPositions({ key: portfolioId, data });
+    setPositionError(null);
   }
 
   useEffect(() => {
     let cancelled = false;
     api.getPortfolios(authFetch).then((data) => {
-      if (!cancelled) setPortfolios(data);
+      if (!cancelled) {
+        setPortfolios(data);
+        setLoadError(null);
+      }
+    }).catch(() => {
+      if (!cancelled) setLoadError('포트폴리오 자료를 가져오지 못했습니다. 잠시 후 새로고침하세요.');
     });
     return () => {
       cancelled = true;
@@ -101,7 +123,12 @@ export default function PortfolioPage() {
     if (effectiveSelectedId == null) return undefined;
     let cancelled = false;
     api.getPortfolioPositions(authFetch, effectiveSelectedId).then((data) => {
-      if (!cancelled) setPositions({ key: effectiveSelectedId, data });
+      if (!cancelled) {
+        setPositions({ key: effectiveSelectedId, data });
+        setPositionError(null);
+      }
+    }).catch(() => {
+      if (!cancelled) setPositionError({ key: effectiveSelectedId, message: '보유 종목 자료를 가져오지 못했습니다. 잠시 후 새로고침하세요.' });
     });
     return () => {
       cancelled = true;
@@ -201,7 +228,7 @@ export default function PortfolioPage() {
       renderCell: (row) => (
         <HStack gap={2} align="center">
           <Text type="body">{formatMoney(row.currentPrice)}</Text>
-          <PriceSourceBadge source={row.priceSource} />
+          <PriceSourceBadge row={row} />
         </HStack>
       ),
     },
@@ -238,13 +265,13 @@ export default function PortfolioPage() {
         <VStack gap={1}>
           <Heading level={3}>포트폴리오</Heading>
           <Text type="supporting" size="sm">
-            여러 포트폴리오를 만들어 보유 종목의 수량·평단가를 관리하고, 실시간 시세 대비 평가손익을 확인하세요
+            보유 수량·평단가와 평가손익을 확인하세요. 가격의 기준일과 자료 상태를 함께 표시합니다.
           </Text>
         </VStack>
       </Section>
 
       <Section padding={4} dividers={['bottom']}>
-        {portfolios === null ? (
+        {loadError ? <Banner status="error" title="자료 조회 실패" description={loadError} /> : portfolios === null ? (
           <Center height={120}>
             <Spinner size="md" label="불러오는 중" />
           </Center>
@@ -264,6 +291,11 @@ export default function PortfolioPage() {
                     {portfolio.positionCount}종목
                   </Text>
                   <Text type="body">{formatMoney(portfolio.totalMarketValue)}</Text>
+                  <Text type="supporting" size="sm">
+                    가격 확인 {portfolio.pricedPositionCount}/{portfolio.positionCount}종목
+                    {portfolio.valuationStatus === 'PARTIAL' ? ' · 일부 평가' : ''}
+                    {portfolio.valuationStatus === 'UNVERIFIED' ? ' · 최신성 미확인' : ''}
+                  </Text>
                   <PnlText value={portfolio.totalUnrealizedPnl} pct={portfolio.totalUnrealizedPnlPct} />
                 </VStack>
               </SelectableCard>
@@ -327,19 +359,19 @@ export default function PortfolioPage() {
               <Grid columns={4} gap={3}>
                 <VStack gap={1}>
                   <Text type="supporting" size="sm">
-                    총 평가금액
+                    {selectedPortfolio.unpricedPositionCount > 0 ? '가격 확인 종목 평가합계' : '평가금액 합계'}
                   </Text>
                   <Heading level={4}>{formatMoney(selectedPortfolio.totalMarketValue)}</Heading>
                 </VStack>
                 <VStack gap={1}>
                   <Text type="supporting" size="sm">
-                    총 매입금액
+                    {selectedPortfolio.unpricedPositionCount > 0 ? '평가 대상 종목 원가합계' : '매입금액 합계'}
                   </Text>
                   <Heading level={4}>{formatMoney(selectedPortfolio.totalCostBasis)}</Heading>
                 </VStack>
                 <VStack gap={1}>
                   <Text type="supporting" size="sm">
-                    평가손익
+                    {selectedPortfolio.unpricedPositionCount > 0 ? '평가 대상 종목 손익' : '평가손익'}
                   </Text>
                   <PnlText value={selectedPortfolio.totalUnrealizedPnl} pct={selectedPortfolio.totalUnrealizedPnlPct} />
                 </VStack>
@@ -359,6 +391,10 @@ export default function PortfolioPage() {
                 }
               />
             </HStack>
+            {selectedPortfolio.valuationStatus !== 'READY' && selectedPortfolio.valuationStatus !== 'EMPTY' && (
+              <Banner status="warning" title="평가 자료를 확인하세요"
+                description={`전체 ${selectedPortfolio.positionCount}종목 중 가격 확인 ${selectedPortfolio.pricedPositionCount}종목, 가격 없음 ${selectedPortfolio.unpricedPositionCount}종목입니다. 오래된 관측 ${selectedPortfolio.stalePositionCount}종목, 최신성 미확인 ${selectedPortfolio.unverifiedPositionCount}종목입니다. 합계는 가격이 있는 종목만 포함하며, 동일 시각의 전체 포트폴리오 평가가 아닐 수 있습니다.`} />
+            )}
           </Section>
 
           <Section padding={4} dividers={['bottom']}>
@@ -386,7 +422,9 @@ export default function PortfolioPage() {
             </VStack>
           </Section>
 
-          {isLoadingPositions ? (
+          {positionError?.key === effectiveSelectedId ? (
+            <Banner status="error" title="자료 조회 실패" description={positionError.message} />
+          ) : isLoadingPositions ? (
             <Center height={200}>
               <Spinner size="lg" label="불러오는 중" />
             </Center>

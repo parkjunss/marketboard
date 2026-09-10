@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface PriceHistoryRepository extends JpaRepository<PriceHistory, Long> {
 
@@ -26,4 +28,13 @@ public interface PriceHistoryRepository extends JpaRepository<PriceHistory, Long
             Collection<Long> symbolIds, String timeframe, Instant since);
 
     void deleteBySymbol_Id(Long symbolId);
+
+    // Include older history too: an old price must be exposed with its date, not silently lost
+    // because a batch optimization happened to use a ten-day window.
+    @Query("""
+            select p from PriceHistory p where p.symbol.id in :ids and p.timeframe = '1d'
+            and p.ts = (select max(h.ts) from PriceHistory h
+                        where h.symbol.id = p.symbol.id and h.timeframe = '1d')
+            """)
+    List<PriceHistory> findLatestDailyBySymbolIds(@Param("ids") Collection<Long> ids);
 }

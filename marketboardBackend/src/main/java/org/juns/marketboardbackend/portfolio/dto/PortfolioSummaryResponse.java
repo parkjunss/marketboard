@@ -15,7 +15,12 @@ public record PortfolioSummaryResponse(
         BigDecimal totalUnrealizedPnl,
         BigDecimal totalUnrealizedPnlPct,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        int pricedPositionCount,
+        int unpricedPositionCount,
+        int stalePositionCount,
+        int unverifiedPositionCount,
+        String valuationStatus) {
 
     /**
      * Totals are summed only over positions with a resolvable price (see {@link PortfolioPositionResponse}),
@@ -35,6 +40,11 @@ public record PortfolioSummaryResponse(
                 ? totalUnrealizedPnl.divide(totalCostBasis, 6, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
                 : null;
 
+        int priced = (int) positions.stream().filter(p -> p.marketValue() != null).count();
+        int stale = (int) positions.stream().filter(p -> "STALE".equals(p.priceStatus())).count();
+        int unverified = (int) positions.stream().filter(p -> "UNVERIFIED".equals(p.priceStatus())).count();
+        String status = positions.isEmpty() ? "EMPTY" : priced == 0 ? "UNAVAILABLE"
+                : priced < positions.size() ? "PARTIAL" : stale > 0 || unverified > 0 ? "UNVERIFIED" : "READY";
         return new PortfolioSummaryResponse(
                 portfolio.getId(),
                 portfolio.getName(),
@@ -44,6 +54,6 @@ public record PortfolioSummaryResponse(
                 totalUnrealizedPnl,
                 totalUnrealizedPnlPct,
                 portfolio.getCreatedAt(),
-                portfolio.getUpdatedAt());
+                portfolio.getUpdatedAt(), priced, positions.size() - priced, stale, unverified, status);
     }
 }

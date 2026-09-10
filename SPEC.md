@@ -66,6 +66,18 @@
 
 ## 4. F03 자료 품질
 
+### 2026-09-10 구현된 포트폴리오 가격 계약
+
+현재 추가 필드는 다음과 같다. 아래는 초기 가격 신뢰성 구현이며 뒤의 범용 자료 규격 전체가 구현된 것은 아니다.
+
+- 포지션: `priceSource` LIVE/CLOSE/CACHED/UNAVAILABLE, `priceProvider` FINNHUB/YFINANCE/UNKNOWN, `priceStatus` RECENT/STALE/UNVERIFIED/UNAVAILABLE, `priceAsOf`, `priceFetchedAt`, `priceSessionDate`.
+- FINNHUB 출처가 명시된 관측만 거래 시각을 인정한다. 조회 시점 대비 120초 이내는 RECENT, 그 이전은 STALE이다. 이것은 관측 경과시간이며 정규장 여부·거래 세션 최신성 보장은 아니다. 미래/잘못된 시각은 UNVERIFIED다.
+- REST yfinance fast_info에는 신뢰할 거래 시각이 없어 `priceAsOf=null`로 전달하고 수집 시각만 기록한다. 기존 출처 없는 Redis 값도 UNVERIFIED로 취급한다.
+- 기존 DB 일봉은 실제 세션 날짜(미국 동부)를 제공하되 관측/수집 시각·원천·보정 근거가 없어 UNVERIFIED다. 봉의 시작 시각을 종가 관측 시각으로 표시하지 않는다. 거래소 달력 및 기업행사 검증은 후속 작업이다.
+- 최신으로 인정된 틱 외에는 DB의 마지막 일봉을 조회한다. 시각 없는 캐시보다 일봉을 우선하고, 시각 있는 오래된 틱보다 더 최근 봉이 있으면 이를 선택한다. 단일/일괄 경로는 같은 정책이며 10일 이전 일봉도 날짜를 포함해 보인다.
+- 포트폴리오: `pricedPositionCount`, `unpricedPositionCount`, `stalePositionCount`, `unverifiedPositionCount`, `valuationStatus` READY/PARTIAL/UNVERIFIED/UNAVAILABLE/EMPTY. 일부 가격이 없으면 PARTIAL, 전부 없으면 UNAVAILABLE, 빈 포트폴리오는 EMPTY다. 평가 가능 전 종목이 최근 관측인 경우에만 READY이며 동일 시각 가격임을 뜻하지 않는다.
+- 기존 합계 필드는 가격이 있는 포지션의 값과 원가를 합산한다. UI는 누락 수·자료 상태를 함께 표시하고 부분 합계를 전체 총액이라고 부르지 않는다. 가격이 전혀 없으면 합계는 null이다.
+
 각 자료는 source,observedAt,fetchedAt,sessionDate,currency,priceBasis,methodVersion,coverage,status,warnings를 가진다. status는 READY/PARTIAL/STALE/UNAVAILABLE. 거래일 기준 최신 완료 세션과 비교하며 주말이라는 이유만으로 오래된 자료라고 판단하지 않는다.
 
 coverage에는 requestedSymbols,includedSymbols,excludedReasons,requestedRange,effectiveRange를 제공한다. 기업행사 보정 정책과 원천 버전이 불명확하면 분석 적합성을 표시한다. 비교 대상별 기간이 다르면 그 사실을 노출하거나 비교를 차단한다.

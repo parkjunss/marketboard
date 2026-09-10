@@ -34,5 +34,6 @@ async def rest_fallback_loop(symbols_provider) -> None:
                 continue
             if not price:
                 continue
-            await publish_quote(symbol, price, volume, now)
+            # fast_info gives no reliable trade timestamp. Never use polling time as trade time.
+            await publish_quote(symbol, price, volume, None, source="YFINANCE")
             state.last_tick_at[symbol] = now

@@ -49,7 +49,7 @@ class QuoteServiceTest {
         Symbol staleSymbol = symbolRepository.save(Symbol.builder().ticker("STALE").name("Stale Co").exchange("NASDAQ").priority(2).build());
 
         stringRedisTemplate.opsForHash().putAll("quote:LIVE",
-                Map.of("price", "123.45", "volume", "1000", "ts", Instant.now().toString()));
+                Map.of("price", "123.45", "volume", "1000", "ts", Instant.now().toString(), "source", "FINNHUB"));
 
         jdbcTemplate.update(
                 "INSERT INTO price_history (symbol_id, ts, open, high, low, close, volume, timeframe) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -57,8 +57,39 @@ class QuoteServiceTest {
 
         Map<String, ResolvedPrice> resolved = quoteService.resolvePrices(List.of("live", "stale", "missing"));
 
-        assertThat(resolved.get("LIVE")).isEqualTo(new ResolvedPrice(new BigDecimal("123.45"), true));
-        assertThat(resolved.get("STALE")).isEqualTo(new ResolvedPrice(new BigDecimal("50.0000"), false));
+        assertThat(resolved.get("LIVE").price()).isEqualByComparingTo("123.45");
+        assertThat(resolved.get("LIVE").status()).isEqualTo("RECENT");
+        assertThat(resolved.get("STALE").price()).isEqualByComparingTo("50.0000");
+        assertThat(resolved.get("STALE").status()).isEqualTo("UNVERIFIED");
+        assertThat(resolved.get("STALE").sessionDate()).isNotNull();
         assertThat(resolved).doesNotContainKey("MISSING");
+    }
+
+    @Test
+    void oldDailyHistoryRemainsVisibleAndSingleMatchesBulk() {
+        Symbol symbol = symbolRepository.save(Symbol.builder().ticker("OLD").name("Old Co").exchange("NASDAQ").priority(3).build());
+        Instant ts = Instant.now().minus(30, ChronoUnit.DAYS);
+        jdbcTemplate.update(
+                "INSERT INTO price_history (symbol_id, ts, open, high, low, close, volume, timeframe) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                symbol.getId(), ts, "50", "50", "50", "50", 100L, "1d");
+        ResolvedPrice single = quoteService.resolvePrice("old").orElseThrow();
+        assertThat(single).isEqualTo(quoteService.resolvePrices(List.of("OLD")).get("OLD"));
+        assertThat(single.status()).isEqualTo("UNVERIFIED");
+        assertThat(single.sessionDate()).isEqualTo(ts.atZone(java.time.ZoneId.of("America/New_York")).toLocalDate());
+        assertThat(single.asOf()).isNull();
+    }
+
+    @Test
+    void newerDailyBarWinsOverAnOldCachedTick() {
+        Symbol symbol = symbolRepository.save(Symbol.builder().ticker("LIVE").name("Live Co").exchange("NASDAQ").priority(1).build());
+        stringRedisTemplate.opsForHash().putAll("quote:LIVE", Map.of("price", "999", "volume", "1",
+                "source", "FINNHUB", "ts", Instant.now().minus(3, ChronoUnit.DAYS).toString()));
+        jdbcTemplate.update(
+                "INSERT INTO price_history (symbol_id, ts, open, high, low, close, volume, timeframe) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                symbol.getId(), Instant.now().minus(1, ChronoUnit.DAYS), "50", "50", "50", "50", 100L, "1d");
+        ResolvedPrice price = quoteService.resolvePrice("LIVE").orElseThrow();
+        assertThat(price.price()).isEqualByComparingTo("50");
+        assertThat(price.source()).isEqualTo("CLOSE");
+        assertThat(price.status()).isEqualTo("UNVERIFIED");
     }
 }

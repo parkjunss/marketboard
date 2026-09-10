@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import redis.asyncio as redis
 
@@ -15,8 +15,13 @@ def get_client() -> redis.Redis:
     return _client
 
 
-async def publish_quote(symbol: str, price: float, volume: float, ts: datetime) -> None:
+async def publish_quote(symbol: str, price: float, volume: float, ts: datetime | None, *, source: str = "FINNHUB") -> None:
     client = get_client()
-    payload = {"symbol": symbol, "price": price, "volume": volume, "ts": ts.isoformat()}
-    await client.hset(f"quote:{symbol}", mapping={"price": str(price), "volume": str(volume), "ts": ts.isoformat()})
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    observed_at = ts.isoformat() if ts is not None else None
+    payload = {"symbol": symbol, "price": price, "volume": volume, "ts": observed_at,
+               "source": source, "fetchedAt": fetched_at}
+    # Empty ts explicitly clears a previous tick's timestamp on a REST fallback update.
+    await client.hset(f"quote:{symbol}", mapping={"price": str(price), "volume": str(volume),
+                       "ts": observed_at or "", "source": source, "fetchedAt": fetched_at})
     await client.publish("quotes", json.dumps(payload))

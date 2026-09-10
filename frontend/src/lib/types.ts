@@ -318,7 +318,7 @@ export interface FinancialsResponse {
   kpis: FinancialsKpis;
 }
 
-export type PriceSource = 'LIVE' | 'CLOSE' | 'UNAVAILABLE';
+export type PriceSource = 'LIVE' | 'CLOSE' | 'CACHED' | 'UNAVAILABLE';
 
 export interface PortfolioSummaryResponse {
   id: number;
@@ -330,6 +330,11 @@ export interface PortfolioSummaryResponse {
   totalUnrealizedPnlPct: number | null;
   createdAt: string;
   updatedAt: string;
+  pricedPositionCount: number;
+  unpricedPositionCount: number;
+  stalePositionCount: number;
+  unverifiedPositionCount: number;
+  valuationStatus: 'EMPTY' | 'UNAVAILABLE' | 'PARTIAL' | 'UNVERIFIED' | 'READY';
 }
 
 export interface PortfolioPositionResponse {
@@ -345,4 +350,9 @@ export interface PortfolioPositionResponse {
   costBasis: number;
   unrealizedPnl: number | null;
   unrealizedPnlPct: number | null;
+  priceStatus: 'RECENT' | 'STALE' | 'UNVERIFIED' | 'UNAVAILABLE';
+  priceProvider: 'FINNHUB' | 'YFINANCE' | 'UNKNOWN';
+  priceAsOf: string | null;
+  priceFetchedAt: string | null;
+  priceSessionDate: string | null;
 }

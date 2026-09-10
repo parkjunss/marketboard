@@ -2,6 +2,8 @@ package org.juns.marketboardbackend.portfolio.dto;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.LocalDate;
 import org.juns.marketboardbackend.portfolio.PortfolioPosition;
 import org.juns.marketboardbackend.quote.ResolvedPrice;
 
@@ -17,7 +19,12 @@ public record PortfolioPositionResponse(
         BigDecimal marketValue,
         BigDecimal costBasis,
         BigDecimal unrealizedPnl,
-        BigDecimal unrealizedPnlPct) {
+        BigDecimal unrealizedPnlPct,
+        String priceStatus,
+        String priceProvider,
+        Instant priceAsOf,
+        Instant priceFetchedAt,
+        LocalDate priceSessionDate) {
 
     /** priceSource: LIVE (real-time WS tick), CLOSE (latest daily bar), or UNAVAILABLE (neither). */
     public static PortfolioPositionResponse from(PortfolioPosition position, ResolvedPrice resolvedPrice) {
@@ -26,7 +33,7 @@ public record PortfolioPositionResponse(
         BigDecimal costBasis = avgCost.multiply(quantity);
 
         BigDecimal currentPrice = resolvedPrice != null ? resolvedPrice.price() : null;
-        String priceSource = resolvedPrice == null ? "UNAVAILABLE" : resolvedPrice.isLive() ? "LIVE" : "CLOSE";
+        String priceSource = resolvedPrice == null ? "UNAVAILABLE" : resolvedPrice.source();
         BigDecimal marketValue = currentPrice != null ? currentPrice.multiply(quantity) : null;
         BigDecimal unrealizedPnl = marketValue != null ? marketValue.subtract(costBasis) : null;
         BigDecimal unrealizedPnlPct = unrealizedPnl != null && costBasis.signum() != 0
@@ -45,6 +52,11 @@ public record PortfolioPositionResponse(
                 marketValue,
                 costBasis,
                 unrealizedPnl,
-                unrealizedPnlPct);
+                unrealizedPnlPct,
+                resolvedPrice == null ? "UNAVAILABLE" : resolvedPrice.status(),
+                resolvedPrice == null ? "UNKNOWN" : resolvedPrice.provider(),
+                resolvedPrice == null ? null : resolvedPrice.asOf(),
+                resolvedPrice == null ? null : resolvedPrice.fetchedAt(),
+                resolvedPrice == null ? null : resolvedPrice.sessionDate());
     }
 }

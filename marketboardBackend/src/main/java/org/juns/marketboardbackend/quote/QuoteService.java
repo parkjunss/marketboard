@@ -2,7 +2,6 @@ package org.juns.marketboardbackend.quote;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -70,81 +69,81 @@ public class QuoteService {
                 .toList();
     }
 
-    /**
-     * Best-effort current price for tickers that may not be in the real-time WS set (e.g. an
-     * arbitrary portfolio position) — falls back to the latest daily close when no live tick exists.
-     */
+    /** Single and bulk callers use the same source selection and metadata policy. */
     public Optional<ResolvedPrice> resolvePrice(String ticker) {
-        Optional<QuoteResponse> live = readQuote(ticker);
-        if (live.isPresent() && live.get().price() != null) {
-            return Optional.of(new ResolvedPrice(live.get().price(), true));
-        }
-        return symbolRepository
-                .findByTickerIgnoreCase(ticker)
-                .flatMap(symbol -> priceHistoryRepository.findFirstBySymbol_IdAndTimeframeOrderByTsDesc(symbol.getId(), "1d"))
-                .map(candle -> new ResolvedPrice(candle.getClose(), false));
+        return Optional.ofNullable(resolvePrices(List.of(ticker)).get(ticker.toUpperCase(java.util.Locale.ROOT)));
     }
 
-    /**
-     * Bulk version of {@link #resolvePrice(String)} for a whole portfolio's positions at once --
-     * avoids the DB fallback's symbol + price-history lookups running once per position. The
-     * per-ticker Redis read stays as-is (it's an in-memory HGETALL, not a relational query, and a
-     * portfolio's position count is small enough that pipelining it wouldn't be worth the added
-     * complexity); only the DB fallback path for tickers with no live tick is batched.
-     *
-     * @return a map containing only the tickers a price could be resolved for -- missing tickers
-     *     mean the same "no price available" case {@link #resolvePrice(String)} signals with an
-     *     empty Optional.
-     */
     public Map<String, ResolvedPrice> resolvePrices(Collection<String> tickers) {
-        Set<String> normalizedTickers = tickers.stream().map(String::toUpperCase).collect(Collectors.toCollection(LinkedHashSet::new));
-
+        Set<String> normalized = tickers.stream().map(t -> t.toUpperCase(java.util.Locale.ROOT))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<String, ResolvedPrice> resolved = new HashMap<>();
-        List<String> missing = new ArrayList<>();
-        for (String ticker : normalizedTickers) {
-            Optional<QuoteResponse> live = readQuote(ticker);
-            if (live.isPresent() && live.get().price() != null) {
-                resolved.put(ticker, new ResolvedPrice(live.get().price(), true));
-            } else {
-                missing.add(ticker);
+        List<String> needsHistory = new ArrayList<>();
+        Instant now = Instant.now();
+        for (String ticker : normalized) {
+            Optional<ResolvedPrice> cached = readResolvedQuote(ticker, now);
+            cached.ifPresent(price -> resolved.put(ticker, price));
+            if (cached.isEmpty() || !cached.get().isLive()) needsHistory.add(ticker);
+        }
+        if (needsHistory.isEmpty()) return resolved;
+        Map<Long, String> tickerById = symbolRepository.findByTickerIn(needsHistory).stream()
+                .collect(Collectors.toMap(Symbol::getId, Symbol::getTicker));
+        if (tickerById.isEmpty()) return resolved;
+        for (PriceHistory candle : priceHistoryRepository.findLatestDailyBySymbolIds(tickerById.keySet())) {
+            if (candle.getClose() == null || candle.getClose().signum() <= 0 || candle.getTs().isAfter(now)) continue;
+            String ticker = tickerById.get(candle.getSymbol().getId()).toUpperCase(java.util.Locale.ROOT);
+            ResolvedPrice cached = resolved.get(ticker);
+            if (cached == null || cached.asOf() == null || candle.getTs().isAfter(cached.asOf())) {
+                // Daily ts is the bar's session timestamp, NOT its closing observation time.
+                // Legacy history has no provider/adjustment metadata or exchange calendar check.
+                resolved.put(ticker, new ResolvedPrice(candle.getClose(), "CLOSE", "UNKNOWN", null, null,
+                        candle.getTs().atZone(java.time.ZoneId.of("America/New_York")).toLocalDate(), "UNVERIFIED"));
             }
         }
-        if (missing.isEmpty()) {
-            return resolved;
-        }
-
-        List<Symbol> symbols = symbolRepository.findByTickerIn(missing);
-        Map<Long, String> tickerBySymbolId = symbols.stream().collect(Collectors.toMap(Symbol::getId, Symbol::getTicker));
-        if (tickerBySymbolId.isEmpty()) {
-            return resolved;
-        }
-
-        Map<Long, PriceHistory> latestCandleBySymbolId = priceHistoryRepository
-                .findBySymbol_IdInAndTimeframeAndTsGreaterThanEqual(
-                        tickerBySymbolId.keySet(), "1d", Instant.now().minus(10, ChronoUnit.DAYS))
-                .stream()
-                .collect(Collectors.toMap(
-                        candle -> candle.getSymbol().getId(),
-                        candle -> candle,
-                        (a, b) -> a.getTs().isAfter(b.getTs()) ? a : b));
-
-        latestCandleBySymbolId.forEach((symbolId, candle) -> {
-            String ticker = tickerBySymbolId.get(symbolId);
-            resolved.put(ticker, new ResolvedPrice(candle.getClose(), false));
-        });
         return resolved;
+    }
+
+    private Optional<ResolvedPrice> readResolvedQuote(String ticker, Instant now) {
+        Map<Object, Object> fields = redisTemplate.opsForHash().entries(QUOTE_KEY_PREFIX + ticker);
+        if (fields.isEmpty()) return Optional.empty();
+        try {
+            BigDecimal price = new BigDecimal(String.valueOf(fields.get("price")));
+            if (price.signum() <= 0) return Optional.empty();
+            String provider = String.valueOf(fields.getOrDefault("source", "UNKNOWN"));
+            if (!Set.of("FINNHUB", "YFINANCE").contains(provider)) provider = "UNKNOWN";
+            Instant fetchedAt = parseInstant(fields.get("fetchedAt"));
+            // Legacy and REST values may carry a fetch time in ts; only explicit Finnhub is trusted.
+            Instant observedAt = "FINNHUB".equals(provider) ? parseInstant(fields.get("ts")) : null;
+            if (observedAt != null && observedAt.isAfter(now)) observedAt = null;
+            String status = observedAt == null ? "UNVERIFIED"
+                    : observedAt.isBefore(now.minusSeconds(120)) ? "STALE" : "RECENT";
+            return Optional.of(new ResolvedPrice(price, "FINNHUB".equals(provider) ? "LIVE" : "CACHED",
+                    provider, observedAt, fetchedAt, null, status));
+        } catch (IllegalArgumentException ex) {
+            return Optional.empty();
+        }
+    }
+
+    private static Instant parseInstant(Object value) {
+        if (value == null || value.toString().isBlank()) return null;
+        try {
+            return Instant.parse(value.toString());
+        } catch (java.time.format.DateTimeParseException ex) {
+            return null;
+        }
     }
 
     private Optional<QuoteResponse> readQuote(String ticker) {
         Map<Object, Object> fields = redisTemplate.opsForHash().entries(QUOTE_KEY_PREFIX + ticker);
-        if (fields.isEmpty()) {
+        if (fields.isEmpty()) return Optional.empty();
+        try {
+            BigDecimal price = new BigDecimal(String.valueOf(fields.get("price")));
+            if (price.signum() <= 0) return Optional.empty();
+            return Optional.of(new QuoteResponse(ticker, null, price,
+                    new BigDecimal(String.valueOf(fields.getOrDefault("volume", "0"))),
+                    "FINNHUB".equals(fields.get("source")) ? parseInstant(fields.get("ts")) : null));
+        } catch (IllegalArgumentException ex) {
             return Optional.empty();
         }
-        return Optional.of(new QuoteResponse(
-                ticker,
-                null,
-                new BigDecimal((String) fields.get("price")),
-                new BigDecimal((String) fields.get("volume")),
-                Instant.parse((String) fields.get("ts"))));
     }
 }

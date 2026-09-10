@@ -17,6 +17,20 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleBadInput(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(IdempotencyService.IdempotencyConflictException.class)
+    public ResponseEntity<ErrorResponse> handleIdempotencyConflict(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(org.springframework.dao.OptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleStaleEdit(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("다른 요청이 보유 정보를 변경했습니다. 최신 자료를 다시 조회하고 수정하세요."));
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {

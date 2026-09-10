@@ -21,5 +21,6 @@
 .breadth { padding: 22px; margin-top: 14px; border: 1px solid #303d4d; border-radius: 10px; }
 .badge { display: inline-block; font-size: 12px; color: #f0d4a0; border: 1px solid #6b5a3e; padding: 2px 8px; border-radius: 5px; }
 .page footer { margin-top: 32px; }
+.page select { max-width: 100%; background: #18212d; color: #e7eaf0; border: 1px solid #526174; border-radius: 6px; padding: 8px; }
 @media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .page { padding: 24px 16px; } .grid { grid-template-columns: 1fr; } .toolbar span { width: 100%; } .value { font-size: 25px; } }

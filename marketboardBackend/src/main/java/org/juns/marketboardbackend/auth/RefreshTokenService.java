@@ -1,6 +1,8 @@
 package org.juns.marketboardbackend.auth;
 
 import java.time.Duration;
+import java.util.List;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.juns.marketboardbackend.security.JwtTokenProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -9,6 +11,11 @@ import org.springframework.stereotype.Service;
 public class RefreshTokenService {
 
     private static final String KEY_PREFIX = "refresh:";
+    private static final DefaultRedisScript<Long> ROTATE = new DefaultRedisScript<>("""
+            if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+            redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+            return 1
+            """, Long.class);
 
     private final StringRedisTemplate redisTemplate;
     private final JwtTokenProvider jwtTokenProvider;
@@ -25,9 +32,9 @@ public class RefreshTokenService {
                 Duration.ofMillis(jwtTokenProvider.getRefreshTokenExpirationMs()));
     }
 
-    public boolean matches(Long userId, String refreshToken) {
-        String stored = redisTemplate.opsForValue().get(key(userId));
-        return stored != null && stored.equals(refreshToken);
+    public boolean rotate(Long userId, String expectedToken, String replacementToken) {
+        return Long.valueOf(1).equals(redisTemplate.execute(ROTATE, List.of(key(userId)),
+                expectedToken, replacementToken, Long.toString(jwtTokenProvider.getRefreshTokenExpirationMs())));
     }
 
     public void revoke(Long userId) {

@@ -46,6 +46,16 @@ public class PortfolioService {
                 .toList();
     }
 
+    public record ReviewEvidence(PortfolioSummaryResponse summary, List<PortfolioPositionResponse> positions) {}
+
+    @Transactional(readOnly = true)
+    public List<ReviewEvidence> getReviewEvidence(Long userId) {
+        return portfolioRepository.findByUser_IdOrderByCreatedAtAsc(userId).stream().map(portfolio -> {
+            var positions = buildPositionResponses(portfolio.getId());
+            return new ReviewEvidence(PortfolioSummaryResponse.of(portfolio, positions), positions);
+        }).toList();
+    }
+
     @Transactional
     public PortfolioSummaryResponse createPortfolio(Long userId, String name) {
         User user = userRepository.getReferenceById(userId);
@@ -96,7 +106,11 @@ public class PortfolioService {
         PortfolioPosition position = portfolioPositionRepository
                 .findByIdAndPortfolio_Id(positionId, portfolioId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio position not found: " + positionId));
+        if (request.version() == null || position.getVersion() != request.version()) {
+            throw new org.springframework.orm.ObjectOptimisticLockingFailureException(PortfolioPosition.class, positionId);
+        }
         position.update(request.quantity(), request.avgCost());
+        portfolioPositionRepository.flush();
         return PortfolioPositionResponse.from(
                 position, quoteService.resolvePrice(position.getSymbol().getTicker()).orElse(null));
     }

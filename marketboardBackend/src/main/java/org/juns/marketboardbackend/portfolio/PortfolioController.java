@@ -26,9 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class PortfolioController {
 
     private final PortfolioService portfolioService;
+    private final org.juns.marketboardbackend.common.IdempotencyService idempotency;
 
-    public PortfolioController(PortfolioService portfolioService) {
+    public PortfolioController(PortfolioService portfolioService, org.juns.marketboardbackend.common.IdempotencyService idempotency) {
         this.portfolioService = portfolioService;
+        this.idempotency = idempotency;
     }
 
     @GetMapping
@@ -38,8 +40,10 @@ public class PortfolioController {
 
     @PostMapping
     public ResponseEntity<PortfolioSummaryResponse> createPortfolio(
-            @AuthenticationPrincipal AuthenticatedUser principal, @Valid @RequestBody PortfolioCreateRequest request) {
-        PortfolioSummaryResponse response = portfolioService.createPortfolio(principal.id(), request.name());
+            @AuthenticationPrincipal AuthenticatedUser principal, @Valid @RequestBody PortfolioCreateRequest request,
+            @org.springframework.web.bind.annotation.RequestHeader("Idempotency-Key") String key) {
+        PortfolioSummaryResponse response = idempotency.execute(principal.id(), "portfolio-create", key, request,
+                PortfolioSummaryResponse.class, () -> portfolioService.createPortfolio(principal.id(), request.name()));
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

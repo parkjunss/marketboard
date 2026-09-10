@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import * as api from './api';
 import { ApiError, request } from './api';
 import { decodeJwt } from './jwt';
-import type { Role } from './types';
+import type { Role, TokenResponse } from './types';
 
 const REFRESH_TOKEN_STORAGE_KEY = 'marketboard.refreshToken';
 
@@ -15,6 +15,7 @@ export interface AuthUser {
 }
 
 interface RequestOptions {
+  headers?: Record<string, string>;
   method?: string;
   body?: unknown;
 }
@@ -51,6 +52,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isInitializing, setIsInitializing] = useState(true);
   const accessTokenRef = useRef<string | null>(null);
   const refreshTokenRef = useRef<string | null>(null);
+  const sessionVersion = useRef(0);
+  const refreshFlight = useRef<{ token: string; version: number; promise: Promise<TokenResponse> } | null>(null);
 
   const applyTokens = useCallback((accessToken: string, refreshToken: string) => {
     accessTokenRef.current = accessToken;
@@ -61,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearTokens = useCallback(() => {
+    sessionVersion.current++;
     accessTokenRef.current = null;
     refreshTokenRef.current = null;
     localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
@@ -68,14 +72,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAccessToken(null);
   }, []);
 
+  const refreshSession = useCallback((token: string) => {
+    const version = sessionVersion.current;
+    const existing = refreshFlight.current;
+    if (existing?.token === token && existing.version === version) return existing.promise;
+    const promise = api.refresh(token).then(tokens => {
+      if (sessionVersion.current !== version) throw new Error('Session changed');
+      applyTokens(tokens.accessToken, tokens.refreshToken);
+      return tokens;
+    }).catch(error => {
+      if (sessionVersion.current === version && error instanceof ApiError && error.status === 401) clearTokens();
+      throw error;
+    }).finally(() => {
+      if (refreshFlight.current?.promise === promise) refreshFlight.current = null;
+    });
+    refreshFlight.current = { token, version, promise };
+    return promise;
+  }, [applyTokens, clearTokens]);
+
   useEffect(() => {
     let cancelled = false;
     const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
     const resolveSession = storedRefreshToken
-      ? api
-          .refresh(storedRefreshToken)
-          .then((tokens) => applyTokens(tokens.accessToken, tokens.refreshToken))
-          .catch(() => clearTokens())
+      ? refreshSession(storedRefreshToken).catch(() => undefined)
       : Promise.resolve();
     resolveSession.finally(() => {
       if (!cancelled) setIsInitializing(false);
@@ -83,12 +102,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [applyTokens, clearTokens]);
+  }, [refreshSession]);
 
   const login = useCallback(
     async (email: string, password: string) => {
+      const version = ++sessionVersion.current;
       const tokens = await api.login({ email, password });
-      applyTokens(tokens.accessToken, tokens.refreshToken);
+      if (sessionVersion.current === version) applyTokens(tokens.accessToken, tokens.refreshToken);
     },
     [applyTokens],
   );
@@ -110,23 +130,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const authFetch = useCallback(
     async <T,>(path: string, options: RequestOptions = {}): Promise<T> => {
+      const version = sessionVersion.current;
+      const sentToken = accessTokenRef.current;
       try {
-        return await request<T>(path, { ...options, accessToken: accessTokenRef.current });
+        return await request<T>(path, { ...options, accessToken: sentToken });
       } catch (err) {
-        if (err instanceof ApiError && err.status === 401 && refreshTokenRef.current) {
-          try {
-            const tokens = await api.refresh(refreshTokenRef.current);
-            applyTokens(tokens.accessToken, tokens.refreshToken);
-            return await request<T>(path, { ...options, accessToken: tokens.accessToken });
-          } catch {
-            clearTokens();
-            throw err;
-          }
+        if (sessionVersion.current === version && err instanceof ApiError && err.status === 401 && refreshTokenRef.current) {
+          const token = accessTokenRef.current !== sentToken
+            ? accessTokenRef.current
+            : (await refreshSession(refreshTokenRef.current)).accessToken;
+          if (sessionVersion.current !== version) throw err;
+          return request<T>(path, { ...options, accessToken: token });
         }
         throw err;
       }
     },
-    [applyTokens, clearTokens],
+    [refreshSession],
   );
 
   const value = useMemo<AuthContextValue>(

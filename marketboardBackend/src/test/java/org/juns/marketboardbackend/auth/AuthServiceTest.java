@@ -147,14 +147,16 @@ class AuthServiceTest {
     void refresh_validToken_returnsNewTokenPair() {
         User user = activeUser(1L);
         String refreshToken = jwtTokenProvider.generateRefreshToken(1L, user.getEmail(), user.getRole());
-        when(refreshTokenService.matches(1L, refreshToken)).thenReturn(true);
+        when(refreshTokenService.rotate(eq(1L), eq(refreshToken), anyString())).thenReturn(true);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         TokenResponse response = authService.refresh(refreshToken);
 
         assertThat(response.accessToken()).isNotBlank();
         assertThat(response.refreshToken()).isNotBlank();
-        verify(refreshTokenService).store(eq(1L), eq(response.refreshToken()));
+        assertThat(response.refreshToken()).isNotEqualTo(refreshToken);
+        verify(refreshTokenService).rotate(1L, refreshToken, response.refreshToken());
+        verify(refreshTokenService, never()).store(any(), anyString());
     }
 
     @Test
@@ -174,11 +176,11 @@ class AuthServiceTest {
     @Test
     void refresh_notMatchingStoredToken_throwsInvalidToken() {
         String refreshToken = jwtTokenProvider.generateRefreshToken(1L, "user@example.com", Role.USER);
-        when(refreshTokenService.matches(1L, refreshToken)).thenReturn(false);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser(1L)));
 
         assertThatThrownBy(() -> authService.refresh(refreshToken))
                 .isInstanceOf(InvalidTokenException.class);
-        verify(userRepository, never()).findById(any());
+        verify(refreshTokenService, never()).store(any(), anyString());
     }
 
     @Test
@@ -186,7 +188,6 @@ class AuthServiceTest {
         User user = activeUser(1L);
         ReflectionTestUtils.setField(user, "status", UserStatus.SUSPENDED);
         String refreshToken = jwtTokenProvider.generateRefreshToken(1L, user.getEmail(), user.getRole());
-        when(refreshTokenService.matches(1L, refreshToken)).thenReturn(true);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         assertThatThrownBy(() -> authService.refresh(refreshToken))

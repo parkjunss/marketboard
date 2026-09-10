@@ -10,7 +10,7 @@ export function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isInitializing && user) {
-      router.replace('/stock-list');
+      router.replace('/review');
     }
   }, [isInitializing, user, router]);
 

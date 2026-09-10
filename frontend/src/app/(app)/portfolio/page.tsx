@@ -71,12 +71,35 @@ export default function PortfolioPage() {
   const { authFetch } = useAuth();
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editing, setEditing] = useState<{ portfolioId: number; row: PortfolioPositionResponse } | null>(null);
+  const [editQuantity, setEditQuantity] = useState<number | null>(null);
+  const [editCost, setEditCost] = useState<number | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function saveEdit() {
+    if (!editing || editQuantity == null || editCost == null || isSaving) return;
+    setIsSaving(true);
+    setEditError(null);
+    try {
+      await api.updatePortfolioPosition(authFetch, editing.portfolioId, editing.row.id,
+        { quantity: editQuantity, avgCost: editCost, version: editing.row.version });
+      const id = editing.portfolioId;
+      setEditing(null);
+      await Promise.all([refreshPositions(id), refreshPortfolios()]).catch(() => {
+        setLoadError('보유 수정은 저장됐지만 최신 평가 조회에 실패했습니다. 페이지를 새로고침하세요.');
+      });
+    } catch (error) {
+      setEditError(error instanceof ApiError ? error.message : '저장 결과를 확인하지 못했습니다. 최신 자료를 조회하세요.');
+    } finally { setIsSaving(false); }
+  }
 
   const [portfolios, setPortfolios] = useState<PortfolioSummaryResponse[] | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [positions, setPositions] = useState<{ key: number; data: PortfolioPositionResponse[] } | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [newPortfolioName, setNewPortfolioName] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const [ticker, setTicker] = useState('');
   const [quantity, setQuantity] = useState<number | null>(null);
@@ -137,11 +160,17 @@ export default function PortfolioPage() {
 
   async function handleCreatePortfolio() {
     if (!newPortfolioName.trim()) return;
-    const created = await api.createPortfolio(authFetch, newPortfolioName.trim());
-    setNewPortfolioName('');
-    setIsCreating(false);
-    await refreshPortfolios();
-    setSelectedId(created.id);
+    setCreateError(null);
+    try {
+      const created = await api.createPortfolio(authFetch, newPortfolioName.trim());
+      setNewPortfolioName(''); setIsCreating(false);
+      setSelectedId(created.id);
+      await refreshPortfolios().catch(() => {
+        setLoadError('포트폴리오는 생성됐지만 목록 조회에 실패했습니다. 페이지를 새로고침하세요.');
+      });
+    } catch (error) {
+      setCreateError(error instanceof ApiError ? error.message : '생성 결과를 확인하지 못했습니다. 같은 이름으로 다시 시도하면 기존 요청을 확인합니다.');
+    }
   }
 
   async function handleDeletePortfolio(portfolioId: number) {
@@ -249,18 +278,39 @@ export default function PortfolioPage() {
       header: '',
       width: proportional(0.4),
       renderCell: (row) => (
+        <HStack gap={1}>
+        <Button isDisabled={isSaving} variant="secondary" size="sm" label="수정" onClick={() => {
+          if (effectiveSelectedId == null) return;
+          setEditing({ portfolioId: effectiveSelectedId, row });
+          setEditQuantity(row.quantity); setEditCost(row.avgCost); setEditError(null);
+        }} />
         <IconButton
           icon={<Icon icon={TrashIcon} size="sm" />}
           label={`${row.ticker} 포지션 삭제`}
           variant="ghost"
           clickAction={() => setDeleteTarget({ type: 'position', positionId: row.id, ticker: row.ticker })}
         />
+        </HStack>
       ),
     },
   ];
 
   return (
     <VStack gap={0}>
+      {createError && <Banner status="error" title="생성 확인 필요" description={createError} />}
+      {editing && <Section padding={4} dividers={['bottom']}><VStack gap={2}>
+        <Heading level={4}>{editing.row.ticker} 보유 수정 · 버전 {editing.row.version}</Heading>
+        <NumberInput label="보유 수량" value={editQuantity} onChange={setEditQuantity} min={0.000001} />
+        <NumberInput label="평단가" value={editCost} onChange={setEditCost} min={0} />
+        {editError && <Banner status="error" title="수정 확인 필요" description={editError} />}
+        <HStack gap={2}>
+          <Button isDisabled={isSaving} label={isSaving ? '저장 중…' : '변경 저장'} clickAction={saveEdit} />
+          <Button isDisabled={isSaving} variant="secondary" label="최신 조회 후 다시 편집" clickAction={async () => {
+            await refreshPositions(editing.portfolioId); setEditing(null);
+          }} />
+          <Button isDisabled={isSaving} variant="secondary" label="취소" onClick={() => setEditing(null)} />
+        </HStack>
+      </VStack></Section>}
       <Section padding={4} dividers={['bottom']}>
         <VStack gap={1}>
           <Heading level={3}>포트폴리오</Heading>
@@ -354,6 +404,7 @@ export default function PortfolioPage() {
         </Section>
       ) : selectedPortfolio ? (
         <VStack gap={0}>
+      {createError && <Banner status="error" title="생성 확인 필요" description={createError} />}
           <Section padding={4} dividers={['bottom']}>
             <HStack justify="between" align="center" wrap="wrap">
               <Grid columns={4} gap={3}>

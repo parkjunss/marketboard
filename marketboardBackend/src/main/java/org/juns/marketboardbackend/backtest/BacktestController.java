@@ -18,14 +18,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class BacktestController {
 
     private final BacktestService backtestService;
+    private final org.juns.marketboardbackend.common.IdempotencyService idempotency;
 
-    public BacktestController(BacktestService backtestService) {
+    public BacktestController(BacktestService backtestService, org.juns.marketboardbackend.common.IdempotencyService idempotency) {
         this.backtestService = backtestService;
+        this.idempotency = idempotency;
     }
 
     @PostMapping
-    public BacktestRunResponse run(@AuthenticationPrincipal AuthenticatedUser principal, @Valid @RequestBody BacktestRunRequest request) {
-        return backtestService.run(principal.id(), request);
+    public BacktestRunResponse run(@AuthenticationPrincipal AuthenticatedUser principal, @Valid @RequestBody BacktestRunRequest request,
+            @org.springframework.web.bind.annotation.RequestHeader("Idempotency-Key") String key) {
+        return idempotency.execute(principal.id(), "backtest-run", key, request,
+                BacktestRunResponse.class, () -> backtestService.run(principal.id(), request));
     }
 
     @GetMapping

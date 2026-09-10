@@ -24,7 +24,8 @@ public record PortfolioPositionResponse(
         String priceProvider,
         Instant priceAsOf,
         Instant priceFetchedAt,
-        LocalDate priceSessionDate) {
+        LocalDate priceSessionDate,
+        long version) {
 
     /** priceSource: LIVE (real-time WS tick), CLOSE (latest daily bar), or UNAVAILABLE (neither). */
     public static PortfolioPositionResponse from(PortfolioPosition position, ResolvedPrice resolvedPrice) {
@@ -57,6 +58,6 @@ public record PortfolioPositionResponse(
                 resolvedPrice == null ? "UNKNOWN" : resolvedPrice.provider(),
                 resolvedPrice == null ? null : resolvedPrice.asOf(),
                 resolvedPrice == null ? null : resolvedPrice.fetchedAt(),
-                resolvedPrice == null ? null : resolvedPrice.sessionDate());
+                resolvedPrice == null ? null : resolvedPrice.sessionDate(), position.getVersion());
     }
 }

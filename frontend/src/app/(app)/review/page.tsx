@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { getMarketIndexHistory, getMarketBreadth, getPortfolios } from '@/lib/api';
+import { getMarketIndexHistory, getMarketBreadth, getPortfolios, createReview, getReviews, getReview } from '@/lib/api';
+import type { ReviewDetail, ReviewSummary, ReviewResource } from '@/lib/types';
 import type { CandleResponse, MarketBreadthResponse, PortfolioSummaryResponse } from '@/lib/types';
 import { reviewChange } from '@/lib/investment-review';
 import styles from './review.module.css';
@@ -19,6 +20,8 @@ const indices = [
 type Resource<T> = { data: T; error?: never } | { data?: never; error: string };
 const quality = { EMPTY: '보유 없음', UNAVAILABLE: '평가 불가', PARTIAL: '부분 평가', UNVERIFIED: '품질 확인 필요', READY: '가격 관측 양호' };
 const number = (value: number | null) => value === null ? '—' : value.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+const restored = <T,>(resource: ReviewResource<T>): Resource<T> => resource.data === null
+  ? { error: resource.error ?? '저장 당시 자료 없음' } : { data: resource.data };
 
 export default function ReviewPage() {
   const { authFetch } = useAuth();
@@ -27,12 +30,43 @@ export default function ReviewPage() {
   const [histories, setHistories] = useState<Record<string, Resource<CandleResponse[]>>>({});
   const [breadth, setBreadth] = useState<Resource<MarketBreadthResponse> | null>(null);
   const [portfolios, setPortfolios] = useState<Resource<PortfolioSummaryResponse[]> | null>(null);
+  const [saved, setSaved] = useState<ReviewDetail | null>(null);
+  const [records, setRecords] = useState<ReviewSummary[]>([]);
+  const [recordError, setRecordError] = useState<string | null>(null);
+  const [recordBusy, setRecordBusy] = useState(false);
+  const generation = useRef(0);
 
   useEffect(() => {
     let active = true;
+    getReviews(authFetch).then(rows => { if (active) setRecords(rows); })
+      .catch(() => { if (active) setRecordError('저장 기록 목록을 불러오지 못했습니다.'); });
+    return () => { active = false; };
+  }, [authFetch]);
+
+  async function openRecord(id?: number) {
+    if (recordBusy) return;
+    setRecordBusy(true); setRecordError(null);
+    try {
+      const detail = id === undefined ? await createReview(authFetch, period) : await getReview(authFetch, id);
+      if (detail.payload.schemaVersion !== 1 || detail.payload.calculationVersion !== 'observed-bars-v1') {
+        throw new Error('이 기록은 현재 화면에서 지원하지 않는 계산 버전입니다.');
+      }
+      generation.current++;
+      setSaved(detail); setPeriod(detail.period);
+      setHistories(Object.fromEntries(Object.entries(detail.payload.histories).map(([key, value]) => [key, restored(value)])));
+      setBreadth(restored(detail.payload.breadth)); setPortfolios(restored(detail.payload.portfolios));
+      setRecords(previous => [{ id: detail.id, period: detail.period, createdAt: detail.createdAt }, ...previous.filter(row => row.id !== detail.id)].sort((a, b) => b.id - a.id).slice(0, 50));
+    } catch (error) { setRecordError(error instanceof Error ? error.message : '점검 기록 처리에 실패했습니다.'); }
+    finally { setRecordBusy(false); }
+  }
+
+  useEffect(() => {
+    if (saved) return;
+    let active = true;
+    const current = generation.current;
     async function read<T>(request: Promise<T>, accept: (result: Resource<T>) => void) {
-      try { const data = await request; if (active) accept({ data }); }
-      catch { if (active) accept({ error: '자료를 불러오지 못했습니다. 다시 조회해 주세요.' }); }
+      try { const data = await request; if (active && current === generation.current) accept({ data }); }
+      catch { if (active && current === generation.current) accept({ error: '자료를 불러오지 못했습니다. 다시 조회해 주세요.' }); }
     }
     for (const index of indices) {
       void read(getMarketIndexHistory(authFetch, index.slug), result => setHistories(previous => ({ ...previous, [index.slug]: result })));
@@ -40,7 +74,7 @@ export default function ReviewPage() {
     void read(getMarketBreadth(authFetch), setBreadth);
     void read(getPortfolios(authFetch), setPortfolios);
     return () => { active = false; };
-  }, [authFetch, revision]);
+  }, [authFetch, revision, saved]);
 
   const loading = !portfolios || !breadth || indices.some(index => !histories[index.slug]);
   const incomplete = portfolios?.data?.filter(portfolio => portfolio.valuationStatus !== 'READY' && portfolio.valuationStatus !== 'EMPTY') ?? [];
@@ -49,14 +83,28 @@ export default function ReviewPage() {
     <main className={styles.page}>
       <header className={styles.header}>
         <div><p className={styles.eyebrow}>INVESTMENT REVIEW</p><h1>투자 점검</h1><p>시장 변화를 읽고, 보유 자료를 확인한 뒤 판단하세요.</p></div>
-        <button disabled={loading} onClick={() => { setHistories({}); setBreadth(null); setPortfolios(null); setRevision(value => value + 1); }}>{loading ? '조회 중…' : '다시 조회'}</button>
+        <button disabled={recordBusy} onClick={() => { generation.current++; setSaved(null); setHistories({}); setBreadth(null); setPortfolios(null); setRevision(value => value + 1); }}>{saved ? '현재 자료로 돌아가기' : loading ? '조회 다시 시작' : '다시 조회'}</button>
       </header>
 
       <div className={styles.toolbar} aria-label="점검 주기">
-        <button aria-pressed={period === 5} onClick={() => setPeriod(5)}>주간 점검</button>
-        <button aria-pressed={period === 21} onClick={() => setPeriod(21)}>월간 점검</button>
+        <button disabled={!!saved || recordBusy} aria-pressed={period === 5} onClick={() => setPeriod(5)}>주간 점검</button>
+        <button disabled={!!saved || recordBusy} aria-pressed={period === 21} onClick={() => setPeriod(21)}>월간 점검</button>
         <span>최근 {period}개 일봉 간격 비교 · 일정 설정과 별개</span>
       </div>
+
+      <section className={styles.breadth} aria-label="점검 기록">
+        <h2>{saved ? `저장된 점검 #${saved.id}` : '점검 근거 보관'}</h2>
+        <p className={styles.caption}>{saved ? `수집 ${saved.payload.startedAt} → ${saved.payload.capturedAt} · 저장 ${saved.createdAt} · 계산 ${saved.payload.calculationVersion}` : '서버가 자료를 새로 조회해 근거와 조회 실패 내역을 저장합니다. 현재 표시값과 다를 수 있습니다.'}</p>
+        <div className={styles.toolbar}>
+          <button disabled={recordBusy || !!saved} onClick={() => void openRecord()}>{recordBusy ? '처리 중…' : '새 자료로 점검 저장'}</button>
+          <label>최근 저장 기록 (최대 50개) <select disabled={recordBusy} value={saved?.id ?? ''} onChange={event => { if (event.target.value) void openRecord(Number(event.target.value)); }}>
+            <option value="">기록 선택</option>
+            {records.map(row => <option key={row.id} value={row.id}>#{row.id} · {row.period === 5 ? '주간' : '월간'} · {new Date(row.createdAt).toLocaleString('ko-KR')}</option>)}
+          </select></label>
+        </div>
+        {recordError && <p role="alert">{recordError}</p>}
+        {saved && <p>저장 당시 근거를 표시하고 있습니다. 자료 누락도 그대로 보존하며, 동일 시점의 시장 전체를 보장하지 않습니다.</p>}
+      </section>
 
       <section className={styles.notice} aria-labelledby="attention-title">
         <p className={styles.eyebrow}>먼저 확인할 사항</p><h2 id="attention-title">전략 규칙을 연결하기 전입니다</h2>
@@ -92,7 +140,7 @@ export default function ReviewPage() {
       </section>
 
       <section aria-labelledby="portfolio-title">
-        <div className={styles.sectionHead}><div><p className={styles.eyebrow}>02 / 보유 자료</p><h2 id="portfolio-title">평가 금액보다 자료 상태부터</h2></div><Link href="/portfolio">보유·가격 근거 확인 →</Link></div>
+        <div className={styles.sectionHead}><div><p className={styles.eyebrow}>02 / 보유 자료</p><h2 id="portfolio-title">평가 금액보다 자료 상태부터</h2></div><Link href="/portfolio">현재 보유·가격 확인 →</Link></div>
         {!portfolios ? <p>포트폴리오 조회 중…</p> : portfolios.data === undefined ? <p role="status">{portfolios.error}</p> : portfolios.data.length === 0 ? <div className={styles.card}><h3>등록한 포트폴리오가 없습니다</h3><p>보유 종목과 수량을 등록하면 가격 누락과 평가 범위를 확인할 수 있습니다.</p><Link href="/portfolio">포트폴리오 등록 →</Link></div> :
           <div className={styles.grid}>{portfolios.data.map(portfolio => <article key={portfolio.id} className={styles.card}>
             <span className={styles.badge}>{quality[portfolio.valuationStatus]}</span><h3>{portfolio.name}</h3>
@@ -100,6 +148,9 @@ export default function ReviewPage() {
             <p>가격 확인 {portfolio.pricedPositionCount} / {portfolio.positionCount}종목</p>
             <p className={styles.caption}>가격 누락 {portfolio.unpricedPositionCount} · 오래된 관측 {portfolio.stalePositionCount} · 미검증 {portfolio.unverifiedPositionCount}</p>
             <p className={styles.caption}>통화·환산 기준은 현재 API에 없어 합산 금액의 투자 판단 활용 전 확인이 필요합니다.</p>
+            {saved && <details><summary>저장 당시 보유 근거</summary>{(saved.payload.positions[String(portfolio.id)] ?? []).map(position => <p key={position.id} className={styles.caption}>
+              {position.ticker} · {position.quantity}주 · 평단 {number(position.avgCost)} · 가격 {number(position.currentPrice)} · {position.priceProvider} / {position.priceStatus} · {position.priceAsOf ?? position.priceSessionDate ?? '관측 시점 미상'} · 보유 버전 {position.version}
+            </p>)}</details>}
           </article>)}</div>}
       </section>
       <footer className={styles.notice}><p className={styles.eyebrow}>03 / 판단 준비</p><h2>근거를 확인한 뒤, 직접 결정하세요</h2><p>{period === 5 ? '시장 변화와 가격 자료 상태를 검토하세요.' : '보유 현황을 확인하고, 전략 목표 비중이 정해진 뒤 리밸런싱 여부를 검토하세요.'} 전략 버전 연결, 판단 기록 저장, 이메일·모바일 알림은 후속 단계입니다.</p></footer>

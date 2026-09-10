@@ -32,6 +32,10 @@ public class PortfolioPosition {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @jakarta.persistence.Version
+    @Column(nullable = false)
+    private long version;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "portfolio_id", nullable = false)
     private Portfolio portfolio;

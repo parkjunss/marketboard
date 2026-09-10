@@ -77,15 +77,16 @@ public class AuthService {
         }
 
         Long userId = Long.valueOf(claims.getSubject());
-        if (!refreshTokenService.matches(userId, refreshToken)) {
-            throw new InvalidTokenException();
-        }
-
         User user = userRepository.findById(userId).orElseThrow(InvalidTokenException::new);
         if (!user.isActive()) {
             throw new AccountSuspendedException();
         }
-        return issueTokens(user);
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole());
+        String replacement = jwtTokenProvider.generateRefreshToken(user.getId(), user.getEmail(), user.getRole());
+        if (!refreshTokenService.rotate(userId, refreshToken, replacement)) {
+            throw new InvalidTokenException();
+        }
+        return new TokenResponse(accessToken, replacement);
     }
 
     public void logout(Long userId) {

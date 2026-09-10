@@ -14,7 +14,7 @@ export function RequireAdmin({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (user && !isAdmin) {
-      router.replace('/stock-list');
+      router.replace('/review');
     }
   }, [user, isAdmin, router]);
 

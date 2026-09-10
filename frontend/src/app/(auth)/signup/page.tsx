@@ -45,7 +45,7 @@ function SignupForm() {
     try {
       await signup({ email, password, passwordConfirm, username, termsAgreed });
       await login(email, password);
-      router.replace('/stock-list');
+      router.replace('/review');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '회원가입에 실패했습니다.');
       setIsSubmitting(false);

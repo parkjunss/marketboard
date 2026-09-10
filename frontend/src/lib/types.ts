@@ -320,6 +320,22 @@ export interface FinancialsResponse {
 
 export type PriceSource = 'LIVE' | 'CLOSE' | 'CACHED' | 'UNAVAILABLE';
 
+export interface ReviewResource<T> { data: T | null; error: string | null }
+export interface ReviewSummary { id: number; period: 5 | 21; createdAt: string }
+export interface ReviewDetail extends ReviewSummary {
+  payload: {
+    schemaVersion: number;
+    calculationVersion: string;
+    period: 5 | 21;
+    startedAt: string;
+    capturedAt: string;
+    histories: Record<string, ReviewResource<CandleResponse[]>>;
+    breadth: ReviewResource<MarketBreadthResponse>;
+    portfolios: ReviewResource<PortfolioSummaryResponse[]>;
+    positions: Record<string, PortfolioPositionResponse[]>;
+  };
+}
+
 export interface PortfolioSummaryResponse {
   id: number;
   name: string;
@@ -338,6 +354,7 @@ export interface PortfolioSummaryResponse {
 }
 
 export interface PortfolioPositionResponse {
+  version: number;
   id: number;
   symbolId: number;
   ticker: string;

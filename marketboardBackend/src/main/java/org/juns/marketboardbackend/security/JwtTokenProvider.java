@@ -6,6 +6,7 @@ import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
+import java.util.UUID;
 import javax.crypto.SecretKey;
 import org.juns.marketboardbackend.user.Role;
 import org.springframework.stereotype.Component;
@@ -46,6 +47,7 @@ public class JwtTokenProvider {
     private String buildToken(Long userId, String email, Role role, TokenType type, long expirationMs) {
         Instant now = Instant.now();
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(String.valueOf(userId))
                 .claim("email", email)
                 .claim("role", role.name())

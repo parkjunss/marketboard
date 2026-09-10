@@ -27,6 +27,26 @@ import type {
 } from './types';
 import type { MomentumScreenerParams, MomentumScreenerResult } from './screener-types';
 import type { StockAnalysisResult } from './analysis-types';
+import { idempotentPost } from './idempotent-post';
+import { decodeJwt } from './jwt';
+import type { ReviewDetail, ReviewSummary } from './types';
+
+export function createReview(fetcher: Fetcher, period: 5 | 21): Promise<ReviewDetail> {
+  return retryablePost<ReviewDetail>(fetcher, '/api/reviews', { period });
+}
+export function getReviews(fetcher: Fetcher): Promise<ReviewSummary[]> {
+  return fetcher<ReviewSummary[]>('/api/reviews');
+}
+export function getReview(fetcher: Fetcher, id: number): Promise<ReviewDetail> {
+  return fetcher<ReviewDetail>(`/api/reviews/${id}`);
+}
+
+function retryablePost<T>(fetcher: Fetcher, path: string, body: unknown): Promise<T> {
+  const stored = localStorage.getItem('marketboard.refreshToken');
+  const claims = stored ? decodeJwt(stored) : null;
+  if (!claims) return Promise.reject(new Error('로그인이 필요합니다.'));
+  return idempotentPost<T>(fetcher, path, body, String(claims.sub));
+}
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
 
@@ -258,7 +278,7 @@ export function saveChartIndicatorSettings(
 }
 
 export function runBacktest(fetcher: Fetcher, request: BacktestRunRequest): Promise<BacktestRunResponse> {
-  return fetcher<BacktestRunResponse>('/api/backtest/runs', { method: 'POST', body: request });
+  return retryablePost<BacktestRunResponse>(fetcher, '/api/backtest/runs', request);
 }
 
 export function getBacktestRuns(fetcher: Fetcher): Promise<BacktestRunResponse[]> {
@@ -328,7 +348,7 @@ export function getPortfolios(fetcher: Fetcher): Promise<PortfolioSummaryRespons
 }
 
 export function createPortfolio(fetcher: Fetcher, name: string): Promise<PortfolioSummaryResponse> {
-  return fetcher<PortfolioSummaryResponse>('/api/portfolios', { method: 'POST', body: { name } });
+  return retryablePost<PortfolioSummaryResponse>(fetcher, '/api/portfolios', { name });
 }
 
 export function renamePortfolio(fetcher: Fetcher, id: number, name: string): Promise<PortfolioSummaryResponse> {
@@ -355,7 +375,7 @@ export function updatePortfolioPosition(
   fetcher: Fetcher,
   portfolioId: number,
   positionId: number,
-  input: { quantity: number; avgCost: number },
+  input: { quantity: number; avgCost: number; version: number },
 ): Promise<PortfolioPositionResponse> {
   return fetcher<PortfolioPositionResponse>(`/api/portfolios/${portfolioId}/positions/${positionId}`, {
     method: 'PATCH',

@@ -58,6 +58,7 @@ function AppNav({ children }: { children: React.ReactNode }) {
           }
         >
           <SideNavSection title="메인" isHeaderHidden>
+            <SideNavItem label="투자 점검" icon={ShieldCheckIcon} isSelected={pathname === '/review'} href="/review" />
             <SideNavItem
               label="종목 리스트"
               icon={ListBulletIcon}

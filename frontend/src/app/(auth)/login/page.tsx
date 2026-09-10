@@ -28,7 +28,7 @@ function LoginForm() {
     setIsSubmitting(true);
     try {
       await login(email, password);
-      router.replace('/stock-list');
+      router.replace('/review');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '로그인에 실패했습니다.');
       setIsSubmitting(false);

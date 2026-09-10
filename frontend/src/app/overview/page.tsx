@@ -52,7 +52,7 @@ export default function OverviewPage() {
           </HStack>
           <HStack gap={2}>
             {user ? (
-              <Button variant="primary" label="대시보드로 이동" href="/stock-list" />
+              <Button variant="primary" label="투자 점검으로 이동" href="/review" />
             ) : (
               <>
                 <Button variant="secondary" label="로그인" href="/login" />

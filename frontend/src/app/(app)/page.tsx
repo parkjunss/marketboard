@@ -7,7 +7,7 @@ export default function RootPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/stock-list');
+    router.replace('/review');
   }, [router]);
 
   return null;

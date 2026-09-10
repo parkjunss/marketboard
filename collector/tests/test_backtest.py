@@ -1,4 +1,7 @@
 from datetime import date
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+import sys
 
 import pandas as pd
 import pytest
@@ -121,6 +124,60 @@ def test_sma_crossover_missing_params_raises():
     closes = _closes({"AAA": [100, 110], BENCHMARK_TICKER: [10, 10]})
     with pytest.raises(InvalidStrategyParamsError):
         _compute_backtest(closes, ["AAA"], initial_capital=1000.0, risk_free_rate=0.0, strategy_type="SMA_CROSSOVER")
+
+
+@pytest.mark.parametrize("frequency,start,end", [
+    ("MONTHLY", date(2026, 1, 30), date(2026, 2, 2)),
+    ("QUARTERLY", date(2026, 3, 31), date(2026, 4, 1)),
+    ("YEARLY", date(2025, 12, 31), date(2026, 1, 2)),
+])
+@pytest.mark.parametrize("last_price", [110.0, 90.0])
+def test_rebalance_preserves_boundary_returns(frequency, start, end, last_price):
+    closes = pd.DataFrame({"AAA": [100., last_price], "SPY": [100., 100.]}, index=[start, end])
+    result = _compute_backtest(closes, ["AAA"], 1000., 0., "PERIODIC_REBALANCE", {"rebalanceFrequency": frequency})
+    assert result["equityCurve"][-1]["portfolioValue"] == pytest.approx(10 * last_price)
+
+
+def test_rebalance_values_old_holdings_before_resetting_weights():
+    # Jan: 5 AAA + 5 BBB. Feb's first close: 1500 + 500 = 2000;
+    # rebalance at that close to 1000 per ticker, then BBB doubles -> 3000.
+    closes = pd.DataFrame(
+        {"AAA": [100., 200., 300., 300.], "BBB": [100., 100., 100., 200.], "SPY": [100.] * 4},
+        index=[date(2026, 1, 29), date(2026, 1, 30), date(2026, 2, 2), date(2026, 2, 3)],
+        dtype=object,
+    )
+    result = _compute_backtest(closes, ["AAA", "BBB"], 1000., 0., "PERIODIC_REBALANCE", {"rebalanceFrequency": "MONTHLY"})
+    assert [p["portfolioValue"] for p in result["equityCurve"]] == pytest.approx([1000., 1500., 2000., 3000.])
+
+
+def test_partially_missing_requested_ticker_is_rejected():
+    closes = _closes({"AAA": [100., 110.], "SPY": [100., 100.]})
+    with pytest.raises(InsufficientDataError, match="MISSING"):
+        _compute_backtest(closes, ["AAA", "MISSING"], 1000., 0.)
+
+
+@pytest.mark.parametrize("symbol_rows", [
+    [(1, "AAA"), (2, "SPY")],
+    [(1, "AAA"), (2, "SPY"), (3, "MISSING")],
+])
+def test_run_backtest_rejects_missing_db_symbol_or_history(monkeypatch, symbol_rows):
+    # Exercise the public engine entry and real pivot path; replace only DB I/O.
+    # Both an unknown symbol and a known symbol with no bars must fail closed.
+    import app
+    from app.backtest import run_backtest
+
+    conn = MagicMock()
+    cursor = conn.cursor.return_value.__enter__.return_value
+    cursor.fetchall.side_effect = [symbol_rows, [
+        (1, date(2026, 1, 2), 100.), (2, date(2026, 1, 2), 100.),
+        (1, date(2026, 1, 5), 110.), (2, date(2026, 1, 5), 100.),
+    ]]
+    writer = SimpleNamespace(connect=lambda: conn)
+    monkeypatch.setitem(sys.modules, "app.mysql_writer", writer)
+    monkeypatch.setattr(app, "mysql_writer", writer, raising=False)
+    with pytest.raises(InsufficientDataError, match="MISSING"):
+        run_backtest(["AAA", "MISSING"], date(2026, 1, 2), date(2026, 1, 5), 1000., 0.)
+    conn.close.assert_called_once()
 
 
 def test_unknown_strategy_type_raises():

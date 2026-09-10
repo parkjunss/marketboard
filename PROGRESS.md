@@ -1,10 +1,38 @@
 # MarketBoard — 진행상황 추적
 
-> 최종 갱신: 2026-07-22
+> 최종 갱신: 2026-09-09 (현재 소스 및 로컬 커밋 기준)
 > 기준 계획서: `stock-monitor-dev-plan.html` (2026-07-16 작성, Phase 1~7 로드맵 — 2026-07-19에 전체 완료)
 > 참고: `marketboard_development_plan.html`은 이전 버전의 위젯/템플릿 중심 기획서로, 현재는 `stock-monitor-dev-plan.html`이 실행 기준 문서. 로드맵 완료 이후 개선 후보 목록은 `UPGRADE_IDEAS.md` 참고.
 
 ## 다음 세션 시작점
+
+**2026-09-10 F06/A05 백테스트 1차 오류 수정 완료(로컬 검증)**:
+- 정기 리밸런싱에서 기간 첫 종가로 이전 보유 수량을 먼저 평가한 뒤 동일비중으로 재조정하도록 수정했다. 월/분기/연 경계의 상승·하락 수익 누락을 방지한다. 기존 종가·소수주·무비용 모델 유지이며 다음 거래일 시가 체결 모델 구현은 아니다.
+- DB 조회 후 피벗 결과와 순수 계산 진입점에서 요청 종목 누락을 검사한다. 미등록 종목 또는 조회 기간에 자료가 없는 종목을 조용히 제외하지 않고 `InsufficientDataError`로 거절한다. 기존 collector 경로는 이를 422로 매핑하며 Spring은 기존대로 실패 실행 결과를 저장한다(사용자 화면 오류는 아직 일반 엔진 실패 문구).
+- 회귀 테스트: 수정 전 8건 실패 확인, 이후 DB I/O 경계 2건을 포함한 신규 10건 추가. collector 전체 **64 passed in 3.19s**. `docs/refactor/reproduce_backtest_findings.py`도 월 경계 1,100 및 누락 종목 거절 확인. DB 경계 테스트의 DB I/O는 대역이며 실제 MySQL/HTTP/브라우저/배포 검증은 미실시.
+- 변경 범위: `collector/app/backtest.py`, `collector/tests/test_backtest.py`, 기존 재현 스크립트 및 진행 기록. 저장된 과거 백테스트 결과는 재계산하지 않았다. 준비 기간·자료 품질 표시·비용/체결 모델 등 A05 전체 규격은 아직 미완료다.
+
+**2026-09-10 개발 기준 문서 작성**: 루트 [GENERAL.md](GENERAL.md)(방향·배경·문제), [FUNCTION.md](FUNCTION.md)(F01~F14 기능·의존성), [SPEC.md](SPEC.md)(상세 규칙·A01~A09 수용 조건·D01~D05 미결정)를 개발 초안으로 작성했다. 기존 refactor 문서는 분석 근거로 유지한다. 현재 인증 코드와 신규 목표 규격을 구분했으며 제품 구현은 아직 시작하지 않았다.
+
+**2026-09-10 리팩토링 방향 확정(계획만 갱신)**: 주간 시장·위험 점검과 월간 리밸런싱 검토로 실제 투자 판단을 지원한다. 자동 주문은 제외하고 이메일·모바일 알림 → 근거 검토 → 실행/보류/유지 기록 → 복기 흐름을 우선한다. 상세 실행 순서는 [주간·월간 투자 판단 지원 계획](docs/refactor/QUANT_TRADING_PLAN.md), 소스 분석과 개선 근거는 [리팩토링 계획](docs/refactor/INVESTMENT_WORKSPACE_PLAN.md) 참고. 알림 기능 구현·실제 발송·자동화 등록·제품 코드 변경은 아직 하지 않았다.
+
+**현재 기준: `0948db9`까지 소스 확인.** 아래 최신 현황을 우선 참고하고, 7월 작업 기록의 실행 상태·테스트 결과·DB 행 수는 당시 기록으로만 해석할 것. 이번 갱신에서는 서비스 기동, 테스트 실행, 실제 DB 및 배포 서버 확인을 하지 않았다.
+
+### 2026-09-09 코드 기준 최신 현황
+
+- **모멘텀 스크리너 구현 (`a11de98`)**: `/screener` 화면 → `/api/screener/momentum` → collector `/screener/momentum`. S&P500 대상으로 모멘텀·추세·RSI·상관관계 조건과 시가총액·매출 조건을 적용하며 재무 지표 및 뉴스 감성 정보를 제공한다. 모멘텀 성장주/단기 강세/우량 대형주 프리셋이 있다. 주요 파일: `collector/app/screener.py`, `frontend/src/app/(app)/screener/page.tsx`.
+- **종목별 정량 분석 구현 (`a11de98`)**: 종목 상세 `AnalysisPanel` → `/api/analysis/{ticker}` → collector `/analysis/{ticker}`. 연환산 변동성, VaR/CVaR, 왜도·첨도, Hurst 지수, 최대 낙폭·기간, SPY 대비 베타·상관관계, 몬테카를로 백분위 경로를 제공한다. 주요 파일: `collector/app/quant_analysis.py`, `frontend/src/components/dashboard/AnalysisPanel.tsx`.
+- **스크리너·정량 분석의 저장 방식**: 현재는 요청마다 collector를 호출하며 결과를 DB에 영속화하지 않는다(`ScreenerService`, `AnalysisService`). 7월 설계 문서의 배치/구조화 스크리너 테이블 제안과 구분해야 한다.
+- **백테스트 전략 확장 (`0948db9`)**: `BUY_AND_HOLD`, `SMA_CROSSOVER`, `PERIODIC_REBALANCE`(월/분기/연), `VOLATILITY_TARGET`을 지원한다. 화면의 전략 설정, API DTO, Python 계산 및 종목별/벤치마크 수익률·변동성 출력이 연결돼 있다. 변동성 목표 전략은 SPY 200일 추세·20일 실현 변동성·VIX 조건을 사용한다. 일반 가격은 DB 일봉을 사용하지만, 이 전략의 VIX는 yfinance에서 별도로 조회하므로 외부 데이터 의존성이 있다.
+- **마이그레이션 V23 추가**: `backtest_runs.result_json`을 `TEXT`에서 `MEDIUMTEXT`로 확대했다. 현재 코드의 최신 마이그레이션은 V23이며 실제 로컬/배포 DB 적용 여부는 미확인이다.
+- **배포 구성 변경 (`12c6b54`, `c95cc7c`)**: 자체 nginx/certbot/duckdns 서비스를 Compose에서 제거하고 외부 공용 nginx를 사용하는 구성이다(`nginx/README.md`). MySQL 이미지는 `8.4`로 고정되어 있다. 호스트 포트는 backend `8081`, collector `8001`, frontend `3100`, MySQL `3308`이다. 루트 README의 자체 nginx 포함 설명은 갱신이 필요하다.
+- **검증 범위**: collector의 스크리너·정량 분석·확장 백테스트 테스트 파일과 CI의 backend 테스트/collector pytest/frontend 타입 검사·lint·build 단계를 확인했다. 테스트 파일 존재 및 CI 설정 확인이며, 이번 세션에서 통과를 재확인한 것은 아니다. 최신 커밋의 원격 반영·CI 성공·Pi 배포 성공도 확인하지 않았다.
+
+**다음 확인 순서**: 최신 코드 테스트와 실제 화면/API 동작 → DB V23 및 분석용 일봉 확보 상태 → Pi 배포·공용 nginx 라우팅 확인. 기존 좀비 프로세스/장 마감 REST 폴백 이슈는 해결 여부를 재확인해야 한다.
+
+## 이전 작업 이력 (2026-07-20~22)
+
+> 이 절의 완료·미착수·프로세스/DB 상태는 당시 기록이다. 현재 구현 여부는 위 최신 현황과 아래 다음 액션을 기준으로 판단한다.
 
 **로드맵(Phase 1~7)은 2026-07-19에 이미 완료**, 이후는 사용자가 그때그때 요청하는 개선/버그수정 위주로 진행 중.
 
@@ -77,6 +105,8 @@
 - **배포(Pi)는 이번 세션 커밋 15개가 전부 push 시점에 CI로 자동 배포됨** — 다음 세션 시작하면 `https://marketboard.duckdns.org`에서 새 스케줄 잡들(섹터로테이션 07:10/Put-Call 10분/지수히스토리 07:30/뉴스 10분)이 실제로 도는지, `V17`~`V22` 마이그레이션이 배포 DB에도 적용됐는지 한 번 확인해볼 것(로컬에서는 전부 실측 검증 완료, Pi에서는 배포만 됐고 아직 재확인 안 함).
 
 ## 전체 요약
+
+> 아래 표는 2026-07-22 당시 요약이다. 이후 추가된 스크리너·정량 분석·백테스트 4개 전략과 배포 변경은 문서 상단 최신 현황에 정리했다.
 
 | 구성요소 | 상태 | 비고 |
 |---|---|---|
@@ -782,6 +812,8 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 
 ## 데이터 모델 현황 (계획서 §06 대비)
 
+> V23까지 마이그레이션 파일을 확인했다. 아래 기존 적재/생성 확인은 과거 기록이며, 현재 DB의 적용 상태·종목 수·데이터 기간은 재조회하지 않았다.
+
 | 테이블 | 상태 |
 |---|---|
 | `users` | ✅ 생성됨 (V1 마이그레이션) |
@@ -801,6 +833,13 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 | `chart_indicator_settings` | ✅ 생성됨 (V14, 2026-07-21), 유저별 SMA 오버레이 기간 설정(JSON 블롭) — `dashboard_configs`와 동일 패턴 |
 | `backtest_runs` | ✅ 생성됨 (V15, 2026-07-21), 백테스팅 실행 이력(설정+결과 JSON) |
 | `market_breadth_snapshots` | ✅ 생성됨 (V16, 2026-07-21), 날짜별 시장 폭(상승/하락, 52주 신고가·신저가) 스냅샷, 일 1회 cron |
+| `sector_performance_snapshot` | V17, 섹터 성과 스냅샷 |
+| `put_call_ratio_snapshot` | V18, Put/Call 스냅샷; V21에서 ticker 컬럼 추가 |
+| `market_index_history_snapshot` | V19, 시장 지수 히스토리 스냅샷 |
+| `news_snapshot` | V20, 뉴스 스냅샷 |
+| `options_levels_snapshot` | V22, 종목별 옵션 지지/저항 스냅샷 |
+| `backtest_runs.result_json` | V23, 결과 저장 공간을 MEDIUMTEXT로 확대 |
+| 스크리너·정량 분석 결과 | 전용 저장 테이블 없음, 요청 시 collector 계산 결과 반환 |
 
 ---
 
@@ -810,9 +849,9 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 2. **콜렉터 좀비 프로세스 재발 원인 조사** — 이번 세션에만 3번 겪음, 근본 원인 미조사(위 "남겨둔 확인 작업" 참고)
 3. **시장 지표 개인화 섹션** — 관심종목/포트폴리오 vs 시장 비교, 포트폴리오 베타, 52주 근접 하이라이트
 4. **거래량 급증 스캐너 + MFI** — 3번과 연결해서 진행하기 좋음
-5. 백테스팅 Phase 2 이후 — 다중 종목 포트폴리오(비중배분/리밸런싱), 지표 조건 기반 전략, CAPM
+5. 확장 백테스트 4개 전략 및 스크리너·정량 분석의 실제 API/화면 검증 — 동일비중 정기 리밸런싱과 SMA 조건 전략은 구현됨. 사용자 지정 비중·CAPM 등 추가 확장은 별도 범위로 검토
 6. 지표 서브페인 확장(볼린저/MACD/DMI/Williams%R/거래량) — `lightweight-charts` v5 멀티페인 지원 확인까지만 하고 미착수, 필요해지면 `CandleChart` 일반화부터
-7. (여유 있을 때) 공유 리버스 프록시 전환 검토 — `tradehub-nginx`가 stop된 채로 남아있음, 나중에 하나의 nginx/Traefik로 tradehub/marketboard 둘 다 Host 헤더 라우팅하는 방향으로 합의했었음(위 "Phase 7" 섹션 참고)
+7. 공용 nginx 운영 라우팅 확인 — 저장소 구성은 외부 공용 프록시 방식으로 전환됨(`nginx/README.md`). 실제 HTTPS/API/WebSocket 라우팅과 최신 배포 상태 확인 필요
 8. 장 마감 후 REST 폴백(`rest_fallback.py`) 실거래 재검증
 9. 그 외엔 위 "남겨둔 확인 작업" 항목들 참고
 
@@ -851,7 +890,7 @@ Playwright로 검증(신규 가입 → 대시보드 진입): 프리셋 레이아
 - **`CollectorClient`(백엔드→콜렉터 내부 호출)는 10초 읽기 타임아웃이 걸려 있음**(2026-07-21 추가) — 콜렉터가 멈추거나 yfinance가 응답을 안 주면 예전엔 백엔드 요청 스레드가 무한정 같이 멈췄음. 새로 콜렉터를 호출하는 코드를 추가할 때 이 타임아웃보다 오래 걸리는 작업(예: 대량 배치)은 요청-응답 경로에 넣지 말고 별도 트리거(fire-and-forget이거나 백그라운드 루프)로 뺄 것.
 - **`lightweight-charts`의 `series.setData()`는 기존 줌/타임레인지를 유지함, 자동으로 전체 범위에 맞춰지지 않음**(2026-07-21 발견) — 이미 떠 있는 차트에 크기가 많이 다른 데이터를 갈아끼우면(기간 변경 등) 화면이 안 바뀐 것처럼 보임. 새로 만든 차트의 첫 `setData()`만 자동으로 fit되므로, 데이터셋이 확 바뀌는 상황에서는 `CandleChart`에 상황을 반영한 `key`(예: `ticker:timeframe:limit`)를 걸어 강제로 리마운트시킬 것 — 실시간 틱처럼 점진적으로 갱신되는 경우는 key를 유지해 기존 줌을 보존.
 - 유저별로 값이 달라지는 설정(대시보드 레이아웃, 차트 SMA 기간 등)은 `dashboard_configs`/`chart_indicator_settings`와 동일한 패턴(`user_id UNIQUE + JSON 블롭 컬럼`)을 재사용할 것 — 엔티티/리포지토리/서비스(get-or-default, upsert)/컨트롤러 전부 거의 그대로 복붙 가능한 수준으로 통일돼 있음.
-- 백테스팅 페이지는 2026-07-21에 Phase 1(단일/소수 종목 매수후보유 vs 벤치마크)까지 완료함 — 위 "백테스팅 페이지 Phase 1" 섹션 참고. Phase 2 이후(다중종목 포트폴리오, 지표조건 전략, CAPM)는 여전히 미착수.
+- 백테스팅은 현재 `0948db9`에서 4개 전략까지 확장됨 — 문서 상단 최신 현황 참고. 과거 Phase 1의 "yfinance 신규 호출 없음" 설명은 VIX를 조회하는 `VOLATILITY_TARGET`에는 적용되지 않는다.
 - **`CollectorClient`에 바디 있는 새 POST/PUT 메서드를 추가할 때는 처음부터 `syncSubscriptions`/`runBacktest`/`backfillTicker`와 같은 raw `HttpClient` 패턴을 쓸 것, `RestClient`로 시도하지 말 것**(2026-07-21 재확인) — uvicorn이 JDK `HttpClient`의 기본 h2c 업그레이드 시도를 지원하지 않아 바디가 있는 요청이 콜렉터에 아예 안 닿고 조용히 타임아웃까지 감(access log에 요청 자체가 안 찍힘, 응답도 없이 설정한 타임아웃만큼 걸린 뒤 실패). GET은 바디가 없어 이 문제가 없으므로 `RestClient` 그대로 써도 됨 — 구분 기준은 순수하게 "바디가 있는 요청이냐"임.
 - **새 `@Scheduled(cron = "${x.cron}")` 프로퍼티를 추가하면 `marketboardBackend/src/test/resources/application.yaml`에도 같은 키를 추가할 것**(2026-07-21 발견) — 이 파일이 메인 `application.yaml`을 완전히 shadow하는 구조라, 메인 쪽에만 새 cron 프로퍼티를 추가하면 테스트 프로파일에서 해당 값을 못 찾아 `contextLoads()`가 즉시 실패함(`indicators.cron`도 이미 이 이유로 테스트 yaml에 따로 정의돼 있었음 — 그 선례를 몰라서 한 번 겪음).
 - **yfinance 옵션 체인의 `openInterest` 컬럼은 신뢰하지 말 것**(2026-07-21 발견) — SPY 등 유동성 높은 종목에서도 대부분 0으로 나오는 게 실제로 확인된 yfinance 데이터 품질 이슈. `volume` 컬럼은 정상적으로 채워지므로, 옵션 기반 지표(Put/Call 비율 등)는 open interest 대신 거래량 기준으로 계산할 것. 또한 가장 가까운(특히 0DTE) 만기 하나만 보면 대표성이 떨어지므로 여러 만기를 합산할 것.

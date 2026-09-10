@@ -79,7 +79,11 @@ def _load_closes(tickers: list[str], start: date, end: date) -> pd.DataFrame:
     df = pd.DataFrame(rows, columns=["symbol_id", "ts", "close"])
     df["ticker"] = df["symbol_id"].map(id_to_ticker)
     df["date"] = pd.to_datetime(df["ts"]).dt.date
-    wide = df.pivot_table(index="date", columns="ticker", values="close").dropna()
+    wide = df.pivot_table(index="date", columns="ticker", values="close")
+    missing = [ticker for ticker in tickers if ticker not in wide.columns]
+    if missing:
+        raise InsufficientDataError(f"No price data for requested tickers: {', '.join(missing)}")
+    wide = wide.dropna()
     if wide.empty:
         raise InsufficientDataError("No overlapping trading days across the selected tickers/benchmark")
     return wide
@@ -119,9 +123,10 @@ def _buy_and_hold_value(prices: pd.DataFrame, tickers: list[str], initial_capita
 
 
 def _periodic_rebalance_value(prices: pd.DataFrame, tickers: list[str], initial_capital: float, frequency: str) -> pd.Series:
-    """Equal-weight, but weights are reset to 1/N at the start of each period instead of drifting
-    for the whole run -- modeled by chaining independent buy & hold sub-curves per period, each
-    one starting from the prior period's ending value. No transaction costs, same as buy & hold.
+    """Value existing shares at the first available close of each period, then reset to 1/N.
+    Carrying shares across the boundary preserves the prior-close -> new-close return before
+    rebalancing. This retains the legacy close-price, fractional-share, zero-cost model;
+    it does not simulate next-open execution.
     """
     pandas_period = _REBALANCE_FREQUENCY_TO_PANDAS_PERIOD.get(frequency)
     if pandas_period is None:
@@ -132,16 +137,16 @@ def _periodic_rebalance_value(prices: pd.DataFrame, tickers: list[str], initial_
 
     values = pd.Series(index=prices.index, dtype=float)
     capital = initial_capital
+    shares = None
     for period in pd.unique(period_labels):
         mask = period_labels == period
-        period_prices = prices.loc[mask, tickers]
-        normalized = period_prices / period_prices.iloc[0]
-        period_value = (normalized * weight).sum(axis=1) * capital
-        # price_history's DECIMAL columns come back as object-dtype Decimals (see _load_closes),
-        # which survive elementwise arithmetic but must be cast before a bulk assignment into a
-        # float64 Series -- otherwise pandas' setitem raises LossySetitemError.
+        period_prices = prices.loc[mask, tickers].astype(float)
+        first_close = period_prices.iloc[0]
+        if shares is not None:
+            capital = float((shares * first_close).sum())
+        shares = capital * weight / first_close
+        period_value = period_prices.mul(shares).sum(axis=1)
         values.loc[mask] = period_value.to_numpy(dtype=float)
-        capital = float(period_value.iloc[-1])
     return values
 
 
@@ -257,7 +262,10 @@ def _compute_backtest(
     columns), computes the selected strategy's equity curve vs the benchmark, plus summary
     risk/return metrics. Fractional shares assumed -- this is a valuation model, not an order book.
     """
-    portfolio_tickers = [t for t in tickers if t in closes.columns]
+    missing = [ticker for ticker in tickers if ticker not in closes.columns]
+    if missing:
+        raise InsufficientDataError(f"No price data for requested tickers: {', '.join(missing)}")
+    portfolio_tickers = list(tickers)
     if not portfolio_tickers:
         raise InsufficientDataError("None of the requested tickers have price data in range")
     if BENCHMARK_TICKER not in closes.columns:

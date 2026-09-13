@@ -30,6 +30,17 @@ import type { StockAnalysisResult } from './analysis-types';
 import { idempotentPost } from './idempotent-post';
 import { decodeJwt } from './jwt';
 import type { ReviewDetail, ReviewSummary } from './types';
+import type { StockReportDetail, StockReportSummary } from './report-types';
+
+export function createStockReport(fetcher: Fetcher, ticker: string): Promise<StockReportDetail> {
+  return retryablePost<StockReportDetail>(fetcher, '/api/reports', { ticker });
+}
+export function getStockReports(fetcher: Fetcher, ticker: string): Promise<StockReportSummary[]> {
+  return fetcher<StockReportSummary[]>(`/api/reports?ticker=${encodeURIComponent(ticker)}`);
+}
+export function getStockReport(fetcher: Fetcher, id: number): Promise<StockReportDetail> {
+  return fetcher<StockReportDetail>(`/api/reports/${id}`);
+}
 
 export function createReview(fetcher: Fetcher, period: 5 | 21): Promise<ReviewDetail> {
   return retryablePost<ReviewDetail>(fetcher, '/api/reviews', { period });

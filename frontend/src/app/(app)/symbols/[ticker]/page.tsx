@@ -261,6 +261,7 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
                 </Text>
               </HStack>
               <Link href={`/financials/${ticker}`}>재무 대시보드 보기 →</Link>
+              <Link href={`/symbols/${encodeURIComponent(ticker)}/reports`}>투자 보고서 보기 →</Link>
             </VStack>
             <Button
               variant={isWatched ? 'secondary' : 'primary'}

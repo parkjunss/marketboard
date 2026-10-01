@@ -23,3 +23,9 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
 ]
+
+[tool.pytest.ini_options]
+addopts = "-m 'not performance'"
+markers = [
+    "performance: deterministic performance baselines (excluded from ordinary correctness checks)",
+]

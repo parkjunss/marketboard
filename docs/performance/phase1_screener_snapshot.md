@@ -97,13 +97,12 @@ Spring Micrometer:
 - Spring ScreenerService: `3 passed`
 - Spring 전체: `79 tests, 28 failed` — 로컬 Redis `localhost:6379` 미실행으로 context/Redis 테스트 실패
 - Frontend ESLint: 통과
-- MySQL/Flyway V28 및 Raspberry Pi API 성능: 아직 미검증
-
-After 측정 전에는 값을 기록하지 않는다.
+- MySQL/Flyway V28 및 Raspberry Pi API 성능: 운영 환경 검증 완료
+- 상세 측정 조건과 원시 요약: [Phase 1 Result](../Phase_1_Result.md)
 
 | Metric | Before p95 | After p50 | After p95 | After p99 |
 |---|---:|---:|---:|---:|
-| Screener request total | 27.216s | 미측정 | 미측정 | 미측정 |
+| Screener request total | 27.216s | 46.194ms | 59.052ms | 70.220ms |
 
 ## 8. Raspberry Pi migration/deploy 및 재측정
 

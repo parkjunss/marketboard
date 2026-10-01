@@ -1,0 +1,15 @@
+.page { min-height: 100%; padding: 30px 36px 52px; background: #f7faff; color: #17233c; }
+.header { margin-bottom: 24px; }
+.header h1 { margin: 0; font-size: 30px; line-height: 1.2; letter-spacing: -.035em; }
+.header p { margin: 8px 0 0; color: #71809a; font-size: 15px; }
+.indexGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.indexGrid > * { min-width: 0; box-shadow: 0 4px 18px rgba(52, 78, 120, .04); }
+.indexSkeleton { height: 210px; border: 1px solid #dce5f2; border-radius: 10px; background: #eef3f8; animation: loading 1.4s infinite alternate; }
+.content { display: grid; gap: 14px; }
+.section { overflow: hidden; border: 1px solid #dce5f2; border-radius: 12px; background: white; box-shadow: 0 4px 18px rgba(52, 78, 120, .04); }
+.sectionTitle { margin: 0; padding: 16px 20px; border-bottom: 1px solid #e8edf5; font-size: 17px; }
+.sectionBody { padding: 16px; }
+.marketGrid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(340px, .8fr); gap: 14px; align-items: start; }
+@keyframes loading { to { opacity: .55; } }
+@media (max-width: 1200px) { .indexGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .marketGrid { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .page { padding: 24px 16px 40px; } .indexGrid { grid-template-columns: 1fr; } }

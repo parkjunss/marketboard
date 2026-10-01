@@ -1,0 +1,10 @@
+.page { min-height: 100%; padding: 30px 36px 52px; background: #f7faff; color: #17233c; }
+.header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.header h1 { margin: 0; font-size: 30px; line-height: 1.2; letter-spacing: -.035em; }
+.header p { max-width: 760px; margin: 8px 0 0; color: #71809a; font-size: 14px; line-height: 1.55; }
+.actions { display: flex; align-items: center; gap: 10px; }
+.body { display: grid; gap: 16px; }
+.surface { overflow: hidden; border: 1px solid #dce5f2; border-radius: 12px; background: white; box-shadow: 0 4px 18px rgba(52,78,120,.04); }
+.surface > h2 { margin: 0; padding: 16px 20px; border-bottom: 1px solid #e7edf5; font-size: 17px; }
+.surfaceBody { padding: 20px; }
+@media (max-width: 700px) { .page { padding: 24px 16px 40px; } .header { align-items: flex-start; flex-direction: column; } .actions { width: 100%; flex-wrap: wrap; } }

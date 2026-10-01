@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { VStack, HStack } from '@astryxdesign/core/Stack';
-import { Section } from '@astryxdesign/core/Section';
+import { HStack } from '@astryxdesign/core/Stack';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
 import { TextInput } from '@astryxdesign/core/TextInput';
@@ -23,6 +22,7 @@ import { resolvePrevClose } from '@/lib/priceChange';
 import { useQuoteStream } from '@/lib/quote-stream-context';
 import * as api from '@/lib/api';
 import type { CandleResponse, QuoteResponse, WatchlistItemResponse } from '@/lib/types';
+import { PageLayout, PageSurface } from '@/components/layout/PageLayout';
 
 const HISTORY_LIMIT = 250; // ~1 trading year of daily candles
 const FLASH_DURATION_MS = 700;
@@ -310,17 +310,11 @@ export default function StockListPage() {
   const isLoading = isQuoteLoading || isWatchlistLoading || isStatsLoading;
 
   return (
-    <VStack gap={0}>
-      <Section padding={4} dividers={['bottom']}>
-        <HStack justify="between" align="center" wrap="wrap">
-          <VStack gap={1}>
-            <Heading level={3}>종목 리스트</Heading>
-            <Text type="supporting" size="sm">
-              {isConnected ? '실시간 연결됨' : '연결 중...'} · 최근 1년간 활성 종목의 고가·저가와 거래량 추이를 한눈에
-              확인하세요
-            </Text>
-          </VStack>
-          <HStack gap={3} align="center">
+    <PageLayout
+      title="종목 검색"
+      description={`${isConnected ? '실시간 연결됨' : '연결 중'} · 최근 1년간 활성 종목의 가격과 거래량 추이를 비교하세요.`}
+      actions={
+        <HStack gap={3} align="center">
             <TextInput
               label="티커/이름 검색"
               isLabelHidden
@@ -333,10 +327,10 @@ export default function StockListPage() {
               <SegmentedControlItem value="all" label="전체" />
               <SegmentedControlItem value="watchlist" label="관심종목" />
             </SegmentedControl>
-          </HStack>
         </HStack>
-      </Section>
-
+      }
+    >
+      <PageSurface>
       {isLoading ? (
         <Center height={320}>
           <Spinner size="lg" label="불러오는 중" />
@@ -357,6 +351,7 @@ export default function StockListPage() {
       ) : (
         <Table data={filteredRows} columns={columns} idKey="ticker" hasHover />
       )}
-    </VStack>
+      </PageSurface>
+    </PageLayout>
   );
 }

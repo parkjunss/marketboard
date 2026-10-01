@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { VStack } from '@astryxdesign/core/Stack';
-import { Section } from '@astryxdesign/core/Section';
 import { Grid } from '@astryxdesign/core/Grid';
-import { Heading, Text } from '@astryxdesign/core/Text';
 import { Center } from '@astryxdesign/core/Center';
 import { Spinner } from '@astryxdesign/core/Spinner';
+import { PageLayout, PageSurface } from '@/components/layout/PageLayout';
 import { MarketIndexCard } from '@/components/market/MarketIndexCard';
 import { MarketBreadthPanel } from '@/components/market/MarketBreadthPanel';
 import { MarketSentimentPanel } from '@/components/market/MarketSentimentPanel';
@@ -21,44 +19,17 @@ export default function MarketPage() {
 
   useEffect(() => {
     let cancelled = false;
-    api.getMarketIndices(authFetch).then((data) => {
-      if (!cancelled) setIndices(data);
-    });
-    return () => {
-      cancelled = true;
-    };
+    api.getMarketIndices(authFetch).then((data) => { if (!cancelled) setIndices(data); });
+    return () => { cancelled = true; };
   }, [authFetch]);
 
-  return (
-    <VStack gap={0}>
-      <Section padding={4} dividers={['bottom']}>
-        <VStack gap={1}>
-          <Heading level={3}>시장 지표</Heading>
-          <Text type="supporting" size="sm">
-            S&amp;P 500, NASDAQ 등 주요 지수의 최근 일봉 추이 (yfinance 기반, 일 단위 갱신 — 실시간 아님)
-          </Text>
-        </VStack>
-      </Section>
-
-      <Section padding={4}>
-        <VStack gap={4}>
-          <MarketSentimentPanel />
-          <MarketBreadthPanel />
-          <SectorRotationTable />
-
-          {indices === null ? (
-            <Center height={320}>
-              <Spinner size="lg" label="불러오는 중" />
-            </Center>
-          ) : (
-            <Grid columns={{ minWidth: 280, max: 3 }} gap={4}>
-              {indices.map((index) => (
-                <MarketIndexCard key={index.slug} slug={index.slug} name={index.name} />
-              ))}
-            </Grid>
-          )}
-        </VStack>
-      </Section>
-    </VStack>
-  );
+  return <PageLayout title="시장 동향" description="주요 지수와 시장 폭, 투자 심리, 섹터 흐름을 한 화면에서 비교하세요.">
+    <PageSurface title="시장 심리"><MarketSentimentPanel /></PageSurface>
+    <PageSurface title="시장 현황"><MarketBreadthPanel /></PageSurface>
+    <PageSurface title="섹터 로테이션"><SectorRotationTable /></PageSurface>
+    <PageSurface title="주요 지수">
+      {indices === null ? <Center height={280}><Spinner size="lg" label="불러오는 중" /></Center> :
+        <Grid columns={{ minWidth: 280, max: 3 }} gap={4}>{indices.map((index) => <MarketIndexCard key={index.slug} slug={index.slug} name={index.name} />)}</Grid>}
+    </PageSurface>
+  </PageLayout>;
 }

@@ -78,7 +78,7 @@ export function MarketBreadthPanel() {
       <Card padding={4}>
         <VStack gap={3}>
           <Text type="supporting" size="sm">
-            상승/하락 종목 ({breadth.universeSize.toLocaleString('ko-KR')}개 중, {breadth.snapshotDate} 기준)
+            상승/하락 종목 ({breadth.universeSize.toLocaleString('ko-KR')}개 중)
           </Text>
           <HStack gap={6}>
             <BreadthStat label="상승" value={breadth.advancingCount} color="var(--color-text-red)" />

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta, timezone
 
 import requests
 from fastapi import FastAPI, HTTPException
@@ -68,17 +68,6 @@ async def handle_tick(symbol: str, price: float, volume: float, ts: datetime) ->
 source = FinnhubWebSocketSource(on_tick=handle_tick, symbols_provider=get_active_symbols)
 
 
-async def sp500_batch_loop():
-    """Runs once at startup, then once a day -- S&P 500 membership and daily bars don't change
-    more often than that, unlike the real-time WS tick path this loop is otherwise independent of."""
-    while True:
-        try:
-            await asyncio.to_thread(run_sp500_batch, config.SP500_BATCH_LIMIT)
-        except Exception:
-            logger.exception("S&P 500 batch failed")
-        await asyncio.sleep(config.SP500_BATCH_INTERVAL_SECONDS)
-
-
 def _refresh_active_symbols_daily_bars() -> None:
     active = mysql_writer.get_active_symbols()
     for ticker, symbol_id in active.items():
@@ -90,22 +79,23 @@ def _refresh_active_symbols_daily_bars() -> None:
             logger.exception("Daily bar refresh failed for %s", ticker)
 
 
-async def active_symbols_daily_refresh_loop():
-    """Keeps the real-time WS symbol set's daily bars current, independent of S&P 500 batch
-    coverage -- index ETF proxies (SPY/QQQ/DIA) aren't S&P 500 constituents and would otherwise
-    never get refreshed, and any active ticker could otherwise lag behind if the (much larger)
-    S&P 500 batch hasn't reached it alphabetically yet. Runs once at startup, then daily."""
+def _seconds_until_daily_batch() -> float:
+    now = datetime.now(timezone.utc)
+    next_run = datetime.combine(now.date() + timedelta(days=1), time(config.DAILY_BATCH_HOUR_UTC), tzinfo=timezone.utc)
+    return (next_run - now).total_seconds()
+
+
+async def daily_data_refresh_loop():
+    """Runs the dependent daily jobs in order: prices, active-symbol catch-up, then screener."""
     while True:
+        try:
+            await asyncio.to_thread(run_sp500_batch, config.SP500_BATCH_LIMIT, config.SP500_BATCH_PERIOD)
+        except Exception:
+            logger.exception("S&P 500 batch failed")
         try:
             await asyncio.to_thread(_refresh_active_symbols_daily_bars)
         except Exception:
             logger.exception("Active symbols daily refresh failed")
-        await asyncio.sleep(config.ACTIVE_SYMBOLS_REFRESH_INTERVAL_SECONDS)
-
-
-async def screening_snapshot_loop():
-    while True:
-        await asyncio.sleep(config.SCREENING_SNAPSHOT_INTERVAL_SECONDS)
         try:
             result = await asyncio.to_thread(run_snapshot_batch)
             logger.info("Screening snapshot completed: %s", result)
@@ -113,6 +103,7 @@ async def screening_snapshot_loop():
             logger.info("Screening snapshot skipped because another run is active")
         except Exception:
             logger.exception("Screening snapshot batch failed")
+        await asyncio.sleep(_seconds_until_daily_batch())
 
 
 @asynccontextmanager
@@ -131,16 +122,12 @@ async def lifespan(app: FastAPI):
 
     ws_task = asyncio.create_task(source.run())
     fallback_task = asyncio.create_task(rest_fallback_loop(get_active_symbols))
-    sp500_task = asyncio.create_task(sp500_batch_loop())
-    active_refresh_task = asyncio.create_task(active_symbols_daily_refresh_loop())
-    screening_snapshot_task = asyncio.create_task(screening_snapshot_loop())
+    daily_data_task = asyncio.create_task(daily_data_refresh_loop())
     try:
         yield
     finally:
         await source.stop()
-        screening_snapshot_task.cancel()
-        active_refresh_task.cancel()
-        sp500_task.cancel()
+        daily_data_task.cancel()
         fallback_task.cancel()
         ws_task.cancel()
 
@@ -361,8 +348,8 @@ async def sentiment_options_levels(ticker: str):
 @app.post("/backfill/{ticker}")
 async def backfill_ticker(ticker: str, period: str = "5y"):
     """One-off deep backfill for a single arbitrary ticker -- for symbols outside the S&P 500
-    universe (e.g. index ETFs like SPY/QQQ/DIA) that never get touched by sp500_batch_loop, and
-    that active_symbols_daily_refresh_loop only ever catches up with a shallow period="5d" (it
+    universe (e.g. index ETFs like SPY/QQQ/DIA) that never get touched by the S&P 500 step, and
+    that the active-symbol step only ever catches up with a shallow period="5d" (it
     assumes deep history already exists). A freshly-activated symbol with zero price_history rows
     won't show up in the frontend's stock list at all (its history fetch returns empty), so this
     is normally needed right after activating a new symbol that isn't an S&P 500 constituent."""
@@ -377,8 +364,8 @@ async def backfill_ticker(ticker: str, period: str = "5y"):
 
 @app.post("/sp500/sync")
 async def sp500_sync(limit: int | None = None, period: str = "6mo"):
-    """Manual trigger for the S&P 500 batch (also runs automatically, see sp500_batch_loop).
-    Pass period="5y" for a one-off deep backfill of the whole universe beyond the routine 6mo
+    """Manual trigger for the S&P 500 batch (also runs in the daily data pipeline).
+    Pass period="5y" for a one-off deep backfill of the whole universe beyond the routine 2y
     window (see run_sp500_batch's docstring)."""
     try:
         return await asyncio.to_thread(run_sp500_batch, limit, period)

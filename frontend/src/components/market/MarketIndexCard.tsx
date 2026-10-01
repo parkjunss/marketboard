@@ -5,15 +5,11 @@ import { Card } from '@astryxdesign/core/Card';
 import { VStack, HStack } from '@astryxdesign/core/Stack';
 import { Section } from '@astryxdesign/core/Section';
 import { Heading, Text } from '@astryxdesign/core/Text';
-import { Center } from '@astryxdesign/core/Center';
-import { Spinner } from '@astryxdesign/core/Spinner';
-import { CandleChart } from '@/components/CandleChart';
+import { Sparkline } from '@/components/Sparkline';
 import { PriceChangeIndicator } from '@/components/PriceChangeIndicator';
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import type { CandleResponse } from '@/lib/types';
-
-const CHART_HEIGHT = 130;
 
 export function MarketIndexCard({ slug, name }: { slug: string; name: string }) {
   const { authFetch } = useAuth();
@@ -49,28 +45,18 @@ export function MarketIndexCard({ slug, name }: { slug: string; name: string }) 
 
   return (
     <Card padding={0}>
-      <VStack gap={0}>
-        <Section padding={3} dividers={['bottom']}>
+      <Section padding={3}>
+        <HStack justify="between" align="center" gap={3}>
           <VStack gap={1}>
             <Text type="supporting" size="sm">
               {name}
             </Text>
-            <HStack justify="between" align="end" wrap="wrap">
-              <Heading level={4}>{latest != null ? latest.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) : '—'}</Heading>
-              <PriceChangeIndicator changeValue={changeValue} changePct={changePct} />
-            </HStack>
+            <Heading level={4}>{latest != null ? latest.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) : '—'}</Heading>
+            <PriceChangeIndicator changeValue={changeValue} changePct={changePct} />
           </VStack>
-        </Section>
-        <Section padding={2}>
-          {candles === null ? (
-            <Center height={CHART_HEIGHT}>
-              <Spinner size="md" label="불러오는 중" />
-            </Center>
-          ) : (
-            <CandleChart candles={candles} height={CHART_HEIGHT} />
-          )}
-        </Section>
-      </VStack>
+          <Sparkline values={candles?.slice(-24).map((candle) => candle.close) ?? []} width={96} height={42} isPositive={(changeValue ?? 0) >= 0} />
+        </HStack>
+      </Section>
     </Card>
   );
 }

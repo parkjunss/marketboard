@@ -92,7 +92,8 @@ export default function ReviewPage() {
         <span>최근 {period}개 일봉 간격 비교 · 일정 설정과 별개</span>
       </div>
 
-      <section className={styles.breadth} aria-label="점검 기록">
+      <div className={styles.topGrid}>
+      <section className={styles.reviewControl} aria-label="점검 기록">
         <h2>{saved ? `저장된 점검 #${saved.id}` : '점검 근거 보관'}</h2>
         <p className={styles.caption}>{saved ? `수집 ${saved.payload.startedAt} → ${saved.payload.capturedAt} · 저장 ${saved.createdAt} · 계산 ${saved.payload.calculationVersion}` : '서버가 자료를 새로 조회해 근거와 조회 실패 내역을 저장합니다. 현재 표시값과 다를 수 있습니다.'}</p>
         <div className={styles.toolbar}>
@@ -112,8 +113,9 @@ export default function ReviewPage() {
         <p aria-live="polite">{!portfolios ? '보유 자료 확인 중…' : portfolios.data === undefined ? portfolios.error : incomplete.length ? `${incomplete.length}개 포트폴리오의 가격 누락·관측 시점 확인이 필요합니다.` : '아래에서 포트폴리오별 자료 상태를 확인하세요.'}</p>
         <Link href="/backtest">전략 연구 · 기존 백테스트 살펴보기 →</Link>
       </section>
+      </div>
 
-      <section aria-labelledby="market-title">
+      <section className={styles.sectionBlock} aria-labelledby="market-title">
         <div className={styles.sectionHead}><div><p className={styles.eyebrow}>01 / 시장 환경</p><h2 id="market-title">{period === 5 ? '주간' : '월간'} 변화의 근거</h2></div><Link href="/market">시장 상세 →</Link></div>
         <p className={styles.caption}>yfinance 일봉의 서버 저장 자료. 장 마감 확정·최신 거래일·중간 거래일 누락은 미검증이며, 지표별 기준일이 다를 수 있습니다.</p>
         <div className={styles.grid}>
@@ -124,7 +126,7 @@ export default function ReviewPage() {
               <p className={styles.caption}>{index.role}</p><h3>{index.name}</h3>
               {!resource ? <p>조회 중…</p> : resource.error ? <p role="status">{resource.error}</p> : !result ? <p>자료 부족 또는 일봉 오류 · 비교 불가</p> : <>
                 <p className={styles.value}>{number(result.value)}{index.slug === 'US10Y' ? '%' : index.slug === 'USDKRW' ? '원' : ''}</p>
-                <p className={styles.change}>{result.change > 0 ? '+' : ''}{number(result.change)} {result.unit}</p>
+                <p className={result.change >= 0 ? styles.positive : styles.negative}>{result.change > 0 ? '+' : ''}{number(result.change)} {result.unit}</p>
                 <p className={styles.caption}>{result.from} → {result.to}</p>
               </>}
             </article>;
@@ -132,14 +134,15 @@ export default function ReviewPage() {
         </div>
         <article className={styles.breadth}><h3>시장 폭 · 최근 단일 스냅샷</h3>
           {!breadth ? <p>조회 중…</p> : breadth.data === undefined ? <p role="status">{breadth.error}</p> : <>
-            <p>상승 {number(breadth.data.advancingCount)} / 하락 {number(breadth.data.decliningCount)} / 보합 {number(breadth.data.unchangedCount)} 종목</p>
+            <div className={styles.breadthStats}><div><strong className={styles.positive}>{number(breadth.data.advancingCount)}</strong><span>상승</span></div><div><strong className={styles.negative}>{number(breadth.data.decliningCount)}</strong><span>하락</span></div><div><strong>{number(breadth.data.unchangedCount)}</strong><span>보합</span></div></div>
+            <div className={styles.breadthBar}><span style={{ width: `${(breadth.data.advancingCount / Math.max(breadth.data.universeSize, 1)) * 100}%` }} /><span style={{ width: `${(breadth.data.decliningCount / Math.max(breadth.data.universeSize, 1)) * 100}%` }} /></div>
             <p className={styles.caption}>대상 {number(breadth.data.universeSize)}종목 · 기준일 {breadth.data.snapshotDate} · 계산 시각 {breadth.data.computedAt}</p>
             <p className={styles.caption}>시장 폭의 주간·월간 변화는 제공하지 않습니다. 전체 시장을 대표하는지와 최신성은 별도 확인이 필요합니다.</p>
           </>}
         </article>
       </section>
 
-      <section aria-labelledby="portfolio-title">
+      <section className={styles.sectionBlock} aria-labelledby="portfolio-title">
         <div className={styles.sectionHead}><div><p className={styles.eyebrow}>02 / 보유 자료</p><h2 id="portfolio-title">평가 금액보다 자료 상태부터</h2></div><Link href="/portfolio">현재 보유·가격 확인 →</Link></div>
         {!portfolios ? <p>포트폴리오 조회 중…</p> : portfolios.data === undefined ? <p role="status">{portfolios.error}</p> : portfolios.data.length === 0 ? <div className={styles.card}><h3>등록한 포트폴리오가 없습니다</h3><p>보유 종목과 수량을 등록하면 가격 누락과 평가 범위를 확인할 수 있습니다.</p><Link href="/portfolio">포트폴리오 등록 →</Link></div> :
           <div className={styles.grid}>{portfolios.data.map(portfolio => <article key={portfolio.id} className={styles.card}>

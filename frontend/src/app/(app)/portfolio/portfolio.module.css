@@ -1,0 +1,21 @@
+.page { width: min(1500px, 100%); min-height: 100%; margin: 0 auto; padding: 26px 32px 52px; background: var(--mb-canvas); color: var(--mb-text); }
+.page > div { overflow: hidden; border: 1px solid var(--mb-border); border-radius: 11px; background: var(--mb-surface); }
+.page section { background: var(--mb-surface); }
+.page table { width: 100%; font-variant-numeric: tabular-nums; }
+.page thead { background: var(--mb-surface-raised); }
+.page tbody tr { transition: background .15s ease; }
+.page tbody tr:hover { background: var(--mb-surface-raised); }
+.page input { border-color: var(--mb-border); background: var(--mb-canvas); }
+.symbolCell { display: grid; min-width: 130px; gap: 3px; }
+.symbolCell strong { font-size: 14px; letter-spacing: .01em; }
+.symbolCell span { overflow: hidden; color: var(--mb-text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.priceCell { display: grid; justify-items: start; gap: 6px; }
+.priceCell strong { font-size: 12px; }
+.priceStatus { display: inline-flex; padding: 3px 7px; border: 1px solid var(--mb-border); border-radius: 999px; color: var(--mb-text-muted); font-size: 9px; font-weight: 700; }
+.priceWarning { border-color: #7d6941; background: #342f24; color: #d9c38e; }
+.positive, .negative { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 750; white-space: nowrap; }
+.positive { color: var(--mb-positive); }
+.negative { color: var(--mb-negative); }
+.positive svg, .negative svg { width: 15px; }
+.muted { color: var(--mb-text-muted); }
+@media (max-width: 760px) { .page { padding: 20px 14px 40px; } .page > div { overflow-x: auto; } }

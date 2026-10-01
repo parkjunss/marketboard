@@ -18,5 +18,7 @@ public interface SymbolRepository extends JpaRepository<Symbol, Long> {
 
     List<Symbol> findByActiveTrueOrderByPriorityAsc();
 
+    List<Symbol> findAllByOrderByPriorityAsc();
+
     List<Symbol> findByActiveTrueOrInSp500UniverseTrueOrderByPriorityAsc();
 }

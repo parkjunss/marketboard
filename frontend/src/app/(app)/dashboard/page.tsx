@@ -1,16 +1,21 @@
 'use client';
 
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import { MainIndexChart } from '@/components/dashboard/MainIndexChart';
+import { MacroMarketGrid } from '@/components/dashboard/MacroMarketGrid';
+import { MarketMovers } from '@/components/dashboard/MarketMovers';
 import { MarketOverview } from '@/components/dashboard/MarketOverview';
+import { NewsPanel } from '@/components/dashboard/NewsPanel';
 import { WatchlistOverviewSection } from '@/components/dashboard/WatchlistOverviewSection';
 import { MarketBreadthPanel } from '@/components/market/MarketBreadthPanel';
 import { MarketSentimentPanel } from '@/components/market/MarketSentimentPanel';
 import { SectorRotationTable } from '@/components/market/SectorRotationTable';
 import { useAuth } from '@/lib/auth-context';
+import Link from 'next/link';
 import styles from '@/components/dashboard/dashboard.module.css';
 
-function DashboardSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className={styles.section}><h2 className={styles.sectionTitle}>{title}</h2><div className={styles.sectionBody}>{children}</div></section>;
+function DashboardSection({ title, moreHref, children }: { title: string; moreHref?: string; children: React.ReactNode }) {
+  return <section className={styles.section}><div className={styles.sectionHeader}><h2 className={styles.sectionTitle}>{title}</h2>{moreHref && <Link href={moreHref}>더보기</Link>}</div><div className={styles.sectionBody}>{children}</div></section>;
 }
 
 export default function DashboardPage() {
@@ -21,12 +26,22 @@ export default function DashboardPage() {
     <DashboardHeader name={name} />
     <MarketOverview />
     <div className={styles.content}>
-      <div className={styles.marketGrid}>
-        <DashboardSection title="시장 현황"><MarketBreadthPanel /></DashboardSection>
-        <DashboardSection title="투자 심리"><MarketSentimentPanel /></DashboardSection>
+      <div className={styles.heroGrid}>
+        <MainIndexChart />
+        <div className={styles.heroSide}>
+          <DashboardSection title="시장 현황"><MarketBreadthPanel /></DashboardSection>
+          <DashboardSection title="공포·탐욕 지수"><MarketSentimentPanel /></DashboardSection>
+        </div>
       </div>
-      <DashboardSection title="섹터 로테이션"><SectorRotationTable /></DashboardSection>
-      <DashboardSection title="관심종목"><WatchlistOverviewSection /></DashboardSection>
+      <MacroMarketGrid />
+      <div className={styles.moversGrid}>
+        <MarketMovers />
+        <DashboardSection title="주요 뉴스" moreHref="/news"><NewsPanel limit={4} compact /></DashboardSection>
+      </div>
+      <div className={styles.secondaryGrid}>
+        <DashboardSection title="섹터 로테이션"><SectorRotationTable /></DashboardSection>
+        <DashboardSection title="관심종목"><WatchlistOverviewSection /></DashboardSection>
+      </div>
     </div>
   </main>;
 }

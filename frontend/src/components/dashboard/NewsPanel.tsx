@@ -1,16 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { List, ListItem } from '@astryxdesign/core/List';
-import { VStack } from '@astryxdesign/core/Stack';
 import { Center } from '@astryxdesign/core/Center';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { Text } from '@astryxdesign/core/Text';
+import { NewsList } from '@/components/news/NewsList';
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import type { NewsItem } from '@/lib/types';
 
-export function NewsPanel({ ticker }: { ticker?: string }) {
+export function NewsPanel({ ticker, limit, compact = false }: { ticker?: string; limit?: number; compact?: boolean }) {
   const { authFetch } = useAuth();
   // Keyed by ticker so isLoading derives from render-time comparison instead of an effect
   // calling setState synchronously (see react-hooks/set-state-in-effect).
@@ -24,7 +23,7 @@ export function NewsPanel({ ticker }: { ticker?: string }) {
     const fetchNews = ticker ? api.getCompanyNews(authFetch, ticker) : api.getGeneralNews(authFetch);
     fetchNews
       .then((data) => {
-        if (!cancelled) setResult({ key: requestKey, items: data.slice(0, 8) });
+        if (!cancelled) setResult({ key: requestKey, items: data });
       })
       .catch(() => {
         // Best-effort external data -- degrade to "뉴스가 없습니다" rather than spin forever,
@@ -54,19 +53,5 @@ export function NewsPanel({ ticker }: { ticker?: string }) {
     );
   }
 
-  return (
-    <VStack height={320} isScrollable>
-      <List hasDividers>
-        {items.map((item) => (
-          <ListItem
-            key={item.id}
-            label={item.headline}
-            description={`${item.source} · ${new Date(item.datetime * 1000).toLocaleString('ko-KR')}`}
-            href={item.url}
-            target="_blank"
-          />
-        ))}
-      </List>
-    </VStack>
-  );
+  return <NewsList items={limit ? items.slice(0, limit) : items} compact={compact} />;
 }

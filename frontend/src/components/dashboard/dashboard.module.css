@@ -1,15 +1,50 @@
-.page { min-height: 100%; padding: 30px 36px 52px; background: #f7faff; color: #17233c; }
-.header { margin-bottom: 24px; }
-.header h1 { margin: 0; font-size: 30px; line-height: 1.2; letter-spacing: -.035em; }
-.header p { margin: 8px 0 0; color: #71809a; font-size: 15px; }
-.indexGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
-.indexGrid > * { min-width: 0; box-shadow: 0 4px 18px rgba(52, 78, 120, .04); }
-.indexSkeleton { height: 210px; border: 1px solid #dce5f2; border-radius: 10px; background: #eef3f8; animation: loading 1.4s infinite alternate; }
-.content { display: grid; gap: 14px; }
-.section { overflow: hidden; border: 1px solid #dce5f2; border-radius: 12px; background: white; box-shadow: 0 4px 18px rgba(52, 78, 120, .04); }
-.sectionTitle { margin: 0; padding: 16px 20px; border-bottom: 1px solid #e8edf5; font-size: 17px; }
-.sectionBody { padding: 16px; }
-.marketGrid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(340px, .8fr); gap: 14px; align-items: start; }
+.page { width: min(1500px, 100%); min-height: 100%; margin: 0 auto; padding: 18px 28px 48px; background: var(--mb-canvas); color: var(--mb-text); }
+.header { margin-bottom: 20px; }
+.header h1 { margin: 0; font-size: 26px; line-height: 1.2; letter-spacing: -.03em; }
+.header p { margin: 6px 0 0; color: var(--mb-text-muted); font-size: 13px; }
+.indexGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; overflow: hidden; margin-bottom: 18px; border: 1px solid var(--mb-border); border-radius: 8px; background: var(--mb-border); }
+.indexGrid > * { min-width: 0; }
+.indexGrid > * { border: 0; border-radius: 0; background: var(--mb-surface); }
+.indexSkeleton { height: 96px; background: var(--mb-surface); animation: loading 1.4s infinite alternate; }
+.content { display: grid; gap: 16px; }
+.section { overflow: hidden; border: 1px solid var(--mb-border); border-radius: 8px; background: var(--mb-surface); }
+.sectionHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 18px; border-bottom: 1px solid var(--mb-border); }
+.sectionHeader a { color: var(--mb-accent); font-size: 12px; font-weight: 700; text-decoration: none; }
+.sectionHeader a:hover { text-decoration: underline; }
+.sectionTitle { margin: 0; padding: 15px 18px; border-bottom: 1px solid var(--mb-border); font-size: 16px; }
+.sectionHeader .sectionTitle { padding: 0; border: 0; }
+.sectionBody { padding: 14px; }
+.heroGrid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(330px, .8fr); gap: 16px; align-items: stretch; }
+.heroSide { display: grid; gap: 16px; }
+.mainChart { min-width: 0; }
+.chartHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 16px 18px 10px; }
+.chartHeader h2 { margin: 0 0 10px; font-size: 16px; }
+.chartValue { display: flex; align-items: baseline; gap: 12px; }
+.chartValue > strong { font-size: 25px; font-variant-numeric: tabular-nums; }
+.chartValue > span { font-size: 12px; font-weight: 700; }
+.tabs { display: flex; flex-wrap: wrap; gap: 5px; }
+.tabs button { height: 30px; padding: 0 11px; border: 1px solid var(--mb-border); border-radius: 6px; background: var(--mb-canvas); color: var(--mb-text-muted); cursor: pointer; font-size: 11px; }
+.tabs button:hover, .tabs .activeTab { border-color: var(--mb-accent); background: var(--mb-accent); color: #18201f; }
+.chartBody { min-height: 310px; padding: 4px 12px 12px; }
+.chartLoading { display: grid; min-height: 310px; place-items: center; color: var(--mb-text-muted); font-size: 13px; }
+.positive { color: var(--mb-positive); }
+.negative { color: var(--mb-negative); }
+.macroGrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.macroCard { min-width: 0; padding: 15px 16px 12px; border: 1px solid var(--mb-border); border-radius: 8px; background: var(--mb-surface); }
+.macroHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--mb-text-muted); font-size: 12px; }
+.macroHead strong { font-size: 11px; }
+.macroValue { margin: 8px 0 10px; color: var(--mb-text); font-size: 21px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.macroCard svg { display: block; width: 100%; }
+.moversGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.moverList { display: grid; }
+.moverRow { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; min-height: 52px; padding: 7px 14px; border-top: 1px solid var(--mb-border); color: var(--mb-text); text-decoration: none; font-size: 12px; }
+.moverRow:first-child { border-top: 0; }
+.moverRow:hover { background: var(--mb-surface-raised); }
+.rank { color: #737373; text-align: center; }
+.moverName { display: grid; min-width: 0; }
+.moverName small { overflow: hidden; color: var(--mb-text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.empty { margin: 0; padding: 42px 16px; color: var(--mb-text-muted); text-align: center; font-size: 13px; }
+.secondaryGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 @keyframes loading { to { opacity: .55; } }
-@media (max-width: 1200px) { .indexGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .marketGrid { grid-template-columns: 1fr; } }
-@media (max-width: 700px) { .page { padding: 24px 16px 40px; } .indexGrid { grid-template-columns: 1fr; } }
+@media (max-width: 1200px) { .indexGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .heroGrid, .secondaryGrid { grid-template-columns: 1fr; } .macroGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .moversGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .page { padding: 24px 16px 40px; } .indexGrid, .macroGrid, .moversGrid { grid-template-columns: 1fr; } .chartHeader { align-items: stretch; flex-direction: column; } .moverRow { grid-template-columns: 22px minmax(0, 1fr) auto; } .moverRow > span:nth-child(3) { display: none; } }

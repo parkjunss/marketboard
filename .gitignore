@@ -3,3 +3,4 @@
 
 # Deploy secrets (docker-compose.yml reads this from the project root) — see .env.example
 .env
+.env.local

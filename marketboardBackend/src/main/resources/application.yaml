@@ -6,9 +6,9 @@ spring:
     # rewriteBatchedStatements folds Hibernate's batched UPDATE/INSERT into fewer multi-row
     # statements -- without it, MySQL Connector/J still sends them one at a time regardless of
     # hibernate.jdbc.batch_size below.
-    url: ${DB_URL:jdbc:mysql://localhost:3306/stockmonitordb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&rewriteBatchedStatements=true}
+    url: ${DB_URL:jdbc:mysql://localhost:13308/stockmonitordb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&rewriteBatchedStatements=true}
     username: ${DB_USERNAME:stockmonitor}
-    password: ${DB_PASSWORD:stockmonitor1234}
+    password: ${DB_PASSWORD:marketboard-local}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       # Kept small on purpose: MySQL runs on the same Raspberry Pi as everything else in the
@@ -42,7 +42,7 @@ spring:
   data:
     redis:
       host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      port: ${REDIS_PORT:16380}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -90,33 +90,27 @@ collector:
   base-url: ${COLLECTOR_BASE_URL:http://localhost:8000}
 
 indicators:
-  cron: ${INDICATORS_CRON:0 */5 * * * *}
+  cron: ${INDICATORS_CRON:0 0 8 * * *}
 
 market-breadth:
-  # Once a day is enough -- derived from daily bars, which only change once a day themselves.
-  # 07:00 gives the daily backfill loops (which also run once a day, no fixed time) a head start,
-  # though a stale/missing bar for a given symbol just gets skipped rather than miscounted.
-  cron: ${MARKET_BREADTH_CRON:0 0 7 * * *}
+  # Daily after the Collector's 06:00 UTC price/snapshot pipeline and indicator calculation.
+  cron: ${MARKET_BREADTH_CRON:0 10 8 * * *}
 
 sector-performance:
-  # Once a day like market-breadth -- the 1d/1w/1m returns it ranks by are all derived from daily
-  # bars anyway, so recomputing intraday wouldn't change the ranking until the next day's close.
-  # 07:10, ten minutes after market-breadth's 07:00, just so the two don't both fire in the same
-  # tick (no actual dependency between them -- sector performance pulls its own yfinance data).
-  cron: ${SECTOR_PERFORMANCE_CRON:0 10 7 * * *}
+  # Daily, staggered after market breadth to avoid competing for the scheduler pool.
+  cron: ${SECTOR_PERFORMANCE_CRON:0 20 8 * * *}
 
 put-call-ratio:
-  # Unlike sector performance, options volume genuinely accumulates through the trading day, so
-  # this stays on a repeating interval rather than moving to once a day -- 10 minutes roughly
-  # matches the old Redis TTL's freshness while keeping the ~2s/8-yfinance-call cost infrequent.
-  cron: ${PUT_CALL_RATIO_CRON:0 */10 * * * *}
+  # Daily after the other market snapshots.
+  cron: ${PUT_CALL_RATIO_CRON:0 40 8 * * *}
 
 market-index-history:
-  # Once a day like market-breadth/sector-performance -- daily OHLC bars, so nothing to gain from
-  # recomputing before the next close. 07:30, after sector-performance's 07:10.
-  cron: ${MARKET_INDEX_HISTORY_CRON:0 30 7 * * *}
+  # Daily after sector performance.
+  cron: ${MARKET_INDEX_HISTORY_CRON:0 30 8 * * *}
 
 news:
-  # Headlines are the most time-sensitive thing cached in this app -- every 10 minutes like
-  # put/call ratio, not once a day.
-  cron: ${NEWS_CRON:0 */10 * * * *}
+  # General market headlines refresh hourly; per-company news remains lazy on request.
+  cron: ${NEWS_CRON:0 0 * * * *}
+
+collector-metrics:
+  fixed-rate-ms: ${COLLECTOR_METRICS_FIXED_RATE_MS:3600000}

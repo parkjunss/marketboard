@@ -2,7 +2,52 @@
 @import '@astryxdesign/core/astryx.css';
 @import '@astryxdesign/theme-neutral/theme.css';
 
+:root {
+  color-scheme: dark;
+  --mb-canvas: #1b1b1b;
+  --mb-sidebar: #1b1b1b;
+  --mb-surface: #262626;
+  --mb-surface-raised: #2e2e2e;
+  --mb-border: #383838;
+  --mb-text: #f0ede6;
+  --mb-text-muted: #a7a39c;
+  --mb-accent: #9ee7e3;
+  --mb-accent-soft: #303a3a;
+  --mb-positive: #48c99a;
+  --mb-negative: #e66f61;
+  --color-success: var(--mb-positive);
+  --color-error: var(--mb-negative);
+
+  --color-background-surface: var(--mb-surface);
+  --color-background-body: var(--mb-canvas);
+  --color-background-card: var(--mb-surface);
+  --color-background-popover: var(--mb-surface-raised);
+  --color-background-muted: var(--mb-surface-raised);
+  --color-text-primary: var(--mb-text);
+  --color-text-secondary: var(--mb-text-muted);
+  --color-text-disabled: #716f6b;
+  --color-text-accent: var(--mb-accent);
+  --color-icon-primary: var(--mb-text);
+  --color-icon-secondary: var(--mb-text-muted);
+  --color-border: var(--mb-border);
+  --color-border-emphasized: #4b5555;
+  --color-background-green: #213a32;
+  --color-border-green: #315d4e;
+  --color-icon-green: var(--mb-positive);
+  --color-text-green: var(--mb-positive);
+  --color-background-red: #402a29;
+  --color-border-red: #75433e;
+  --color-icon-red: var(--mb-negative);
+  --color-text-red: var(--mb-negative);
+  --color-background-blue: var(--mb-accent-soft);
+  --color-border-blue: #527673;
+  --color-icon-blue: var(--mb-accent);
+  --color-text-blue: var(--mb-accent);
+}
+
 html,
 body {
   height: 100%;
+  background: var(--mb-canvas);
+  color: var(--mb-text);
 }

@@ -22,6 +22,8 @@ MACRO_INDICES = [
     {"slug": "US10Y", "yf_ticker": "^TNX", "name": "Treasury Yield 10 Years"},
     {"slug": "US30Y", "yf_ticker": "^TYX", "name": "Treasury Yield 30 Years"},
     {"slug": "USDKRW", "yf_ticker": "KRW=X", "name": "USD/KRW"},
+    {"slug": "GOLD", "yf_ticker": "GC=F", "name": "Gold"},
+    {"slug": "WTI", "yf_ticker": "CL=F", "name": "WTI Crude Oil"},
 ]
 
 # The 11 GICS sector SPDR ETFs -- the standard retail proxy for sector rotation/relative strength

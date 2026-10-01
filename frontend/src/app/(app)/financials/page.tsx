@@ -1,22 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { VStack, HStack } from '@astryxdesign/core/Stack';
-import { Section } from '@astryxdesign/core/Section';
-import { Heading, Text } from '@astryxdesign/core/Text';
-import { TextInput } from '@astryxdesign/core/TextInput';
-import { Button } from '@astryxdesign/core/Button';
-import { Token } from '@astryxdesign/core/Token';
-import { Table, proportional } from '@astryxdesign/core/Table';
-import type { TableColumn } from '@astryxdesign/core/Table';
-import { Link } from '@astryxdesign/core/Link';
-import { Center } from '@astryxdesign/core/Center';
-import { Spinner } from '@astryxdesign/core/Spinner';
-import { EmptyState } from '@astryxdesign/core/EmptyState';
-import { Banner } from '@astryxdesign/core/Banner';
+import Link from 'next/link';
+import { ArrowTopRightOnSquareIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { PageLayout } from '@/components/layout/PageLayout';
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import type { FinancialsResponse, WatchlistItemResponse } from '@/lib/types';
+import styles from './financials.module.css';
 
 interface CompareRow extends Record<string, unknown> {
   ticker: string;
@@ -34,6 +25,11 @@ interface CompareRow extends Record<string, unknown> {
 
 function fmt(value: number | null | undefined, formatter: (v: number) => string): string {
   return value == null ? '—' : formatter(value);
+}
+
+function tone(value: number | null | undefined) {
+  if (value == null || value === 0) return '';
+  return value > 0 ? styles.positive : styles.negative;
 }
 
 function toCompareRow(ticker: string, data: FinancialsResponse): CompareRow {
@@ -140,158 +136,52 @@ export default function FinancialsPage() {
 
   const quickAddCandidates = watchlist.filter((item) => !tickers.includes(item.ticker));
 
-  const columns: TableColumn<CompareRow>[] = [
-    {
-      key: 'ticker',
-      header: '종목',
-      width: proportional(1.6),
-      renderCell: (row) => (
-        <Link href={`/financials/${row.ticker}`} isStandalone>
-          <HStack gap={2} align="end">
-            <Heading level={5}>{row.ticker}</Heading>
-            <Text type="supporting" size="sm">
-              {row.name}
-              {row.year != null ? ` · ${row.year}` : ''}
-            </Text>
-          </HStack>
-        </Link>
-      ),
-    },
-    {
-      key: 'quickRatio',
-      header: 'Quick Ratio',
-      width: proportional(1),
-      renderCell: (row) => <Text type="body">{fmt(row.quickRatio, (v) => v.toFixed(2))}</Text>,
-    },
-    {
-      key: 'debtToCapitalPct',
-      header: 'Debt to Capital',
-      width: proportional(1),
-      renderCell: (row) => <Text type="body">{fmt(row.debtToCapitalPct, (v) => `${v.toFixed(1)}%`)}</Text>,
-    },
-    {
-      key: 'interestCoverage',
-      header: 'Interest Coverage',
-      width: proportional(1),
-      renderCell: (row) => <Text type="body">{fmt(row.interestCoverage, (v) => v.toFixed(1))}</Text>,
-    },
-    {
-      key: 'netMarginPct',
-      header: 'Net Margin',
-      width: proportional(1),
-      renderCell: (row) => <Text type="body">{fmt(row.netMarginPct, (v) => `${v.toFixed(1)}%`)}</Text>,
-    },
-    {
-      key: 'revenueGrowthPct',
-      header: 'Revenue Growth',
-      width: proportional(1),
-      renderCell: (row) => <Text type="body">{fmt(row.revenueGrowthPct, (v) => `${v.toFixed(1)}%`)}</Text>,
-    },
-    {
-      key: 'operatingIncomeGrowthPct',
-      header: 'Op. Income Growth',
-      width: proportional(1),
-      renderCell: (row) => <Text type="body">{fmt(row.operatingIncomeGrowthPct, (v) => `${v.toFixed(1)}%`)}</Text>,
-    },
-    {
-      key: 'roePct',
-      header: 'ROE',
-      width: proportional(1),
-      renderCell: (row) => <Text type="body">{fmt(row.roePct, (v) => `${v.toFixed(1)}%`)}</Text>,
-    },
-    {
-      key: 'peRatio',
-      header: 'P/E',
-      width: proportional(0.8),
-      renderCell: (row) => <Text type="body">{fmt(row.peRatio, (v) => v.toFixed(1))}</Text>,
-    },
-  ];
-
   return (
-    <VStack gap={0}>
-      <Section padding={4} dividers={['bottom']}>
-        <VStack gap={1}>
-          <Heading level={3}>재무 종목 비교</Heading>
-          <Text type="supporting" size="sm">
-            재무 건전성(Quick Ratio, Debt to Capital, Interest Coverage, Net Margin)과 성장 잠재력(매출/영업이익
-            성장률, ROE, P/E)을 여러 종목에서 나란히 비교하세요 — 각 지표는 최신 회계연도 기준입니다. 종목을
-            선택하면 상세 재무 대시보드로 이동합니다. 관심종목은 자동으로 비교 목록에 추가됩니다.
-          </Text>
-        </VStack>
-      </Section>
+    <PageLayout title="재무 종목 비교" description="관심 종목의 건전성, 성장성, 수익성과 밸류에이션을 같은 기준으로 비교하세요.">
+      <section className={styles.selector}>
+        <div className={styles.selectorTop}>
+          <div><h2>비교할 종목</h2><p>티커를 직접 입력하거나 관심종목에서 빠르게 추가할 수 있습니다.</p></div>
+          <form onSubmit={(event) => { event.preventDefault(); addTicker(tickerInput); }} className={styles.addForm}>
+            <label htmlFor="financial-ticker">티커 추가</label>
+            <div><input id="financial-ticker" placeholder="예: AAPL" value={tickerInput} onChange={(event) => setTickerInput(event.target.value.toUpperCase())} /><button type="submit"><PlusIcon />추가</button></div>
+          </form>
+        </div>
 
-      <Section padding={4} dividers={['bottom']}>
-        <VStack gap={3}>
-          <HStack gap={2} align="end">
-            <TextInput
-              label="티커 추가"
-              size="sm"
-              placeholder="AAPL"
-              value={tickerInput}
-              onChange={(value) => setTickerInput(value.toUpperCase())}
-            />
-            <Button variant="primary" size="sm" label="추가" clickAction={() => addTicker(tickerInput)} />
-          </HStack>
+        {quickAddCandidates.length > 0 && <div className={styles.quickAdd}><span>관심종목 빠른 추가</span><div>{quickAddCandidates.map((item) => <button key={item.id} onClick={() => addTicker(item.ticker)}>+ {item.ticker}</button>)}</div></div>}
+        {tickers.length > 0 && <div className={styles.selected}><span>비교 중 · {tickers.length}개</span><div>{tickers.map((ticker) => <span key={ticker}>{ticker}<button onClick={() => removeTicker(ticker)} aria-label={`${ticker} 비교에서 제거`}><XMarkIcon /></button></span>)}</div></div>}
+      </section>
 
-          {quickAddCandidates.length > 0 && (
-            <VStack gap={1}>
-              <Text type="supporting" size="sm">
-                워치리스트에서 빠른 추가
-              </Text>
-              <HStack gap={2} wrap="wrap">
-                {quickAddCandidates.map((item) => (
-                  <Token key={item.id} label={item.ticker} onClick={() => addTicker(item.ticker)} />
-                ))}
-              </HStack>
-            </VStack>
-          )}
-
-          {tickers.length > 0 && (
-            <VStack gap={1}>
-              <Text type="supporting" size="sm">
-                비교 중
-              </Text>
-              <HStack gap={2} wrap="wrap">
-                {tickers.map((ticker) => (
-                  <Token key={ticker} label={ticker} color="blue" onRemove={() => removeTicker(ticker)} />
-                ))}
-              </HStack>
-            </VStack>
-          )}
-        </VStack>
-      </Section>
-
-      <Section padding={4}>
+      <section className={styles.comparison}>
+        <div className={styles.comparisonHeader}><div><h2>핵심 재무 지표</h2><p>최신 회계연도 기준 · 종목을 누르면 상세 분석으로 이동합니다.</p></div>{rows.length > 0 && <strong>{rows.length}<small>종목 비교</small></strong>}</div>
         {tickers.length === 0 ? (
-          <Center height={280}>
-            <EmptyState
-              title="비교할 종목을 추가하세요"
-              description="티커를 입력하거나 워치리스트에서 빠르게 추가할 수 있습니다"
-            />
-          </Center>
+          <div className={styles.state}><strong>비교할 종목을 추가하세요</strong><span>위 입력창이나 관심종목 바로가기를 이용할 수 있습니다.</span></div>
         ) : isLoading ? (
-          <Center height={280}>
-            <Spinner size="lg" label="불러오는 중" />
-          </Center>
+          <div className={styles.state}><span className={styles.loader} /><strong>재무 데이터를 불러오는 중입니다</strong></div>
+        ) : rows.length === 0 ? (
+          <div className={styles.state}><strong>표시할 재무 데이터가 없습니다</strong></div>
         ) : (
-          <VStack gap={4}>
-            {data && data.failedTickers.length > 0 && (
-              <Banner
-                status="warning"
-                title="일부 종목을 불러오지 못했습니다"
-                description={`${data.failedTickers.join(', ')} — 티커를 확인하고 다시 시도해보세요.`}
-              />
-            )}
-            {rows.length === 0 ? (
-              <Center height={200}>
-                <EmptyState title="표시할 재무 데이터가 없습니다" />
-              </Center>
-            ) : (
-              <Table data={rows} columns={columns} idKey="ticker" hasHover />
-            )}
-          </VStack>
+          <>
+            {data && data.failedTickers.length > 0 && <div className={styles.warning}><strong>일부 종목을 불러오지 못했습니다.</strong> {data.failedTickers.join(', ')}</div>}
+            <div className={styles.tableScroll}>
+              <table>
+                <thead><tr><th>종목</th><th>유동비율</th><th>부채비율</th><th>이자보상배율</th><th>순이익률</th><th>매출 성장률</th><th>영업이익 성장률</th><th>ROE</th><th>P/E</th></tr></thead>
+                <tbody>{rows.map((row) => <tr key={row.ticker}>
+                  <th scope="row"><Link href={`/financials/${row.ticker}`}><span>{row.ticker}<ArrowTopRightOnSquareIcon /></span><small>{row.name}</small><em>{row.year ?? '연도 미상'}</em></Link></th>
+                  <td>{fmt(row.quickRatio, (v) => v.toFixed(2))}</td>
+                  <td>{fmt(row.debtToCapitalPct, (v) => `${v.toFixed(1)}%`)}</td>
+                  <td>{fmt(row.interestCoverage, (v) => `${v.toFixed(1)}x`)}</td>
+                  <td className={tone(row.netMarginPct)}>{fmt(row.netMarginPct, (v) => `${v.toFixed(1)}%`)}</td>
+                  <td className={tone(row.revenueGrowthPct)}>{fmt(row.revenueGrowthPct, (v) => `${v.toFixed(1)}%`)}</td>
+                  <td className={tone(row.operatingIncomeGrowthPct)}>{fmt(row.operatingIncomeGrowthPct, (v) => `${v.toFixed(1)}%`)}</td>
+                  <td className={tone(row.roePct)}>{fmt(row.roePct, (v) => `${v.toFixed(1)}%`)}</td>
+                  <td>{fmt(row.peRatio, (v) => v.toFixed(1))}</td>
+                </tr>)}</tbody>
+              </table>
+            </div>
+            <div className={styles.legend}><span><i className={styles.goodDot} />양수</span><span><i className={styles.badDot} />음수</span><p>지표의 높고 낮음이 투자 적합성을 단독으로 의미하지는 않습니다.</p></div>
+          </>
         )}
-      </Section>
-    </VStack>
+      </section>
+    </PageLayout>
   );
 }

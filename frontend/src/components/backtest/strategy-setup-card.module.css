@@ -1,0 +1,61 @@
+.card { display: grid; gap: 26px; padding: 24px; border: 1px solid var(--mb-border); border-radius: 16px; background: var(--mb-surface); }
+.card header { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--mb-border); }
+.title { display: flex; align-items: center; gap: 13px; }
+.title > span { display: grid; width: 38px; height: 38px; border-radius: 10px; place-items: center; background: var(--mb-accent-soft); color: var(--mb-accent); }
+.title svg { width: 20px; }
+.title h2, .strategySection h3, .parameterPanel h3 { margin: 0; }
+.title h2 { font-size: 18px; }
+.title p, .strategySection p { margin: 5px 0 0; color: var(--mb-text-muted); font-size: 11px; }
+.limit { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--mb-border); border-radius: 999px; color: var(--mb-text-muted); font-size: 10px; white-space: nowrap; }
+.limit svg, .note svg { width: 14px; flex: 0 0 auto; }
+.primaryRow { display: grid; grid-template-columns: minmax(250px, .38fr) minmax(400px, .62fr); gap: 22px; }
+.field { display: grid; align-content: start; gap: 7px; min-width: 0; }
+.field > span { color: var(--mb-text); font-size: 11px; font-weight: 750; }
+.field small { color: var(--mb-text-muted); font-size: 9px; line-height: 1.4; }
+.inputShell, .dateRange { display: flex; align-items: center; min-height: 44px; overflow: hidden; border: 1px solid var(--mb-border); border-radius: 10px; background: var(--mb-canvas); transition: border-color .15s ease, box-shadow .15s ease; }
+.inputShell:focus-within, .dateRange:focus-within, .symbolBox:focus-within { border-color: var(--mb-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mb-accent) 12%, transparent); }
+.inputShell > svg, .dateRange > svg { width: 17px; margin-left: 12px; color: var(--mb-text-muted); }
+.inputShell b { min-width: 36px; padding-left: 12px; color: var(--mb-accent); font-size: 13px; }
+.inputShell input, .dateRange input, .symbolInput input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--mb-text); font: inherit; font-size: 12px; }
+.inputShell input { height: 42px; padding: 0 12px; }
+.symbolBox { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 5px 6px 5px 8px; border: 1px solid var(--mb-border); border-radius: 10px; background: var(--mb-canvas); }
+.chip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 6px 0 10px; border: 1px solid #527673; border-radius: 999px; background: var(--mb-accent-soft); color: var(--mb-accent); font-size: 10px; font-weight: 800; }
+.chip button { display: grid; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; place-items: center; background: transparent; color: inherit; cursor: pointer; }
+.chip button:hover { background: var(--mb-surface-raised); }
+.chip svg { width: 12px; }
+.symbolInput { display: flex; flex: 1 1 180px; align-items: center; gap: 7px; min-width: 120px; }
+.symbolInput svg { width: 15px; color: var(--mb-text-muted); }
+.addButton { height: 32px; padding: 0 12px; border: 1px solid var(--mb-border); border-radius: 7px; background: var(--mb-surface-raised); color: var(--mb-text); cursor: pointer; font-size: 10px; font-weight: 750; }
+.addButton:disabled { cursor: not-allowed; opacity: .4; }
+.basicGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.dateRange { gap: 7px; padding: 0 10px; }
+.dateRange input { height: 42px; color-scheme: dark; }
+.dateRange i { color: var(--mb-text-muted); font-style: normal; }
+.strategySection { display: grid; gap: 14px; }
+.strategySection h3, .parameterPanel h3 { font-size: 13px; }
+.strategyGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.strategyGrid button { position: relative; display: grid; min-height: 130px; padding: 16px; border: 1px solid var(--mb-border); border-radius: 12px; outline: none; background: var(--mb-canvas); color: var(--mb-text); cursor: pointer; text-align: left; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+.strategyGrid button:hover { border-color: #596363; transform: translateY(-1px); }
+.strategyGrid button:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--mb-accent) 18%, transparent); }
+.strategyGrid button > svg:first-child { width: 20px; margin-bottom: 15px; color: var(--mb-text-muted); }
+.strategyGrid strong { font-size: 12px; }
+.strategyGrid span { margin-top: 7px; color: var(--mb-text-muted); font-size: 9px; line-height: 1.5; }
+.strategyGrid .selectedStrategy { border-color: var(--mb-accent); background: var(--mb-accent-soft); }
+.strategyGrid .selectedStrategy > svg:first-child, .strategyGrid .selectedStrategy strong { color: var(--mb-accent); }
+.check { position: absolute; top: 13px; right: 13px; width: 17px; color: var(--mb-accent); }
+.parameterPanel { display: grid; gap: 15px; padding: 18px; border: 1px solid var(--mb-border); border-radius: 12px; background: var(--mb-canvas); }
+.parameterGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.field select { height: 44px; padding: 0 12px; border: 1px solid var(--mb-border); border-radius: 10px; outline: none; background: var(--mb-surface); color: var(--mb-text); }
+.error, .errorBox { margin: 0; color: var(--mb-negative); font-size: 10px; }
+.errorBox { padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--mb-negative) 42%, var(--mb-border)); border-radius: 8px; background: color-mix(in srgb, var(--mb-negative) 8%, var(--mb-canvas)); }
+.runButton { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 48px; border: 0; border-radius: 11px; background: var(--mb-accent); color: #17201f; cursor: pointer; font-weight: 850; }
+.runButton:hover:not(:disabled) { filter: brightness(1.05); }
+.runButton:active:not(:disabled) { transform: translateY(1px); }
+.runButton:disabled { cursor: not-allowed; opacity: .45; }
+.runButton svg { width: 17px; }
+.spinner { width: 15px; height: 15px; border: 2px solid rgba(23,32,31,.35); border-top-color: #17201f; border-radius: 50%; animation: spin .7s linear infinite; }
+.note { display: flex; align-items: center; justify-content: center; gap: 6px; margin: -14px 0 0; color: var(--mb-text-muted); font-size: 9px; text-align: center; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 1100px) { .primaryRow { grid-template-columns: 1fr; } .strategyGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .card { gap: 22px; padding: 18px; border-radius: 12px; } .card header { align-items: flex-start; flex-direction: column; } .limit { white-space: normal; } .basicGrid, .parameterGrid { grid-template-columns: 1fr; } .symbolBox { align-items: stretch; flex-wrap: wrap; } .symbolInput { min-height: 32px; } }
+@media (max-width: 480px) { .strategyGrid { grid-template-columns: 1fr; } }

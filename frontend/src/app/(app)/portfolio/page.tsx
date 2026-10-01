@@ -14,51 +14,33 @@ import { IconButton } from '@astryxdesign/core/IconButton';
 import { Button } from '@astryxdesign/core/Button';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { NumberInput } from '@astryxdesign/core/NumberInput';
-import { Badge } from '@astryxdesign/core/Badge';
 import { Center } from '@astryxdesign/core/Center';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Banner } from '@astryxdesign/core/Banner';
 import { AlertDialog } from '@astryxdesign/core/AlertDialog';
-import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowTrendingDownIcon, ArrowTrendingUpIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import { ApiError } from '@/lib/api';
 import type { PortfolioPositionResponse, PortfolioSummaryResponse } from '@/lib/types';
+import styles from './portfolio.module.css';
 
 function formatMoney(value: number | null): string {
   return value == null ? '—' : value.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function PnlText({ value, pct }: { value: number | null; pct: number | null }) {
-  if (value == null || pct == null) return <Text type="supporting">—</Text>;
-  return (
-    <HStack gap={1} align="center">
-      <Icon icon={value >= 0 ? 'arrowUp' : 'arrowDown'} color={value >= 0 ? 'success' : 'error'} size="sm" />
-      <Text type="body">
-        {formatMoney(Math.abs(value))} ({Math.abs(pct).toFixed(2)}%)
-      </Text>
-    </HStack>
-  );
+  if (value == null || pct == null) return <span className={styles.muted}>—</span>;
+  const TrendIcon = value >= 0 ? ArrowTrendingUpIcon : ArrowTrendingDownIcon;
+  return <span className={value >= 0 ? styles.positive : styles.negative}><TrendIcon />{formatMoney(Math.abs(value))} ({Math.abs(pct).toFixed(2)}%)</span>;
 }
 
 function PriceSourceBadge({ row }: { row: PortfolioPositionResponse }) {
   const label = row.priceStatus === 'UNAVAILABLE' ? '가격 없음'
     : row.priceStatus === 'STALE' ? '오래된 관측 가격'
     : row.priceStatus === 'RECENT' ? '최근 관측 가격' : '최신성 미확인';
-  return (
-    <VStack gap={1}>
-      <Badge variant={row.priceStatus === 'RECENT' ? 'neutral' : 'warning'} label={label} />
-      <Text type="supporting" size="sm">
-        {row.priceSource === 'CLOSE' ? `${row.priceSessionDate ?? '날짜 미상'} 일봉 종가 (미국 동부)`
-          : row.priceAsOf ? `${new Date(row.priceAsOf).toLocaleString('ko-KR')} 관측` : '관측 시각 미확인'}
-      </Text>
-      <Text type="supporting" size="sm">
-        {row.priceProvider === 'UNKNOWN' ? '원천 미확인' : row.priceProvider}
-        {row.priceFetchedAt ? ` · ${new Date(row.priceFetchedAt).toLocaleString('ko-KR')} 수집` : ''}
-      </Text>
-    </VStack>
-  );
+  return <span className={`${styles.priceStatus} ${row.priceStatus === 'RECENT' ? '' : styles.priceWarning}`} title={row.priceSource === 'CLOSE' ? `${row.priceSessionDate ?? '날짜 미상'} 일봉 종가` : row.priceAsOf ? `${new Date(row.priceAsOf).toLocaleString('ko-KR')} 관측` : '관측 시각 미확인'}>{label}</span>;
 }
 
 interface PositionRow extends PortfolioPositionResponse, Record<string, unknown> {}
@@ -225,77 +207,24 @@ export default function PortfolioPage() {
   const rows: PositionRow[] = (positions?.key === effectiveSelectedId ? positions.data : []) as PositionRow[];
 
   const columns: TableColumn<PositionRow>[] = [
-    {
-      key: 'ticker',
-      header: '종목',
-      width: proportional(1.2),
-      renderCell: (row) => (
-        <HStack gap={2} align="end">
-          <Heading level={5}>{row.ticker}</Heading>
-          <Text type="supporting" size="sm">
-            {row.name}
-          </Text>
-        </HStack>
-      ),
-    },
-    {
-      key: 'quantity',
-      header: '수량',
-      width: proportional(0.8),
-      renderCell: (row) => <Text type="body">{row.quantity}</Text>,
-    },
-    {
-      key: 'avgCost',
-      header: '평단가',
-      width: proportional(0.8),
-      renderCell: (row) => <Text type="body">{formatMoney(row.avgCost)}</Text>,
-    },
-    {
-      key: 'currentPrice',
-      header: '현재가',
-      width: proportional(1),
-      renderCell: (row) => (
-        <HStack gap={2} align="center">
-          <Text type="body">{formatMoney(row.currentPrice)}</Text>
-          <PriceSourceBadge row={row} />
-        </HStack>
-      ),
-    },
-    {
-      key: 'marketValue',
-      header: '평가금액',
-      width: proportional(1),
-      renderCell: (row) => <Text type="body">{formatMoney(row.marketValue)}</Text>,
-    },
-    {
-      key: 'unrealizedPnl',
-      header: '평가손익',
-      width: proportional(1.4),
-      renderCell: (row) => <PnlText value={row.unrealizedPnl} pct={row.unrealizedPnlPct} />,
-    },
-    {
-      key: 'actions',
-      header: '',
-      width: proportional(0.4),
-      renderCell: (row) => (
-        <HStack gap={1}>
-        <Button isDisabled={isSaving} variant="secondary" size="sm" label="수정" onClick={() => {
-          if (effectiveSelectedId == null) return;
-          setEditing({ portfolioId: effectiveSelectedId, row });
-          setEditQuantity(row.quantity); setEditCost(row.avgCost); setEditError(null);
-        }} />
-        <IconButton
-          icon={<Icon icon={TrashIcon} size="sm" />}
-          label={`${row.ticker} 포지션 삭제`}
-          variant="ghost"
-          clickAction={() => setDeleteTarget({ type: 'position', positionId: row.id, ticker: row.ticker })}
-        />
-        </HStack>
-      ),
-    },
+    { key: 'ticker', header: '종목', width: proportional(1.2), renderCell: (row) => <div className={styles.symbolCell}><strong>{row.ticker}</strong><span>{row.name}</span></div> },
+    { key: 'quantity', header: '수량', width: proportional(0.8), renderCell: (row) => <Text type="body">{row.quantity}</Text> },
+    { key: 'avgCost', header: '평단가', width: proportional(0.8), renderCell: (row) => <Text type="body">{formatMoney(row.avgCost)}</Text> },
+    { key: 'currentPrice', header: '현재가', width: proportional(1), renderCell: (row) => <div className={styles.priceCell}><strong>{formatMoney(row.currentPrice)}</strong><PriceSourceBadge row={row} /></div> },
+    { key: 'marketValue', header: '평가금액', width: proportional(1), renderCell: (row) => <Text type="body">{formatMoney(row.marketValue)}</Text> },
+    { key: 'unrealizedPnl', header: '평가손익', width: proportional(1.4), renderCell: (row) => <PnlText value={row.unrealizedPnl} pct={row.unrealizedPnlPct} /> },
+    { key: 'actions', header: '', width: proportional(0.5), renderCell: (row) => <HStack gap={1}>
+      <Button isDisabled={isSaving} variant="secondary" size="sm" label="수정" onClick={() => {
+        if (effectiveSelectedId == null) return;
+        setEditing({ portfolioId: effectiveSelectedId, row });
+        setEditQuantity(row.quantity); setEditCost(row.avgCost); setEditError(null);
+      }} />
+      <IconButton icon={<Icon icon={TrashIcon} size="sm" />} label={`${row.ticker} 포지션 삭제`} variant="ghost" clickAction={() => setDeleteTarget({ type: 'position', positionId: row.id, ticker: row.ticker })} />
+    </HStack> },
   ];
 
   return (
+    <div className={styles.page}>
     <VStack gap={0}>
       {createError && <Banner status="error" title="생성 확인 필요" description={createError} />}
       {editing && <Section padding={4} dividers={['bottom']}><VStack gap={2}>
@@ -509,5 +438,6 @@ export default function PortfolioPage() {
         onAction={handleConfirmDelete}
       />
     </VStack>
+    </div>
   );
 }

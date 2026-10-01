@@ -49,6 +49,14 @@ public class QuoteService {
                 .toList();
     }
 
+    public List<QuoteResponse> getAllQuotes() {
+        return symbolRepository.findAllByOrderByPriorityAsc().stream()
+                .map(symbol -> readQuote(symbol.getTicker())
+                        .map(quote -> quote.withName(symbol.getName()))
+                        .orElseGet(() -> QuoteResponse.empty(symbol.getTicker(), symbol.getName())))
+                .toList();
+    }
+
     public QuoteResponse getQuote(String ticker) {
         String normalized = ticker.toUpperCase();
         QuoteResponse quote = readQuote(normalized)

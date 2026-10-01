@@ -28,6 +28,11 @@ public class QuoteController {
         return quoteService.getActiveQuotes();
     }
 
+    @GetMapping("/all")
+    public List<QuoteResponse> getAllQuotes() {
+        return quoteService.getAllQuotes();
+    }
+
     @GetMapping("/{ticker}")
     public QuoteResponse getQuote(@PathVariable String ticker) {
         return quoteService.getQuote(ticker);

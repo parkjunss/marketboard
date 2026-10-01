@@ -6,25 +6,28 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   ArrowLeftStartOnRectangleIcon, BanknotesIcon, Bars3Icon, BeakerIcon, BriefcaseIcon,
   ChartBarIcon, ChartBarSquareIcon, Cog6ToothIcon, GlobeAltIcon, HeartIcon, HomeIcon,
-  MagnifyingGlassIcon, ShieldCheckIcon, XMarkIcon,
+  MagnifyingGlassIcon, NewspaperIcon, ShieldCheckIcon, XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/lib/auth-context';
 import styles from './app-shell.module.css';
 
-const navigation = [
+const marketNavigation = [
   { label: '대시보드', href: '/dashboard', icon: HomeIcon },
   { label: '투자 점검', href: '/review', icon: ShieldCheckIcon },
-  { label: '관심종목', href: '/stock-list', icon: HeartIcon },
   { label: '종목 검색', href: '/stock-list', icon: MagnifyingGlassIcon },
   { label: '스크리너', href: '/screener', icon: BeakerIcon },
   { label: '시장 동향', href: '/market', icon: GlobeAltIcon },
+  { label: '뉴스', href: '/news', icon: NewspaperIcon },
   { label: '재무 비교', href: '/financials', icon: BanknotesIcon },
+];
+
+const accountNavigation = [
+  { label: '관심종목', href: '/watchlist', icon: HeartIcon },
   { label: '포트폴리오', href: '/portfolio', icon: BriefcaseIcon },
   { label: '백테스팅', href: '/backtest', icon: ChartBarSquareIcon },
 ];
 
-function isActive(pathname: string, href: string, label: string) {
-  if (label === '관심종목') return false;
+function isActive(pathname: string, href: string) {
   return pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
 }
 
@@ -50,7 +53,10 @@ export function AppNavigation({ children }: { children: React.ReactNode }) {
     <aside className={`${styles.sidebar} ${open ? styles.sidebarOpen : ''}`}>
       <div className={styles.brand}><span><ChartBarIcon /></span><strong>MarketBoard</strong><button onClick={() => setOpen(false)} aria-label="메뉴 닫기"><XMarkIcon /></button></div>
       <nav className={styles.nav} aria-label="주요 메뉴">
-        {navigation.map((item) => <Link key={`${item.label}-${item.href}`} href={item.href} onClick={() => setOpen(false)} className={isActive(pathname, item.href, item.label) ? styles.active : undefined}><item.icon /><span>{item.label}</span></Link>)}
+        <p>MARKET</p>
+        {marketNavigation.map((item) => <Link key={`${item.label}-${item.href}`} href={item.href} onClick={() => setOpen(false)} className={isActive(pathname, item.href) ? styles.active : undefined}><item.icon /><span>{item.label}</span></Link>)}
+        <p>ACCOUNT</p>
+        {accountNavigation.map((item) => <Link key={`${item.label}-${item.href}`} href={item.href} onClick={() => setOpen(false)} className={isActive(pathname, item.href) ? styles.active : undefined}><item.icon /><span>{item.label}</span></Link>)}
         {user?.role === 'ADMIN' && <Link href="/admin/symbols" className={pathname.startsWith('/admin') ? styles.active : undefined}><Cog6ToothIcon /><span>관리자</span></Link>}
       </nav>
       <div className={styles.sidebarFooter}>

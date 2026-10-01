@@ -18,7 +18,7 @@ class RefreshTokenRedisTest {
     @Test
     void concurrentRotationHasOneWinnerAndRevocationCannotBeUndone() throws Exception {
         var factory = new LettuceConnectionFactory("localhost",
-                Integer.parseInt(System.getenv().getOrDefault("REDIS_PORT", "6379")));
+                Integer.parseInt(System.getenv().getOrDefault("REDIS_PORT", "16380")));
         factory.afterPropertiesSet();
         var redis = new StringRedisTemplate(factory);
         var provider = new JwtTokenProvider(new JwtProperties(

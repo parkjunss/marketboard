@@ -26,12 +26,13 @@ import { PageLayout, PageSurface } from '@/components/layout/PageLayout';
 
 const HISTORY_LIMIT = 250; // ~1 trading year of daily candles
 const FLASH_DURATION_MS = 700;
+const ROW_BATCH_SIZE = 50;
 
 interface StockStats {
   ticker: string;
   name: string;
-  high: number;
-  low: number;
+  high: number | null;
+  low: number | null;
   closes: number[];
   volumeSeries: number[];
   volumeChangePct: number;
@@ -84,18 +85,22 @@ function usePriceFlash(quotes: Record<string, QuoteResponse>) {
   return flashes;
 }
 
-export default function StockListPage() {
+export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'all' | 'watchlist' }) {
   const { authFetch } = useAuth();
-  const { quotes, tickers, isConnected, isLoading: isQuoteLoading } = useQuoteStream();
+  const { quotes, tickers, isConnected } = useQuoteStream();
   const flashes = usePriceFlash(quotes);
 
-  const [filter, setFilter] = useState<'all' | 'watchlist'>('all');
+  const [filter, setFilter] = useState<'all' | 'watchlist'>(initialFilter);
   const [search, setSearch] = useState('');
+  const [rowWindow, setRowWindow] = useState({ key: '', count: ROW_BATCH_SIZE });
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const [watchlist, setWatchlist] = useState<WatchlistItemResponse[]>([]);
+  const [catalog, setCatalog] = useState<QuoteResponse[] | null>(null);
   const [isWatchlistLoading, setIsWatchlistLoading] = useState(true);
   const [pendingTicker, setPendingTicker] = useState<string | null>(null);
 
   useEffect(() => {
+    api.getAllQuotes(authFetch).then(setCatalog).catch(() => setCatalog([]));
     api
       .getWatchlist(authFetch)
       .then(setWatchlist)
@@ -156,30 +161,52 @@ export default function StockListPage() {
   }, [authFetch, tickers, requestKey]);
 
   const statsByTicker = result?.key === requestKey ? result.statsByTicker : {};
-  const rows: StockRow[] = tickers
-    .map((ticker) => {
+  const rows: StockRow[] = (catalog ?? []).map((catalogQuote) => {
+      const ticker = catalogQuote.symbol;
       const stats = statsByTicker[ticker];
-      if (!stats) return null;
-      const quote = quotes[ticker];
-      const price = quote?.price ?? null;
-      const prevClose = resolvePrevClose(stats.closes, price);
+      const quote = quotes[ticker] ?? catalogQuote;
+      const closes = stats?.closes ?? [];
+      const price = quote?.price ?? closes.at(-1) ?? null;
+      const prevClose = resolvePrevClose(closes, price);
       const changeValue = price != null && prevClose != null ? price - prevClose : null;
       const changePct = changeValue != null && prevClose ? (changeValue / prevClose) * 100 : null;
       return {
-        ...stats,
+        ticker,
+        name: catalogQuote.name ?? ticker,
+        high: stats?.high ?? null,
+        low: stats?.low ?? null,
+        closes,
+        volumeSeries: stats?.volumeSeries ?? [],
+        volumeChangePct: stats?.volumeChangePct ?? 0,
         price,
         latestVolume: quote?.volume ?? null,
         changeValue,
         changePct,
       };
-    })
-    .filter((row): row is StockRow => row !== null);
+    });
 
   const filteredRows = (filter === 'watchlist' ? rows.filter((row) => watchlistByTicker.has(row.ticker)) : rows).filter((row) => {
     const query = search.trim().toUpperCase();
     if (!query) return true;
     return row.ticker.toUpperCase().includes(query) || row.name.toUpperCase().includes(query);
   });
+  const rowWindowKey = `${filter}:${search.trim().toUpperCase()}:${watchlist.map((item) => item.ticker).join(',')}`;
+  const visibleCount = rowWindow.key === rowWindowKey ? rowWindow.count : ROW_BATCH_SIZE;
+  const visibleRows = filteredRows.slice(0, visibleCount);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || visibleCount >= filteredRows.length) return undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setRowWindow((current) => ({
+        key: rowWindowKey,
+        count: (current.key === rowWindowKey ? current.count : ROW_BATCH_SIZE) + ROW_BATCH_SIZE,
+      }));
+    }, { rootMargin: '240px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [filteredRows.length, rowWindowKey, visibleCount]);
 
   const columns: TableColumn<StockRow>[] = [
     {
@@ -265,13 +292,13 @@ export default function StockListPage() {
       key: 'high',
       header: '고가 (1년)',
       width: proportional(1),
-      renderCell: (row) => <Text type="body">{row.high.toFixed(2)}</Text>,
+      renderCell: (row) => <Text type="body">{row.high != null ? row.high.toFixed(2) : '—'}</Text>,
     },
     {
       key: 'low',
       header: '저가 (1년)',
       width: proportional(1),
-      renderCell: (row) => <Text type="body">{row.low.toFixed(2)}</Text>,
+      renderCell: (row) => <Text type="body">{row.low != null ? row.low.toFixed(2) : '—'}</Text>,
     },
     {
       key: 'trend',
@@ -286,7 +313,7 @@ export default function StockListPage() {
       renderCell: (row) => (
         <HStack gap={2} align="center">
           <Text type="body">{row.latestVolume != null ? Math.round(row.latestVolume).toLocaleString('ko-KR') : '—'}</Text>
-          <HStack gap={1} align="center">
+          {row.volumeSeries.length > 0 && <HStack gap={1} align="center">
             <Icon
               icon={row.volumeChangePct >= 0 ? 'arrowUp' : 'arrowDown'}
               color={row.volumeChangePct >= 0 ? 'success' : 'error'}
@@ -295,7 +322,7 @@ export default function StockListPage() {
             <Text type="supporting" size="sm">
               {Math.abs(row.volumeChangePct).toFixed(1)}%
             </Text>
-          </HStack>
+          </HStack>}
         </HStack>
       ),
     },
@@ -307,12 +334,14 @@ export default function StockListPage() {
     },
   ];
 
-  const isLoading = isQuoteLoading || isWatchlistLoading || isStatsLoading;
+  const isLoading = catalog === null || isWatchlistLoading || isStatsLoading;
 
   return (
     <PageLayout
-      title="종목 검색"
-      description={`${isConnected ? '실시간 연결됨' : '연결 중'} · 최근 1년간 활성 종목의 가격과 거래량 추이를 비교하세요.`}
+      title={initialFilter === 'watchlist' ? '관심종목' : '종목 검색'}
+      description={initialFilter === 'watchlist'
+        ? `${isConnected ? '실시간 연결됨' : '연결 중'} · 저장한 관심종목의 가격과 거래량 추이를 확인하세요.`
+        : `${isConnected ? '실시간 연결됨' : '연결 중'} · DB에 등록된 전체 종목을 검색하고 가격 자료를 비교하세요.`}
       actions={
         <HStack gap={3} align="center">
             <TextInput
@@ -349,9 +378,16 @@ export default function StockListPage() {
           />
         </Center>
       ) : (
-        <Table data={filteredRows} columns={columns} idKey="ticker" hasHover />
+        <>
+          <Table data={visibleRows} columns={columns} idKey="ticker" hasHover />
+          {visibleRows.length < filteredRows.length && <div ref={loadMoreRef} aria-label="종목 더 불러오기"><Center height={56}><Spinner size="sm" label="더 불러오는 중" /></Center></div>}
+        </>
       )}
       </PageSurface>
     </PageLayout>
   );
+}
+
+export default function StockListPage() {
+  return <StockListContent />;
 }

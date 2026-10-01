@@ -25,7 +25,7 @@ public class CollectorMetricsPoller {
         registry.gauge("marketboard.collector.ws.connected", wsConnected);
     }
 
-    @Scheduled(fixedRate = 30_000)
+    @Scheduled(fixedRateString = "${collector-metrics.fixed-rate-ms:3600000}")
     public void poll() {
         collectorClient.getHealth().ifPresent(health -> {
             reconnectCount.set(health.reconnectCount());

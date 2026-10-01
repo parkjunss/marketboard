@@ -135,6 +135,10 @@ export function getQuotes(fetcher: Fetcher): Promise<QuoteResponse[]> {
   return fetcher<QuoteResponse[]>('/api/quotes');
 }
 
+export function getAllQuotes(fetcher: Fetcher): Promise<QuoteResponse[]> {
+  return fetcher<QuoteResponse[]>('/api/quotes/all');
+}
+
 export function getHistory(
   fetcher: Fetcher,
   ticker: string,

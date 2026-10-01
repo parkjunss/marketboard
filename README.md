@@ -56,7 +56,23 @@ marketboard/
 
 ## 로컬 개발 환경
 
-MySQL/Redis는 다른 스터디 프로젝트와 공유하는 컨테이너(호스트 3306/6379)를 그대로 사용하는 것을 전제로 합니다. 별도로 격리된 스택이 필요하면 `docker-compose.yml`을 참고하세요(배포용으로 작성됨).
+운영용 `docker-compose.yml`과 분리된 `compose.local.yml`을 사용합니다. 로컬 스택은 별도 프로젝트명, 네트워크, 볼륨, 컨테이너를 사용하며 Redis도 `marketboard-local-redis`(기본 호스트 포트 `16380`)로 완전히 분리됩니다.
+
+```bash
+cp .env.local.example .env.local
+# .env.local의 FINNHUB_API_KEY 설정
+docker compose --env-file .env.local -f compose.local.yml up -d --build
+```
+
+로컬 접속 주소는 frontend `http://localhost:13100`, backend `http://localhost:18081`, collector `http://localhost:18001`입니다. MySQL은 `13308`, Redis는 `16380`으로 노출됩니다.
+
+인프라만 Docker로 실행하고 애플리케이션을 호스트에서 개발하려면 다음처럼 실행합니다.
+
+```bash
+docker compose --env-file .env.local -f compose.local.yml up -d mysql redis
+```
+
+Backend와 Collector의 로컬 기본값이 위 포트와 계정에 맞춰져 있어 별도 DB/Redis 환경변수 없이 실행할 수 있습니다. 다른 포트를 선택했다면 `DB_URL`/`REDIS_PORT`(Backend), `MYSQL_PORT`/`REDIS_PORT`(Collector)로 재정의하세요.
 
 **Backend**
 ```bash

@@ -35,6 +35,59 @@ export interface MomentumScreenerResult {
   results: MomentumScreenerCandidate[];
 }
 
+export type MomentumPeriod = 'THREE_MONTHS' | 'SIX_MONTHS' | 'TWELVE_MONTHS';
+export type ScreenerSortField =
+  | 'MOMENTUM_3M' | 'MOMENTUM_6M' | 'MOMENTUM_12M' | 'RSI_14' | 'VOLATILITY_20D'
+  | 'MARKET_CAP' | 'REVENUE_GROWTH' | 'ROE' | 'TRAILING_PE' | 'NEWS_SENTIMENT' | 'TICKER';
+
+export interface ScreenerSearchRequest {
+  momentumPeriod?: MomentumPeriod;
+  minMomentumPct?: number;
+  maxRsi?: number;
+  aboveSma200?: boolean;
+  minMarketCap?: number;
+  minRevenue?: number;
+  minRevenueGrowth?: number;
+  minRoe?: number;
+  maxTrailingPe?: number;
+  minNewsSentiment?: number;
+  sort?: { field: ScreenerSortField; direction: 'ASC' | 'DESC' };
+  page?: number;
+  size?: number;
+}
+
+export interface ScreenerSnapshotItem {
+  ticker: string;
+  price: number;
+  momentum3m: number | null;
+  momentum6m: number | null;
+  momentum12m: number | null;
+  volatility20d: number | null;
+  rsi14: number | null;
+  sma50: number | null;
+  sma100: number | null;
+  sma200: number | null;
+  aboveSma200: boolean | null;
+  marketCap: number | null;
+  revenueTtm: number | null;
+  revenueGrowth: number | null;
+  roe: number | null;
+  profitMargin: number | null;
+  trailingPe: number | null;
+  newsSentiment: number | null;
+  newsCount: number;
+}
+
+export interface ScreenerSearchResponse {
+  snapshotDate: string;
+  calculatedAt: string;
+  totalElements: number;
+  totalPages: number;
+  page: number;
+  size: number;
+  items: ScreenerSnapshotItem[];
+}
+
 export type ScreenerTemplateId = 'MOMENTUM_GROWTH' | 'SHORT_TERM_MOMENTUM' | 'LARGE_CAP_QUALITY';
 
 export interface ScreenerTemplate {

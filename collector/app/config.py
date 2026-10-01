@@ -38,3 +38,5 @@ SP500_BATCH_LIMIT = int(_sp500_limit_raw) if _sp500_limit_raw else None
 # S&P 500 membership, since index ETF proxies (SPY/QQQ/DIA) aren't S&P 500 constituents and would
 # never get refreshed by the S&P 500 batch otherwise.
 ACTIVE_SYMBOLS_REFRESH_INTERVAL_SECONDS = float(os.getenv("ACTIVE_SYMBOLS_REFRESH_INTERVAL_SECONDS", str(24 * 60 * 60)))
+
+SCREENING_SNAPSHOT_INTERVAL_SECONDS = float(os.getenv("SCREENING_SNAPSHOT_INTERVAL_SECONDS", str(30 * 60)))

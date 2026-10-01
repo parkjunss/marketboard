@@ -21,6 +21,7 @@ from app.quant_analysis import InvalidAnalysisParamsError, analyze_stock
 from app.redis_publisher import publish_quote
 from app.rest_fallback import rest_fallback_loop
 from app.screener import InsufficientScreenerDataError, InvalidScreenerParamsError, run_screener
+from app.screening_snapshot import SnapshotAlreadyRunningError, run_snapshot_batch
 from app.sentiment import FearGreedUnavailableError, PutCallDataUnavailableError, get_fear_greed, get_put_call_ratio
 from app.sp500_universe import run_sp500_batch
 from app.state import state
@@ -102,6 +103,18 @@ async def active_symbols_daily_refresh_loop():
         await asyncio.sleep(config.ACTIVE_SYMBOLS_REFRESH_INTERVAL_SECONDS)
 
 
+async def screening_snapshot_loop():
+    while True:
+        await asyncio.sleep(config.SCREENING_SNAPSHOT_INTERVAL_SECONDS)
+        try:
+            result = await asyncio.to_thread(run_snapshot_batch)
+            logger.info("Screening snapshot completed: %s", result)
+        except SnapshotAlreadyRunningError:
+            logger.info("Screening snapshot skipped because another run is active")
+        except Exception:
+            logger.exception("Screening snapshot batch failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _symbol_ids
@@ -120,10 +133,12 @@ async def lifespan(app: FastAPI):
     fallback_task = asyncio.create_task(rest_fallback_loop(get_active_symbols))
     sp500_task = asyncio.create_task(sp500_batch_loop())
     active_refresh_task = asyncio.create_task(active_symbols_daily_refresh_loop())
+    screening_snapshot_task = asyncio.create_task(screening_snapshot_loop())
     try:
         yield
     finally:
         await source.stop()
+        screening_snapshot_task.cancel()
         active_refresh_task.cancel()
         sp500_task.cancel()
         fallback_task.cancel()
@@ -131,6 +146,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="MarketBoard Collector", lifespan=lifespan)
+
+
+@app.post("/screening-snapshot/run")
+async def screening_snapshot_run():
+    try:
+        return await asyncio.to_thread(run_snapshot_batch)
+    except SnapshotAlreadyRunningError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.get("/health")

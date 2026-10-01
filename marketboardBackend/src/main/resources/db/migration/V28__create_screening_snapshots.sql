@@ -1,0 +1,40 @@
+CREATE TABLE screening_snapshot_runs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    snapshot_date DATE NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    started_at TIMESTAMP(6) NOT NULL,
+    completed_at TIMESTAMP(6) NULL,
+    symbol_count INT NOT NULL DEFAULT 0,
+    error_message VARCHAR(1000) NULL,
+    INDEX idx_screening_run_status_id (status, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE stock_screening_snapshots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    snapshot_run_id BIGINT NOT NULL,
+    symbol_id BIGINT NOT NULL,
+    snapshot_date DATE NOT NULL,
+    price DECIMAL(18,4) NOT NULL,
+    momentum_3m DECIMAL(12,4) NULL,
+    momentum_6m DECIMAL(12,4) NULL,
+    momentum_12m DECIMAL(12,4) NULL,
+    volatility_20d DECIMAL(12,4) NULL,
+    rsi_14 DECIMAL(12,4) NULL,
+    sma_50 DECIMAL(18,4) NULL,
+    sma_100 DECIMAL(18,4) NULL,
+    sma_200 DECIMAL(18,4) NULL,
+    above_sma_200 BOOLEAN NULL,
+    market_cap BIGINT NULL,
+    revenue_ttm BIGINT NULL,
+    revenue_growth DECIMAL(12,4) NULL,
+    roe DECIMAL(12,4) NULL,
+    profit_margin DECIMAL(12,4) NULL,
+    trailing_pe DECIMAL(12,4) NULL,
+    news_sentiment DECIMAL(12,6) NULL,
+    news_count INT NOT NULL DEFAULT 0,
+    calculated_at TIMESTAMP(6) NOT NULL,
+    CONSTRAINT fk_screening_snapshot_run FOREIGN KEY (snapshot_run_id) REFERENCES screening_snapshot_runs(id),
+    CONSTRAINT fk_screening_snapshot_symbol FOREIGN KEY (symbol_id) REFERENCES symbols(id),
+    CONSTRAINT uk_screening_snapshot_run_symbol UNIQUE (snapshot_run_id, symbol_id),
+    INDEX idx_screening_snapshot_run_momentum (snapshot_run_id, momentum_6m)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

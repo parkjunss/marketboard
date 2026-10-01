@@ -121,6 +121,7 @@ services:
       MYSQL_DATABASE: stockmonitordb
       MYSQL_USER: stockmonitor
       MYSQL_PASSWORD: ${DB_PASSWORD}
+      SCREENING_SNAPSHOT_INTERVAL_SECONDS: ${SCREENING_SNAPSHOT_INTERVAL_SECONDS:-1800}
     ports:
       - "8001:8000"
     networks: [marketboard]
@@ -167,4 +168,3 @@ services:
     ports:
       - "3300:3000"
     networks: [marketboard]
-

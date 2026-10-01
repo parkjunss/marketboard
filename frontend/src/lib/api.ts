@@ -322,6 +322,13 @@ export function getMomentumScreener(fetcher: Fetcher, params: MomentumScreenerPa
   return fetcher<MomentumScreenerResult>(`/api/screener/momentum?${query.toString()}`);
 }
 
+export function searchScreener(fetcher: Fetcher, request: import('./screener-types').ScreenerSearchRequest) {
+  return fetcher<import('./screener-types').ScreenerSearchResponse>('/api/screener/search', {
+    method: 'POST',
+    body: request,
+  });
+}
+
 export function getSectorPerformance(fetcher: Fetcher): Promise<SectorPerformance[]> {
   return fetcher<SectorPerformance[]>('/api/market-indices/sectors/performance');
 }

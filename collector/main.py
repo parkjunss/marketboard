@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from app import config, mysql_writer
 from app.aggregator import CandleAggregator
 from app.alerts import check_alerts
-from app.backfill import backfill_symbol
+from app.backfill import backfill_missing_symbols, backfill_symbol
 from app.backtest import InsufficientDataError, InvalidStrategyParamsError, run_backtest
 from app.financials import get_financials
 from app.finnhub_source import FinnhubWebSocketSource
@@ -168,7 +168,7 @@ async def get_subscriptions():
 @app.put("/subscriptions")
 async def update_subscriptions(update: SubscriptionUpdate):
     global _symbol_ids
-    tickers = [s.strip().upper() for s in update.symbols if s.strip()]
+    tickers = list(dict.fromkeys(s.strip().upper() for s in update.symbols if s.strip()))[: config.REALTIME_SYMBOL_LIMIT]
 
     new_ids = await asyncio.to_thread(mysql_writer.ensure_symbols, tickers)
     _symbol_ids.update(new_ids)
@@ -358,6 +358,15 @@ async def backfill_ticker(ticker: str, period: str = "5y"):
         symbol_ids = await asyncio.to_thread(mysql_writer.ensure_symbols, [ticker])
         rows = await asyncio.to_thread(backfill_symbol, ticker, symbol_ids[ticker], period)
         return {"ticker": ticker, "period": period, "rows": rows}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/backfill-missing")
+async def backfill_missing(period: str = "5y"):
+    """Backfills every registered symbol that has no daily price history."""
+    try:
+        return await asyncio.to_thread(backfill_missing_symbols, period)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

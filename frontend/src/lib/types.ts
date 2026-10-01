@@ -41,6 +41,13 @@ export interface SymbolResponse {
   priority: number;
 }
 
+export interface BackfillMissingResult {
+  attempted: number;
+  succeeded: number;
+  failed: string[];
+  totalRows: number;
+}
+
 export interface SymbolProfileResponse {
   ticker: string;
   name: string;

@@ -57,6 +57,7 @@ services:
         condition: service_healthy
     environment:
       FINNHUB_API_KEY: ${FINNHUB_API_KEY}
+      REALTIME_SYMBOL_LIMIT: ${REALTIME_SYMBOL_LIMIT:-30}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       MYSQL_HOST: mysql
@@ -90,6 +91,7 @@ services:
       ADMIN_SEED_PASSWORD: ${LOCAL_ADMIN_PASSWORD:-ChangeMe1234!}
       CORS_ALLOWED_ORIGINS: http://localhost:${LOCAL_FRONTEND_PORT:-13100}
       COLLECTOR_BASE_URL: http://collector:8000
+      REALTIME_SYMBOL_LIMIT: ${REALTIME_SYMBOL_LIMIT:-30}
     ports:
       - "${LOCAL_BACKEND_PORT:-18081}:8080"
     networks: [marketboard-local]

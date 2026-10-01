@@ -1,6 +1,7 @@
 package org.juns.marketboardbackend.symbol;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -8,8 +9,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
+import java.util.stream.IntStream;
 import org.juns.marketboardbackend.alert.AlertRepository;
 import org.juns.marketboardbackend.collector.CollectorClient;
+import org.juns.marketboardbackend.collector.BackfillMissingResult;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
 import org.juns.marketboardbackend.indicator.IndicatorRepository;
 import org.juns.marketboardbackend.portfolio.PortfolioPositionRepository;
@@ -85,5 +88,26 @@ class SymbolAdminServiceTest {
 
         verify(priceHistoryRepository, never()).deleteBySymbol_Id(404L);
         verify(symbolRepository, never()).delete(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void backfillMissing_delegatesToCollectorOnce() {
+        BackfillMissingResult expected = new BackfillMissingResult(2, 2, java.util.List.of(), 500);
+        when(collectorClient.backfillMissing("5y")).thenReturn(Optional.of(expected));
+
+        assertThat(symbolAdminService.backfillMissing("5y")).contains(expected);
+        verify(collectorClient).backfillMissing("5y");
+    }
+
+    @Test
+    void syncActiveSymbols_limitsRealtimeSubscriptionsToThirty() {
+        var symbols = IntStream.range(0, 31)
+                .mapToObj(i -> Symbol.builder().ticker("T" + i).name("Ticker " + i).exchange("US").priority(i).build())
+                .toList();
+        when(symbolRepository.findActiveOrderByLatestMarketCapDesc()).thenReturn(symbols);
+
+        symbolAdminService.syncActiveSymbols();
+
+        verify(collectorClient).syncSubscriptions(IntStream.range(0, 30).mapToObj(i -> "T" + i).toList());
     }
 }

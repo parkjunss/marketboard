@@ -2,6 +2,7 @@ package org.juns.marketboardbackend.symbol;
 
 import jakarta.validation.Valid;
 import java.util.List;
+import org.juns.marketboardbackend.collector.BackfillMissingResult;
 import org.juns.marketboardbackend.symbol.dto.SymbolBulkActiveRequest;
 import org.juns.marketboardbackend.symbol.dto.SymbolCreateRequest;
 import org.juns.marketboardbackend.symbol.dto.SymbolResponse;
@@ -58,6 +59,13 @@ public class SymbolAdminController {
     public ResponseEntity<Void> backfill(@PathVariable Long id, @RequestParam(defaultValue = "5y") String period) {
         boolean success = symbolAdminService.backfill(id, period);
         return success ? ResponseEntity.accepted().build() : ResponseEntity.status(HttpStatus.BAD_GATEWAY).build();
+    }
+
+    @PostMapping("/backfill-missing")
+    public ResponseEntity<BackfillMissingResult> backfillMissing(@RequestParam(defaultValue = "5y") String period) {
+        return symbolAdminService.backfillMissing(period)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.BAD_GATEWAY).build());
     }
 
     @DeleteMapping("/{id}")

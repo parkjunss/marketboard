@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 public interface SymbolRepository extends JpaRepository<Symbol, Long> {
 
@@ -16,9 +17,26 @@ public interface SymbolRepository extends JpaRepository<Symbol, Long> {
     // JPA versions for collection-valued parameters.
     List<Symbol> findByTickerIn(Collection<String> tickers);
 
-    List<Symbol> findByActiveTrueOrderByPriorityAsc();
+    @Query(value = """
+            SELECT s.* FROM symbols s
+            LEFT JOIN stock_screening_snapshots ss
+              ON ss.symbol_id=s.id AND ss.snapshot_run_id=(
+                SELECT id FROM screening_snapshot_runs WHERE status='COMPLETED' ORDER BY id DESC LIMIT 1
+              )
+            WHERE s.is_active=TRUE
+            ORDER BY CASE WHEN ss.market_cap IS NULL THEN 1 ELSE 0 END, ss.market_cap DESC, s.id
+            """, nativeQuery = true)
+    List<Symbol> findActiveOrderByLatestMarketCapDesc();
 
-    List<Symbol> findAllByOrderByPriorityAsc();
+    @Query(value = """
+            SELECT s.* FROM symbols s
+            LEFT JOIN stock_screening_snapshots ss
+              ON ss.symbol_id=s.id AND ss.snapshot_run_id=(
+                SELECT id FROM screening_snapshot_runs WHERE status='COMPLETED' ORDER BY id DESC LIMIT 1
+              )
+            ORDER BY s.is_active DESC, CASE WHEN ss.market_cap IS NULL THEN 1 ELSE 0 END, ss.market_cap DESC, s.id
+            """, nativeQuery = true)
+    List<Symbol> findAllOrderByRealtimeThenLatestMarketCapDesc();
 
     List<Symbol> findByActiveTrueOrInSp500UniverseTrueOrderByPriorityAsc();
 }

@@ -48,6 +48,7 @@ export default function AdminSymbolsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [backfillingId, setBackfillingId] = useState<number | null>(null);
+  const [isBulkBackfilling, setIsBulkBackfilling] = useState(false);
   const [backfillMessage, setBackfillMessage] = useState<{ status: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -118,6 +119,26 @@ export default function AdminSymbolsPage() {
       });
     } finally {
       setBackfillingId(null);
+    }
+  }
+
+  async function handleMissingBackfill() {
+    setIsBulkBackfilling(true);
+    setBackfillMessage(null);
+    try {
+      const result = await api.backfillMissingAdminSymbols(authFetch, '5y');
+      const failed = result.failed.length > 0 ? ` · 실패: ${result.failed.join(', ')}` : '';
+      setBackfillMessage({
+        status: result.failed.length > 0 ? 'error' : 'success',
+        text: `${result.attempted}개 중 ${result.succeeded}개 완료 · ${result.totalRows.toLocaleString('ko-KR')}행 저장${failed}`,
+      });
+    } catch (err) {
+      setBackfillMessage({
+        status: 'error',
+        text: err instanceof ApiError ? err.message : '미수집 종목 일괄 백필에 실패했습니다.',
+      });
+    } finally {
+      setIsBulkBackfilling(false);
     }
   }
 
@@ -223,9 +244,18 @@ export default function AdminSymbolsPage() {
               onChange={setSearch}
               hasClear
             />
-            <Text type="supporting" size="sm">
-              {filteredSymbols.length}/{symbols.length}개 표시
-            </Text>
+            <HStack gap={3} align="center">
+              <Text type="supporting" size="sm">
+                {filteredSymbols.length}/{symbols.length}개 표시
+              </Text>
+              <Button
+                variant="secondary"
+                size="sm"
+                label="데이터 없는 종목 전체 백필"
+                isLoading={isBulkBackfilling}
+                clickAction={handleMissingBackfill}
+              />
+            </HStack>
           </HStack>
           {selectedCount > 0 && (
             <HStack gap={3} align="center">
@@ -253,7 +283,7 @@ export default function AdminSymbolsPage() {
         isOpen={isActivateDialogOpen}
         onOpenChange={setIsActivateDialogOpen}
         title="선택한 종목을 활성화할까요?"
-        description={`${selectedCount}개 종목이 실시간 시세 구독 대상에 추가됩니다. 한 번에 너무 많은 종목을 활성화하면 Finnhub 실시간 연결의 동시구독 제한에 걸려 기존 종목의 실시간 시세가 끊길 수 있습니다.`}
+        description={`${selectedCount}개 종목이 실시간 시세 후보에 추가됩니다. 활성 종목 중 우선순위가 높은 최대 30개만 Finnhub 실시간 시세를 구독하며 종목검색 상단에 표시됩니다.`}
         actionLabel="활성화"
         actionVariant="primary"
         isActionLoading={isBulkActivating}

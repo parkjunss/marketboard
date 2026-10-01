@@ -21,6 +21,7 @@ import org.juns.marketboardbackend.symbol.Symbol;
 import org.juns.marketboardbackend.symbol.SymbolRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -32,6 +33,9 @@ public class QuoteService {
     private final SymbolRepository symbolRepository;
     private final PriceHistoryRepository priceHistoryRepository;
 
+    @Value("${marketboard.realtime-symbol-limit:30}")
+    private int realtimeSymbolLimit = 30;
+
     public QuoteService(
             StringRedisTemplate redisTemplate,
             SymbolRepository symbolRepository,
@@ -42,7 +46,8 @@ public class QuoteService {
     }
 
     public List<QuoteResponse> getActiveQuotes() {
-        return symbolRepository.findByActiveTrueOrderByPriorityAsc().stream()
+        return symbolRepository.findActiveOrderByLatestMarketCapDesc().stream()
+                .limit(realtimeSymbolLimit)
                 .map(symbol -> readQuote(symbol.getTicker())
                         .map(quote -> quote.withName(symbol.getName()))
                         .orElseGet(() -> QuoteResponse.empty(symbol.getTicker(), symbol.getName())))
@@ -50,7 +55,7 @@ public class QuoteService {
     }
 
     public List<QuoteResponse> getAllQuotes() {
-        return symbolRepository.findAllByOrderByPriorityAsc().stream()
+        return symbolRepository.findAllOrderByRealtimeThenLatestMarketCapDesc().stream()
                 .map(symbol -> readQuote(symbol.getTicker())
                         .map(quote -> quote.withName(symbol.getName()))
                         .orElseGet(() -> QuoteResponse.empty(symbol.getTicker(), symbol.getName())))

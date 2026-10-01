@@ -31,6 +31,27 @@ def backfill_symbol(ticker: str, symbol_id: int, period: str = "5y") -> int:
     return mysql_writer.insert_candles_bulk(rows)
 
 
+def backfill_missing_symbols(period: str = "5y") -> dict:
+    missing = mysql_writer.get_symbols_missing_daily_history()
+    failed: list[str] = []
+    total_rows = 0
+    for ticker, symbol_id in missing.items():
+        try:
+            rows = backfill_symbol(ticker, symbol_id, period)
+            if rows == 0:
+                failed.append(ticker)
+            else:
+                total_rows += rows
+        except Exception:
+            failed.append(ticker)
+    return {
+        "attempted": len(missing),
+        "succeeded": len(missing) - len(failed),
+        "failed": failed,
+        "totalRows": total_rows,
+    }
+
+
 def main(tickers: list[str] | None = None) -> None:
     tickers = tickers or config.DEFAULT_SYMBOLS
     symbol_ids = mysql_writer.ensure_symbols(tickers)

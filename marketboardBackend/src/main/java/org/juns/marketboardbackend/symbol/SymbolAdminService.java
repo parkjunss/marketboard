@@ -2,8 +2,10 @@ package org.juns.marketboardbackend.symbol;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import org.juns.marketboardbackend.alert.AlertRepository;
 import org.juns.marketboardbackend.collector.CollectorClient;
+import org.juns.marketboardbackend.collector.BackfillMissingResult;
 import org.juns.marketboardbackend.common.exception.DuplicateSymbolException;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
 import org.juns.marketboardbackend.indicator.IndicatorRepository;
@@ -15,6 +17,7 @@ import org.juns.marketboardbackend.symbol.dto.SymbolResponse;
 import org.juns.marketboardbackend.symbol.dto.SymbolUpdateRequest;
 import org.juns.marketboardbackend.watchlist.WatchlistItemRepository;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class SymbolAdminService {
 
     private static final String SYMBOLS_TOPIC = "/topic/symbols";
+
+    @Value("${marketboard.realtime-symbol-limit:30}")
+    private int realtimeSymbolLimit = 30;
 
     private final SymbolRepository symbolRepository;
     private final CollectorClient collectorClient;
@@ -133,6 +139,10 @@ public class SymbolAdminService {
         return collectorClient.backfillTicker(symbol.getTicker(), period);
     }
 
+    public Optional<BackfillMissingResult> backfillMissing(String period) {
+        return collectorClient.backfillMissing(period);
+    }
+
     /**
      * Pushes the current active-symbol set to the collector (real-time WS resubscribe) and
      * broadcasts it over STOMP. Deliberately NOT {@code @Transactional} and called by the
@@ -142,7 +152,8 @@ public class SymbolAdminService {
      * row causes a cross-process lock-wait deadlock (found 2026-07-18 adding a new active symbol).
      */
     public void syncActiveSymbols() {
-        List<String> activeTickers = symbolRepository.findByActiveTrueOrderByPriorityAsc().stream()
+        List<String> activeTickers = symbolRepository.findActiveOrderByLatestMarketCapDesc().stream()
+                .limit(realtimeSymbolLimit)
                 .map(Symbol::getTicker)
                 .toList();
         collectorClient.syncSubscriptions(activeTickers);

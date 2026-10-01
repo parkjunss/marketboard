@@ -265,6 +265,28 @@ public class CollectorClient {
         }
     }
 
+    public Optional<BackfillMissingResult> backfillMissing(String period) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/backfill-missing?period=" + period))
+                    .timeout(Duration.ofMinutes(30))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                log.warn("Missing-symbol backfill failed: HTTP {} {}", response.statusCode(), response.body());
+                return Optional.empty();
+            }
+            return Optional.of(objectMapper.readValue(response.body(), BackfillMissingResult.class));
+        } catch (IOException ex) {
+            log.warn("Missing-symbol backfill failed (collector may be offline): {}", ex.getMessage());
+            return Optional.empty();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        }
+    }
+
     // Optional<T> return values are unwrapped by the caching abstraction before #result is bound
     // for unless/condition SpEL -- #result is a bare FearGreedResponse (or null), not an Optional,
     // so isEmpty() would fail with a SpelEvaluationException (as isEmpty() did before this fix).

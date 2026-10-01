@@ -89,6 +89,9 @@ app:
 collector:
   base-url: ${COLLECTOR_BASE_URL:http://localhost:8000}
 
+marketboard:
+  realtime-symbol-limit: ${REALTIME_SYMBOL_LIMIT:30}
+
 indicators:
   cron: ${INDICATORS_CRON:0 0 8 * * *}
 

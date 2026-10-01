@@ -35,7 +35,7 @@ interface StockStats {
   low: number | null;
   closes: number[];
   volumeSeries: number[];
-  volumeChangePct: number;
+  volumeChangePct: number | null;
 }
 
 interface StockRow extends StockStats, Record<string, unknown> {
@@ -51,9 +51,9 @@ function computeStats(ticker: string, name: string, candles: CandleResponse[]): 
   const low = Math.min(...candles.map((c) => c.low));
   const closes = candles.map((c) => c.close);
   const volumeSeries = candles.map((c) => c.volume);
-  const firstVolume = volumeSeries[0] || 1;
   const lastVolume = volumeSeries[volumeSeries.length - 1];
-  const volumeChangePct = ((lastVolume - firstVolume) / firstVolume) * 100;
+  const previousVolume = volumeSeries.at(-2);
+  const volumeChangePct = previousVolume ? ((lastVolume - previousVolume) / previousVolume) * 100 : null;
   return { ticker, name, high, low, closes, volumeSeries, volumeChangePct };
 }
 
@@ -87,7 +87,7 @@ function usePriceFlash(quotes: Record<string, QuoteResponse>) {
 
 export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'all' | 'watchlist' }) {
   const { authFetch } = useAuth();
-  const { quotes, tickers, isConnected } = useQuoteStream();
+  const { quotes, isConnected } = useQuoteStream();
   const flashes = usePriceFlash(quotes);
 
   const [filter, setFilter] = useState<'all' | 'watchlist'>(initialFilter);
@@ -129,38 +129,8 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
     }
   }
 
-  // Keyed by the ticker set so isLoading derives from render-time comparison instead of an
-  // effect calling setState synchronously (see react-hooks/set-state-in-effect).
-  const requestKey = tickers.join(',');
-  const [result, setResult] = useState<{ key: string; statsByTicker: Record<string, StockStats> } | null>(null);
-  const isStatsLoading = tickers.length > 0 && result?.key !== requestKey;
-
-  useEffect(() => {
-    if (tickers.length === 0) return undefined;
-    let cancelled = false;
-    Promise.all(
-      tickers.map((ticker) =>
-        api
-          .getHistory(authFetch, ticker, '1d', HISTORY_LIMIT)
-          .then((candles) => computeStats(ticker, quotes[ticker]?.name ?? ticker, candles)),
-      ),
-    ).then((results) => {
-      if (cancelled) return;
-      const statsByTicker: Record<string, StockStats> = {};
-      results.forEach((stats) => {
-        if (stats) statsByTicker[stats.ticker] = stats;
-      });
-      setResult({ key: requestKey, statsByTicker });
-    });
-    return () => {
-      cancelled = true;
-    };
-    // quotes intentionally excluded: only re-fetch history when the active symbol set changes,
-    // not on every live price tick.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authFetch, tickers, requestKey]);
-
-  const statsByTicker = result?.key === requestKey ? result.statsByTicker : {};
+  const [statsByTicker, setStatsByTicker] = useState<Record<string, StockStats>>({});
+  const requestedTickers = useRef(new Set<string>());
   const rows: StockRow[] = (catalog ?? []).map((catalogQuote) => {
       const ticker = catalogQuote.symbol;
       const stats = statsByTicker[ticker];
@@ -177,9 +147,9 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
         low: stats?.low ?? null,
         closes,
         volumeSeries: stats?.volumeSeries ?? [],
-        volumeChangePct: stats?.volumeChangePct ?? 0,
+        volumeChangePct: stats?.volumeChangePct ?? null,
         price,
-        latestVolume: quote?.volume ?? null,
+        latestVolume: stats?.volumeSeries.at(-1) ?? null,
         changeValue,
         changePct,
       };
@@ -193,6 +163,29 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
   const rowWindowKey = `${filter}:${search.trim().toUpperCase()}:${watchlist.map((item) => item.ticker).join(',')}`;
   const visibleCount = rowWindow.key === rowWindowKey ? rowWindow.count : ROW_BATCH_SIZE;
   const visibleRows = filteredRows.slice(0, visibleCount);
+
+  useEffect(() => {
+    const missing = visibleRows.filter((row) => !requestedTickers.current.has(row.ticker));
+    if (missing.length === 0) return undefined;
+    missing.forEach((row) => requestedTickers.current.add(row.ticker));
+
+    Promise.all(
+      missing.map((row) =>
+        api
+          .getHistory(authFetch, row.ticker, '1d', HISTORY_LIMIT)
+          .then((candles) => computeStats(row.ticker, row.name, candles))
+          .catch(() => null),
+      ),
+    ).then((results) => {
+      setStatsByTicker((current) => {
+        const next = { ...current };
+        results.forEach((stats) => {
+          if (stats) next[stats.ticker] = stats;
+        });
+        return next;
+      });
+    });
+  }, [authFetch, visibleRows]);
 
   useEffect(() => {
     const target = loadMoreRef.current;
@@ -308,20 +301,20 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
     },
     {
       key: 'volume',
-      header: '거래량',
+      header: '거래량 (일봉)',
       width: proportional(1.4),
       renderCell: (row) => (
         <HStack gap={2} align="center">
           <Text type="body">{row.latestVolume != null ? Math.round(row.latestVolume).toLocaleString('ko-KR') : '—'}</Text>
-          {row.volumeSeries.length > 0 && <HStack gap={1} align="center">
+          {row.volumeChangePct != null && <HStack gap={1} align="center">
             <Icon
               icon={row.volumeChangePct >= 0 ? 'arrowUp' : 'arrowDown'}
               color={row.volumeChangePct >= 0 ? 'success' : 'error'}
               size="sm"
             />
-            <Text type="supporting" size="sm">
-              {Math.abs(row.volumeChangePct).toFixed(1)}%
-            </Text>
+            <span title="전일 대비">
+              <Text type="supporting" size="sm">{Math.abs(row.volumeChangePct).toFixed(1)}%</Text>
+            </span>
           </HStack>}
         </HStack>
       ),
@@ -330,11 +323,11 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
       key: 'volumeTrend',
       header: '거래량 추이',
       width: proportional(1.2),
-      renderCell: (row) => <Sparkline values={row.volumeSeries} isPositive={row.volumeChangePct >= 0} />,
+      renderCell: (row) => <Sparkline values={row.volumeSeries} isPositive={(row.volumeChangePct ?? 0) >= 0} />,
     },
   ];
 
-  const isLoading = catalog === null || isWatchlistLoading || isStatsLoading;
+  const isLoading = catalog === null || (filter === 'watchlist' && isWatchlistLoading);
 
   return (
     <PageLayout

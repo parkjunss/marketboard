@@ -50,7 +50,30 @@ def get_active_symbols() -> dict[str, int]:
     conn = connect()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, ticker FROM symbols WHERE is_active = TRUE")
+            cur.execute(
+                "SELECT s.id,s.ticker FROM symbols s "
+                "LEFT JOIN stock_screening_snapshots ss ON ss.symbol_id=s.id "
+                "AND ss.snapshot_run_id=(SELECT id FROM screening_snapshot_runs "
+                "WHERE status='COMPLETED' ORDER BY id DESC LIMIT 1) "
+                "WHERE s.is_active=TRUE "
+                "ORDER BY ss.market_cap IS NULL,ss.market_cap DESC,s.id LIMIT %s",
+                (config.REALTIME_SYMBOL_LIMIT,),
+            )
+            return {ticker: symbol_id for symbol_id, ticker in cur.fetchall()}
+    finally:
+        conn.close()
+
+
+def get_symbols_missing_daily_history() -> dict[str, int]:
+    """Returns every registered symbol that has no daily candle yet."""
+    conn = connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT s.id, s.ticker FROM symbols s "
+                "LEFT JOIN price_history p ON p.symbol_id=s.id AND p.timeframe='1d' "
+                "WHERE p.id IS NULL ORDER BY s.priority, s.ticker"
+            )
             return {ticker: symbol_id for symbol_id, ticker in cur.fetchall()}
     finally:
         conn.close()

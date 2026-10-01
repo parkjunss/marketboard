@@ -1,5 +1,6 @@
 import type {
   AlertResponse,
+  BackfillMissingResult,
   BacktestRunRequest,
   BacktestRunResponse,
   CandleResponse,
@@ -228,6 +229,10 @@ export function deleteAdminSymbol(fetcher: Fetcher, id: number): Promise<void> {
 
 export function backfillAdminSymbol(fetcher: Fetcher, id: number, period = '5y'): Promise<void> {
   return fetcher<void>(`/api/admin/symbols/${id}/backfill?period=${period}`, { method: 'POST' });
+}
+
+export function backfillMissingAdminSymbols(fetcher: Fetcher, period = '5y'): Promise<BackfillMissingResult> {
+  return fetcher<BackfillMissingResult>(`/api/admin/symbols/backfill-missing?period=${period}`, { method: 'POST' });
 }
 
 export function getAdminUsers(fetcher: Fetcher): Promise<UserResponse[]> {

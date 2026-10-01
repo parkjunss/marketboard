@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import platform
 import statistics
 import time
@@ -48,6 +49,10 @@ def _measure(name: str, operation) -> dict[str, object]:
         operation()
         samples_ms.append((time.perf_counter_ns() - started) / 1_000_000)
 
+    return _summarize(name, samples_ms)
+
+
+def _summarize(name: str, samples_ms: list[float]) -> dict[str, object]:
     result = {
         "name": name,
         "runs": MEASURED_RUNS,
@@ -60,6 +65,20 @@ def _measure(name: str, operation) -> dict[str, object]:
     }
     print(json.dumps(result, sort_keys=True))
     return result
+
+
+def _measure_screener(operation) -> dict[str, dict[str, object]]:
+    for _ in range(WARMUP_RUNS):
+        operation({})
+
+    samples = {stage: [] for stage in ("db_load", "cpu", "enrichment", "total")}
+    for _ in range(MEASURED_RUNS):
+        timings = {}
+        operation(timings)
+        for stage, duration in timings.items():
+            samples[stage].append(duration)
+
+    return {stage: _summarize(f"screener.{stage}", durations) for stage, durations in samples.items()}
 
 
 def _screener_closes() -> pd.DataFrame:
@@ -108,8 +127,15 @@ def test_phase0_screener_cpu_baseline(monkeypatch):
     assert result["universeSize"] == 503
     assert result["screenedCount"] == 503
 
-    measurement = _measure("collector.screener.cpu", lambda: screener.run_screener(top_n=10))
-    assert measurement["runs"] == MEASURED_RUNS
+    measurements = _measure_screener(lambda timings: screener.run_screener(top_n=10, timings=timings))
+    assert measurements.keys() == {"db_load", "cpu", "enrichment", "total"}
+
+
+@pytest.mark.performance
+@pytest.mark.skipif(os.getenv("RUN_LIVE_PERFORMANCE") != "1", reason="requires live database and external APIs")
+def test_phase0_screener_live_baseline():
+    measurements = _measure_screener(lambda timings: screener.run_screener(top_n=10, timings=timings))
+    assert measurements.keys() == {"db_load", "cpu", "enrichment", "total"}
 
 
 @pytest.mark.performance

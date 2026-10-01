@@ -180,6 +180,9 @@ def test_run_screener_backfills_past_candidates_that_fail_the_market_cap_filter(
 
     monkeypatch.setattr(screener, "_enrich", fake_enrich)
 
-    result = screener.run_screener(top_n=2, correlation_threshold=1.0, min_market_cap=50e9)
+    timings = {}
+    result = screener.run_screener(top_n=2, correlation_threshold=1.0, min_market_cap=50e9, timings=timings)
 
     assert [r["ticker"] for r in result["results"]] == ["C", "D"]
+    assert timings.keys() == {"db_load", "cpu", "enrichment", "total"}
+    assert all(duration >= 0 for duration in timings.values())

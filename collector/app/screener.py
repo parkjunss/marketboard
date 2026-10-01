@@ -9,6 +9,7 @@ the external-call count small enough to do synchronously within one request.
 """
 
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import timedelta
 
@@ -242,7 +243,9 @@ def run_screener(
     max_rsi: float | None = None,
     min_market_cap: float | None = None,
     min_revenue: float | None = None,
+    timings: dict[str, float] | None = None,
 ) -> dict:
+    total_started = time.perf_counter_ns()
     top_n = max(1, min(top_n, MAX_TOP_N))
     if not (0 < momentum_window_days <= MAX_MOMENTUM_WINDOW_DAYS):
         raise InvalidScreenerParamsError(f"momentumWindowDays must be between 1 and {MAX_MOMENTUM_WINDOW_DAYS}")
@@ -257,7 +260,11 @@ def run_screener(
     if min_revenue is not None and min_revenue < 0:
         raise InvalidScreenerParamsError("minRevenue must be non-negative")
 
+    stage_started = time.perf_counter_ns()
     closes = _load_universe_closes(momentum_window_days, trend_ma_window)
+    db_load_ms = (time.perf_counter_ns() - stage_started) / 1_000_000
+
+    stage_started = time.perf_counter_ns()
     metrics_by_ticker: dict[str, dict] = {}
     for ticker in closes.columns:
         metrics = _ticker_metrics(closes[ticker], momentum_window_days, trend_ma_window)
@@ -281,7 +288,9 @@ def run_screener(
     # just shrink the final result count instead of backfilling from the next-best candidates.
     pool_size = min(len(candidates), top_n * ENRICHMENT_POOL_MULTIPLIER, MAX_ENRICHMENT_POOL)
     pool = _select_diversified(candidates, closes, pool_size, correlation_threshold)
+    cpu_ms = (time.perf_counter_ns() - stage_started) / 1_000_000
 
+    stage_started = time.perf_counter_ns()
     enrichment: dict[str, dict] = {}
     with ThreadPoolExecutor(max_workers=ENRICHMENT_WORKERS) as pool_executor:
         future_to_ticker = {pool_executor.submit(_enrich, t): t for t in pool}
@@ -300,6 +309,14 @@ def run_screener(
             break
 
     results = [{"ticker": t, **metrics_by_ticker[t], **enrichment[t]} for t in selected]
+
+    if timings is not None:
+        timings.update(
+            db_load=db_load_ms,
+            cpu=cpu_ms,
+            enrichment=(time.perf_counter_ns() - stage_started) / 1_000_000,
+            total=(time.perf_counter_ns() - total_started) / 1_000_000,
+        )
 
     return {
         "universeSize": len(closes.columns),

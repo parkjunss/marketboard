@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useMemo, useState } from 'react';
 import { VStack, HStack } from '@astryxdesign/core/Stack';
 import { Section } from '@astryxdesign/core/Section';
 import { Grid } from '@astryxdesign/core/Grid';
@@ -15,9 +15,10 @@ import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/Segme
 import { Center } from '@astryxdesign/core/Center';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { Banner } from '@astryxdesign/core/Banner';
+import { Switch } from '@astryxdesign/core/Switch';
 import { StarIcon as StarOutlineIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
-import { CandleChart, type SmaOverlay } from '@/components/CandleChart';
+import { CandleChart, type SmaOverlay, type TechnicalChartSettings } from '@/components/CandleChart';
 import { AlertsPanel } from '@/components/AlertsPanel';
 import { PriceChangeIndicator } from '@/components/PriceChangeIndicator';
 import { IndicatorPanel } from '@/components/dashboard/IndicatorPanel';
@@ -32,6 +33,7 @@ import { useCandles, type Timeframe } from '@/lib/candles';
 import * as api from '@/lib/api';
 import { ApiError } from '@/lib/api';
 import type { SymbolProfileResponse, WatchlistItemResponse } from '@/lib/types';
+import styles from './symbol-detail.module.css';
 
 const DAILY_STATS_LIMIT = 250; // ~1 trading year of daily candles, independent of chart timeframe
 
@@ -117,6 +119,12 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
   const [smaPeriods, setSmaPeriods] = useState<number[]>(DEFAULT_SMA_PERIODS);
   const [newSmaPeriod, setNewSmaPeriod] = useState<number | null>(null);
   const [isSavingSmaSettings, setIsSavingSmaSettings] = useState(false);
+  const [emaPeriod, setEmaPeriod] = useState<number | null>(null);
+  const [bollingerPeriod, setBollingerPeriod] = useState<number | null>(null);
+  const [rsiPeriod, setRsiPeriod] = useState<number | null>(null);
+  const [isMacdEnabled, setIsMacdEnabled] = useState(false);
+  const [atrPeriod, setAtrPeriod] = useState<number | null>(null);
+  const [relativeVolumePeriod, setRelativeVolumePeriod] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +159,19 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
   }
 
   const dailySmaOverlays = buildSmaOverlays(smaPeriods);
+  const technicalIndicators = useMemo<TechnicalChartSettings>(
+    () => ({
+      ...(emaPeriod ? { emaPeriod } : {}),
+      ...(bollingerPeriod ? { bollingerPeriod } : {}),
+      ...(rsiPeriod ? { rsiPeriod } : {}),
+      ...(isMacdEnabled ? { macd: { fast: 12, slow: 26, signal: 9 } } : {}),
+      ...(atrPeriod ? { atrPeriod } : {}),
+      ...(relativeVolumePeriod ? { relativeVolumePeriod } : {}),
+    }),
+    [atrPeriod, bollingerPeriod, emaPeriod, isMacdEnabled, relativeVolumePeriod, rsiPeriod],
+  );
+  const indicatorKey = `${emaPeriod ?? 0}:${bollingerPeriod ?? 0}:${rsiPeriod ?? 0}:${isMacdEnabled}:${atrPeriod ?? 0}:${relativeVolumePeriod ?? 0}`;
+  const indicatorPaneCount = [rsiPeriod, isMacdEnabled, atrPeriod, relativeVolumePeriod].filter(Boolean).length;
 
   // Fetched independently of the chart's selected timeframe so 전일대비/1년 고가·저가 stay
   // accurate even when the user is looking at 분봉 candles.
@@ -284,7 +305,7 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
             />
           )}
 
-          <Grid columns={5} gap={4}>
+          <Grid columns={{ minWidth: 160, max: 5 }} gap={3}>
             <InfoCard label="현재가">
               <Heading level={4}>{liveQuote?.price != null ? liveQuote.price.toFixed(2) : '—'}</Heading>
               <PriceChangeIndicator changeValue={changeValue} changePct={changePct} />
@@ -307,6 +328,121 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
             </InfoCard>
           </Grid>
 
+          <PanelCard title="가격 차트">
+            <VStack gap={3}>
+              <div className={styles.chartControls}>
+                {timeframe === '1d' && (
+                  <SegmentedControl value={period} onChange={(value) => setPeriod(value as ChartPeriod)} label="조회 기간">
+                    <SegmentedControlItem value="1mo" label="1개월" />
+                    <SegmentedControlItem value="3mo" label="3개월" />
+                    <SegmentedControlItem value="6mo" label="6개월" />
+                    <SegmentedControlItem value="1y" label="1년" />
+                    <SegmentedControlItem value="5y" label="5년" />
+                    <SegmentedControlItem value="all" label="전체" />
+                  </SegmentedControl>
+                )}
+                <SegmentedControl value={timeframe} onChange={(value) => setTimeframe(value as Timeframe)} label="차트 단위">
+                  <SegmentedControlItem value="1d" label="일봉" />
+                  <SegmentedControlItem value="1m" label="분봉" />
+                </SegmentedControl>
+              </div>
+
+              {isChartLoading ? (
+                <Center height={420}>
+                  <Spinner size="lg" label="차트 불러오는 중" />
+                </Center>
+              ) : (
+                <CandleChart
+                  // lightweight-charts' setData() keeps whatever zoom/pan range was already visible
+                  // instead of re-fitting to the new data -- fine for live-tick merges (same key), but
+                  // switching 기간/차트 단위/SMA 설정 swaps in a differently-shaped series and needs a
+                  // fresh chart instance (which fits-to-content on its first setData) or the view
+                  // silently stays cropped to the old range and looks unchanged.
+                  key={`${ticker}:${timeframe}:${chartLimit ?? 'default'}:${smaPeriods.join(',')}:${indicatorKey}`}
+                  candles={candles}
+                  height={420 + indicatorPaneCount * 130}
+                  smaOverlays={timeframe === '1d' ? dailySmaOverlays : NO_OVERLAYS}
+                  indicators={timeframe === '1d' ? technicalIndicators : {}}
+                />
+              )}
+
+              {timeframe === '1d' && (
+                <details className={styles.indicatorSettings}>
+                  <summary>차트 지표 설정</summary>
+                  <VStack gap={3}>
+                    <HStack gap={2} align="center" wrap="wrap">
+                      {smaPeriods.map((smaPeriod) => (
+                        <HStack key={smaPeriod} gap={1} align="center">
+                          <Text type="body">SMA{smaPeriod}</Text>
+                          <IconButton
+                            variant="ghost"
+                            size="sm"
+                            icon={<Icon icon={XMarkIcon} />}
+                            label={`SMA${smaPeriod} 제거`}
+                            clickAction={() => removeSmaPeriod(smaPeriod)}
+                          />
+                        </HStack>
+                      ))}
+                      <NumberInput label="SMA 기간 추가" value={newSmaPeriod} min={2} max={500} onChange={setNewSmaPeriod} />
+                      <Button
+                        variant="secondary"
+                        label="추가"
+                        isDisabled={newSmaPeriod == null || smaPeriods.length >= MAX_SMA_OVERLAYS}
+                        clickAction={addSmaPeriod}
+                      />
+                      <Button variant="primary" label="SMA 저장" isLoading={isSavingSmaSettings} clickAction={saveSmaSettings} />
+                    </HStack>
+                    <div className={styles.indicatorGrid}>
+                      <div className={styles.indicatorOption}>
+                        <Switch label="EMA" value={emaPeriod != null} onChange={(enabled) => setEmaPeriod(enabled ? 20 : null)} />
+                        <NumberInput label="EMA 기간" value={emaPeriod} min={2} max={500} onChange={setEmaPeriod} />
+                      </div>
+                      <div className={styles.indicatorOption}>
+                        <Switch label="볼린저밴드" value={bollingerPeriod != null} onChange={(enabled) => setBollingerPeriod(enabled ? 20 : null)} />
+                        <NumberInput label="볼린저 기간" value={bollingerPeriod} min={2} max={500} onChange={setBollingerPeriod} />
+                      </div>
+                      <div className={styles.indicatorOption}>
+                        <Switch label="RSI" value={rsiPeriod != null} onChange={(enabled) => setRsiPeriod(enabled ? 14 : null)} />
+                        <NumberInput label="RSI 기간" value={rsiPeriod} min={2} max={500} onChange={setRsiPeriod} />
+                      </div>
+                      <div className={styles.indicatorOption}>
+                        <Switch label="MACD (12·26·9)" value={isMacdEnabled} onChange={setIsMacdEnabled} />
+                      </div>
+                      <div className={styles.indicatorOption}>
+                        <Switch label="ATR" value={atrPeriod != null} onChange={(enabled) => setAtrPeriod(enabled ? 14 : null)} />
+                        <NumberInput label="ATR 기간" value={atrPeriod} min={2} max={500} onChange={setAtrPeriod} />
+                      </div>
+                      <div className={styles.indicatorOption}>
+                        <Switch label="상대 거래량" value={relativeVolumePeriod != null} onChange={(enabled) => setRelativeVolumePeriod(enabled ? 20 : null)} />
+                        <NumberInput label="거래량 평균 기간" value={relativeVolumePeriod} min={2} max={500} onChange={setRelativeVolumePeriod} />
+                      </div>
+                    </div>
+                  </VStack>
+                </details>
+              )}
+            </VStack>
+          </PanelCard>
+
+          <AlertsPanel ticker={ticker} />
+
+          <VStack gap={2}>
+            <Heading level={4}>시장 분석</Heading>
+            <Grid columns={{ minWidth: 360, max: 2 }} gap={4}>
+              <PanelCard title="기술 지표">
+                <IndicatorPanel ticker={ticker} />
+              </PanelCard>
+              <PanelCard title="정량 분석">
+                <AnalysisPanel ticker={ticker} />
+              </PanelCard>
+              <PanelCard title="옵션 Put/Call 비율">
+                <PutCallRatioPanel ticker={ticker} />
+              </PanelCard>
+              <PanelCard title="옵션 지지/저항 (맥스페인)">
+                <OptionsLevelsPanel ticker={ticker} />
+              </PanelCard>
+            </Grid>
+          </VStack>
+
           <PanelCard title="기업 개요">
             {profileState?.key !== ticker ? (
               <Center height={80}>
@@ -319,7 +455,7 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
                     {profile.longBusinessSummary}
                   </Text>
                 )}
-                <Grid columns={4} gap={4}>
+                <Grid columns={{ minWidth: 180, max: 4 }} gap={4}>
                   <ProfileStat label="거래소" value={profile.exchange ?? '—'} />
                   <ProfileStat label="섹터" value={profile.sector ?? '—'} />
                   <ProfileStat label="업종" value={profile.industry ?? '—'} />
@@ -342,10 +478,7 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
                     label="직원 수"
                     value={profile.fullTimeEmployees != null ? profile.fullTimeEmployees.toLocaleString('ko-KR') : '—'}
                   />
-                  <ProfileStat
-                    label="본사"
-                    value={[profile.city, profile.country].filter(Boolean).join(', ') || '—'}
-                  />
+                  <ProfileStat label="본사" value={[profile.city, profile.country].filter(Boolean).join(', ') || '—'} />
                   <ProfileStat
                     label="애널리스트 의견"
                     value={
@@ -376,89 +509,6 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
               </Text>
             )}
           </PanelCard>
-
-          <PanelCard title="기술 지표">
-            <IndicatorPanel ticker={ticker} />
-          </PanelCard>
-
-          <PanelCard title="옵션 Put/Call 비율">
-            <PutCallRatioPanel ticker={ticker} />
-          </PanelCard>
-
-          <PanelCard title="옵션 지지/저항 (맥스페인)">
-            <OptionsLevelsPanel ticker={ticker} />
-          </PanelCard>
-
-          <PanelCard title="정량 분석">
-            <AnalysisPanel ticker={ticker} />
-          </PanelCard>
-
-          <HStack justify="between" align="center" wrap="wrap">
-            <Text type="label">가격 차트</Text>
-            <HStack gap={2}>
-              {timeframe === '1d' && (
-                <SegmentedControl value={period} onChange={(value) => setPeriod(value as ChartPeriod)} label="조회 기간">
-                  <SegmentedControlItem value="1mo" label="1개월" />
-                  <SegmentedControlItem value="3mo" label="3개월" />
-                  <SegmentedControlItem value="6mo" label="6개월" />
-                  <SegmentedControlItem value="1y" label="1년" />
-                  <SegmentedControlItem value="5y" label="5년" />
-                  <SegmentedControlItem value="all" label="전체" />
-                </SegmentedControl>
-              )}
-              <SegmentedControl value={timeframe} onChange={(value) => setTimeframe(value as Timeframe)} label="차트 단위">
-                <SegmentedControlItem value="1d" label="일봉" />
-                <SegmentedControlItem value="1m" label="분봉" />
-              </SegmentedControl>
-            </HStack>
-          </HStack>
-
-          {timeframe === '1d' && (
-            <HStack justify="between" align="center" wrap="wrap">
-              <Text type="label">SMA 지표 설정</Text>
-              <HStack gap={2} align="center" wrap="wrap">
-                {smaPeriods.map((smaPeriod) => (
-                  <HStack key={smaPeriod} gap={1} align="center">
-                    <Text type="body">SMA{smaPeriod}</Text>
-                    <IconButton
-                      variant="ghost"
-                      size="sm"
-                      icon={<Icon icon={XMarkIcon} />}
-                      label={`SMA${smaPeriod} 제거`}
-                      clickAction={() => removeSmaPeriod(smaPeriod)}
-                    />
-                  </HStack>
-                ))}
-                <NumberInput label="기간 추가" value={newSmaPeriod} onChange={setNewSmaPeriod} />
-                <Button
-                  variant="secondary"
-                  label="추가"
-                  isDisabled={newSmaPeriod == null || smaPeriods.length >= MAX_SMA_OVERLAYS}
-                  clickAction={addSmaPeriod}
-                />
-                <Button variant="primary" label="저장" isLoading={isSavingSmaSettings} clickAction={saveSmaSettings} />
-              </HStack>
-            </HStack>
-          )}
-
-          {isChartLoading ? (
-            <Center height={420}>
-              <Spinner size="lg" label="차트 불러오는 중" />
-            </Center>
-          ) : (
-            <CandleChart
-              // lightweight-charts' setData() keeps whatever zoom/pan range was already visible
-              // instead of re-fitting to the new data -- fine for live-tick merges (same key), but
-              // switching 기간/차트 단위/SMA 설정 swaps in a differently-shaped series and needs a
-              // fresh chart instance (which fits-to-content on its first setData) or the view
-              // silently stays cropped to the old range and looks unchanged.
-              key={`${ticker}:${timeframe}:${chartLimit ?? 'default'}:${smaPeriods.join(',')}`}
-              candles={candles}
-              smaOverlays={timeframe === '1d' ? dailySmaOverlays : NO_OVERLAYS}
-            />
-          )}
-
-          <AlertsPanel ticker={ticker} />
 
           <PanelCard title="관련 뉴스">
             <NewsPanel ticker={ticker} />

@@ -1,0 +1,49 @@
+.chartControls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.indicatorSettings {
+  border-top: 1px solid var(--mb-border);
+  padding-top: 12px;
+}
+
+.indicatorSettings summary {
+  width: fit-content;
+  margin-bottom: 12px;
+  color: var(--mb-text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.indicatorGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.indicatorOption {
+  display: flex;
+  min-width: 0;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--mb-border);
+  border-radius: 8px;
+}
+
+@media (max-width: 700px) {
+  .chartControls {
+    justify-content: flex-start;
+  }
+
+  .indicatorOption {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

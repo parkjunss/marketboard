@@ -15,6 +15,9 @@ import { Card } from '@astryxdesign/core/Card';
 import { useTheme } from '@astryxdesign/core/theme';
 import type { CandleResponse } from '@/lib/types';
 
+const UP_COLOR = '#00e5a0';
+const DOWN_COLOR = '#ff5c67';
+
 export interface SmaOverlay {
   period: number;
   /** Theme token key. Canvas rendering cannot resolve CSS var(...) references. */
@@ -170,11 +173,13 @@ export function CandleChart({ candles, height = 420, smaOverlays = [], indicator
     });
     chart.panes()[0].setStretchFactor(3);
     candleSeriesRef.current = chart.addSeries(CandlestickSeries, {
-      upColor: tokens['--color-success'],
-      downColor: tokens['--color-error'],
-      borderVisible: false,
-      wickUpColor: tokens['--color-success'],
-      wickDownColor: tokens['--color-error'],
+      upColor: UP_COLOR,
+      downColor: DOWN_COLOR,
+      borderVisible: true,
+      borderUpColor: UP_COLOR,
+      borderDownColor: DOWN_COLOR,
+      wickUpColor: UP_COLOR,
+      wickDownColor: DOWN_COLOR,
     });
     smaSeriesRef.current = smaOverlays.map((overlay) =>
       chart.addSeries(LineSeries, {
@@ -270,7 +275,15 @@ export function CandleChart({ candles, height = 420, smaOverlays = [], indicator
           ? null
           : (candle.volume ?? 0) / averages[index - 1]!,
       );
-      volumeSeriesRef.current?.setData(points(candles, relative));
+      volumeSeriesRef.current?.setData(
+        candles
+          .map((candle, index) => ({
+            time: (new Date(candle.ts).getTime() / 1000) as UTCTimestamp,
+            value: relative[index],
+            color: candle.close >= candle.open ? UP_COLOR : DOWN_COLOR,
+          }))
+          .filter((point): point is { time: UTCTimestamp; value: number; color: string } => point.value != null),
+      );
     }
   }, [candles, indicators, smaOverlays]);
 

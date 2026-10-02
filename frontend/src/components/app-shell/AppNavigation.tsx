@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  ArrowLeftStartOnRectangleIcon, BanknotesIcon, Bars3Icon, BeakerIcon, BriefcaseIcon,
+  ArrowLeftStartOnRectangleIcon, BanknotesIcon, Bars3Icon, BeakerIcon, BellIcon, BriefcaseIcon,
   ChartBarIcon, ChartBarSquareIcon, Cog6ToothIcon, GlobeAltIcon, HeartIcon, HomeIcon,
   MagnifyingGlassIcon, NewspaperIcon, ShieldCheckIcon, XMarkIcon,
 } from '@heroicons/react/24/outline';
@@ -21,10 +21,15 @@ const marketNavigation = [
   { label: '재무 비교', href: '/financials', icon: BanknotesIcon },
 ];
 
+const publicNavigation = marketNavigation.filter(({ href }) =>
+  ['/dashboard', '/stock-list', '/market', '/news'].includes(href),
+);
+
 const accountNavigation = [
   { label: '관심종목', href: '/watchlist', icon: HeartIcon },
   { label: '포트폴리오', href: '/portfolio', icon: BriefcaseIcon },
   { label: '백테스팅', href: '/backtest', icon: ChartBarSquareIcon },
+  { label: '프로필', href: '/profile', icon: Cog6ToothIcon },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -37,7 +42,8 @@ export function AppNavigation({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const displayName = user?.email?.split('@')[0] || '사용자';
+  const displayName = user?.username || user?.email?.split('@')[0] || '게스트';
+  const visibleMarketNavigation = user ? marketNavigation : publicNavigation;
 
   function submitSearch(event: React.FormEvent) {
     event.preventDefault();
@@ -54,19 +60,19 @@ export function AppNavigation({ children }: { children: React.ReactNode }) {
       <div className={styles.brand}><span><ChartBarIcon /></span><strong>MarketBoard</strong><button onClick={() => setOpen(false)} aria-label="메뉴 닫기"><XMarkIcon /></button></div>
       <nav className={styles.nav} aria-label="주요 메뉴">
         <p>MARKET</p>
-        {marketNavigation.map((item) => <Link key={`${item.label}-${item.href}`} href={item.href} onClick={() => setOpen(false)} className={isActive(pathname, item.href) ? styles.active : undefined}><item.icon /><span>{item.label}</span></Link>)}
-        <p>ACCOUNT</p>
-        {accountNavigation.map((item) => <Link key={`${item.label}-${item.href}`} href={item.href} onClick={() => setOpen(false)} className={isActive(pathname, item.href) ? styles.active : undefined}><item.icon /><span>{item.label}</span></Link>)}
+        {visibleMarketNavigation.map((item) => <Link key={`${item.label}-${item.href}`} href={item.href} onClick={() => setOpen(false)} className={isActive(pathname, item.href) ? styles.active : undefined}><item.icon /><span>{item.label}</span></Link>)}
+        {user && <><p>ACCOUNT</p>{accountNavigation.map((item) => <Link key={`${item.label}-${item.href}`} href={item.href} onClick={() => setOpen(false)} className={isActive(pathname, item.href) ? styles.active : undefined}><item.icon /><span>{item.label}</span></Link>)}</>}
         {user?.role === 'ADMIN' && <Link href="/admin/symbols" className={pathname.startsWith('/admin') ? styles.active : undefined}><Cog6ToothIcon /><span>관리자</span></Link>}
       </nav>
       <div className={styles.sidebarFooter}>
         <div className={styles.profile}><span>{displayName.slice(0, 1).toUpperCase()}</span><div><strong>{displayName}</strong><small>{user?.role === 'ADMIN' ? '관리자' : '투자자'}</small></div></div>
-        <button onClick={() => { void logout(); router.replace('/login'); }}><ArrowLeftStartOnRectangleIcon />로그아웃</button>
+        {user ? <button onClick={() => { void logout(); router.replace('/dashboard'); }}><ArrowLeftStartOnRectangleIcon />로그아웃</button> : <Link className={styles.loginLink} href="/login">로그인</Link>}
       </div>
     </aside>
     <div className={styles.workspace}>
       <header className={styles.topbar}>
         <form onSubmit={submitSearch}><MagnifyingGlassIcon /><input aria-label="티커 검색" placeholder="종목명 또는 티커를 검색하세요..." value={query} onChange={(event) => setQuery(event.target.value)} /></form>
+        {user && <Link className={styles.notificationButton} href="/profile#notifications" aria-label="알림 설정"><BellIcon /></Link>}
         <div className={styles.userChip}><span>{displayName.slice(0, 1).toUpperCase()}</span><strong>{displayName}</strong></div>
       </header>
       <div className={styles.content}>{children}</div>

@@ -20,10 +20,10 @@ function DashboardSection({ title, moreHref, children }: { title: string; moreHr
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const name = user?.email?.split('@')[0] || '투자자';
+  const name = user?.email?.split('@')[0] || '게스트';
 
   return <main className={styles.page}>
-    <DashboardHeader name={name} />
+    <DashboardHeader name={name} showWatchlist={Boolean(user)} />
     <MarketOverview />
     <div className={styles.content}>
       <div className={styles.heroGrid}>
@@ -40,7 +40,7 @@ export default function DashboardPage() {
       </div>
       <div className={styles.secondaryGrid}>
         <DashboardSection title="섹터 로테이션"><SectorRotationTable /></DashboardSection>
-        <DashboardSection title="관심종목"><WatchlistOverviewSection /></DashboardSection>
+        {user && <DashboardSection title="관심종목"><WatchlistOverviewSection /></DashboardSection>}
       </div>
     </div>
   </main>;

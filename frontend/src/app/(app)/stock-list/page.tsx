@@ -86,7 +86,7 @@ function usePriceFlash(quotes: Record<string, QuoteResponse>) {
 }
 
 export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'all' | 'watchlist' }) {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const { quotes, isConnected } = useQuoteStream();
   const flashes = usePriceFlash(quotes);
 
@@ -101,11 +101,10 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
 
   useEffect(() => {
     api.getAllQuotes(authFetch).then(setCatalog).catch(() => setCatalog([]));
-    api
-      .getWatchlist(authFetch)
-      .then(setWatchlist)
-      .finally(() => setIsWatchlistLoading(false));
-  }, [authFetch]);
+    if (user) {
+      api.getWatchlist(authFetch).then(setWatchlist).finally(() => setIsWatchlistLoading(false));
+    }
+  }, [authFetch, user]);
 
   const watchlistByTicker = useMemo(() => {
     const map = new Map<string, WatchlistItemResponse>();
@@ -202,7 +201,7 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
   }, [filteredRows.length, rowWindowKey, visibleCount]);
 
   const columns: TableColumn<StockRow>[] = [
-    {
+    ...(user ? [{
       key: 'watch',
       header: '',
       width: pixel(48),
@@ -224,7 +223,7 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
           />
         );
       },
-    },
+    } as TableColumn<StockRow>] : []),
     {
       key: 'ticker',
       header: '종목',
@@ -345,10 +344,10 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
               onChange={setSearch}
               hasClear
             />
-            <SegmentedControl value={filter} onChange={(value) => setFilter(value as 'all' | 'watchlist')} label="보기 필터">
+            {user && <SegmentedControl value={filter} onChange={(value) => setFilter(value as 'all' | 'watchlist')} label="보기 필터">
               <SegmentedControlItem value="all" label="전체" />
               <SegmentedControlItem value="watchlist" label="관심종목" />
-            </SegmentedControl>
+            </SegmentedControl>}
         </HStack>
       }
     >

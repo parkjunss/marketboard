@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -42,13 +43,15 @@ public class SecurityConfig {
                     response.getWriter().write("{\"message\":\"Authentication required\"}");
                 }))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/refresh").permitAll()
+                        .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/refresh",
+                                "/api/auth/password/forgot", "/api/auth/password/reset").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         // Public market-overview data (indices, breadth, sentiment, sector rotation) --
                         // none of it is user-specific, so it's shown on the unauthenticated /overview
                         // page. No mutating endpoints live under these paths for non-admins (the admin
                         // recompute trigger is under /api/admin/**, gated separately below).
                         .requestMatchers("/api/market-indices/**", "/api/market-breadth", "/api/market-sentiment/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/quotes/**", "/api/news/**").permitAll()
                         // /actuator/prometheus is scraped by Prometheus itself (no JWT to send), so it's
                         // permitAll like health/info — order matters here, this must come before the
                         // ADMIN-gated /actuator/** rule below or it'd be shadowed by it.

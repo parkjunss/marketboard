@@ -83,7 +83,14 @@ def _rows_from_history(symbol_id: int, history) -> list[tuple]:
 
 def _download_chunk(chunk_tickers: list[str], period: str):
     return yf.download(
-        chunk_tickers, period=period, interval="1d", group_by="ticker", threads=True, progress=False, timeout=15
+        chunk_tickers,
+        period=period,
+        interval="1d",
+        group_by="ticker",
+        threads=True,
+        progress=False,
+        timeout=15,
+        auto_adjust=True,
     )
 
 

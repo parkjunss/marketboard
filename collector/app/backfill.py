@@ -14,7 +14,7 @@ from . import config, mysql_writer
 
 
 def backfill_symbol(ticker: str, symbol_id: int, period: str = "5y") -> int:
-    data = yf.Ticker(ticker).history(period=period, interval="1d")
+    data = yf.Ticker(ticker).history(period=period, interval="1d", auto_adjust=True)
     rows = [
         (
             symbol_id,

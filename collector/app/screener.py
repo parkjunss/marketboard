@@ -16,6 +16,8 @@ from datetime import timedelta
 import pandas as pd
 from textblob import TextBlob
 
+from .technical_indicators import wilder_rsi
+
 logger = logging.getLogger("collector.screener")
 
 # Defaults, all user-adjustable via run_screener except VOLATILITY_WINDOW_DAYS/RSI_WINDOW/
@@ -109,17 +111,7 @@ def _load_universe_closes(momentum_window_days: int, trend_ma_window: int) -> pd
 
 
 def _rsi(prices: pd.Series, window: int = RSI_WINDOW) -> float | None:
-    delta = prices.diff().dropna()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.rolling(window).mean().iloc[-1]
-    avg_loss = loss.rolling(window).mean().iloc[-1]
-    if pd.isna(avg_gain) or pd.isna(avg_loss):
-        return None
-    if avg_loss == 0:
-        return 100.0
-    rs = avg_gain / avg_loss
-    return float(100 - (100 / (1 + rs)))
+    return wilder_rsi(prices, window)
 
 
 def _ticker_metrics(prices: pd.Series, momentum_window_days: int, trend_ma_window: int) -> dict | None:

@@ -56,6 +56,11 @@ class IndicatorCalculationServiceTest {
         List<Indicator> withHistoryIndicators = indicatorRepository.findBySymbol_TickerIgnoreCaseAndTimeframe("AAA", "1d");
         assertThat(withHistoryIndicators).hasSize(3);
         assertThat(withHistoryIndicators)
+                .filteredOn(indicator -> indicator.getIndicatorType() == IndicatorType.RSI14)
+                .singleElement()
+                .satisfies(indicator -> assertThat(indicator.getValue()).isEqualByComparingTo("50.0000"));
+        assertThat(withHistoryIndicators)
+                .filteredOn(indicator -> indicator.getIndicatorType() != IndicatorType.RSI14)
                 .allSatisfy(indicator -> assertThat(indicator.getValue()).isEqualByComparingTo("100.0000"));
 
         assertThat(indicatorRepository.findBySymbol_TickerIgnoreCaseAndTimeframe("BBB", "1d")).isEmpty();

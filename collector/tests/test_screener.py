@@ -25,6 +25,14 @@ def test_ticker_metrics_none_when_history_too_short():
     assert _ticker_metrics(prices, DEFAULT_MOMENTUM_WINDOW_DAYS, DEFAULT_TREND_MA_WINDOW) is None
 
 
+def test_rsi_flat_prices_are_neutral():
+    assert _rsi(pd.Series([10.0] * 20), 14) == 50.0
+
+
+def test_rsi_uses_wilder_smoothing():
+    assert _rsi(pd.Series([10.0, 11.0, 10.0, 12.0, 11.0]), 3) == pytest.approx(54.545455, rel=1e-6)
+
+
 def test_ticker_metrics_excludes_a_series_with_an_implausible_one_day_move():
     # Regression test: a real S&P 500 ticker's price_history was observed with a bogus +177%
     # one-day jump (almost certainly bad data -- an unadjusted split or a bad print, not a real

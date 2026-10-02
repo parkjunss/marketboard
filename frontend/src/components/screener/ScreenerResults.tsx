@@ -6,6 +6,12 @@ import styles from './screener.module.css';
 const SORT_OPTIONS: { value: ScreenerSortField; label: string }[] = [
   { value: 'MOMENTUM_3M', label: '3개월 모멘텀' }, { value: 'MOMENTUM_6M', label: '6개월 모멘텀' },
   { value: 'MOMENTUM_12M', label: '12개월 모멘텀' }, { value: 'RSI_14', label: 'RSI' },
+
+  { value: 'EMA_20', label: 'EMA 20' }, { value: 'MACD_HISTOGRAM', label: 'MACD 히스토그램' },
+
+  { value: 'BOLLINGER_PERCENT_B_20', label: '볼린저 %B' }, { value: 'ATR_PCT_14', label: 'ATR (%)' },
+
+  { value: 'RELATIVE_VOLUME_20', label: '상대 거래량' },
   { value: 'MARKET_CAP', label: '시가총액' }, { value: 'REVENUE_GROWTH', label: '매출 성장률' },
 ];
 
@@ -15,7 +21,17 @@ function ResultRow({ item, period }: { item: ScreenerSnapshotItem; period: Momen
     <td><div className={styles.symbol}><span className={styles.symbolMark}>{item.ticker.slice(0, 2)}</span><strong>{item.ticker}</strong></div></td>
     <td><strong>${item.price.toLocaleString('en-US', { maximumFractionDigits: 2 })}</strong></td>
     <td className={momentum != null && momentum >= 0 ? styles.positive : styles.negative}>{formatPercent(momentum)}</td>
-    <td>{item.rsi14?.toFixed(1) ?? '—'}</td>
+  <td>{item.rsi14?.toFixed(1) ?? '—'}</td>
+
+  <td><span className={item.ema20 != null && item.price > item.ema20 ? styles.successBadge : styles.neutralBadge}>{item.ema20 == null ? '—' : item.price > item.ema20 ? '위' : '아래'}</span></td>
+
+  <td>{item.macdHistogram?.toFixed(2) ?? '—'}</td>
+
+  <td>{item.bollingerPercentB20?.toFixed(2) ?? '—'}</td>
+
+  <td>{formatPercent(item.atrPct14)}</td>
+
+  <td>{item.relativeVolume20 != null ? `${item.relativeVolume20.toFixed(2)}×` : '—'}</td>
     <td><span className={item.aboveSma200 ? styles.successBadge : styles.neutralBadge}>{item.aboveSma200 == null ? '확인 불가' : item.aboveSma200 ? '위에 있음' : '아래에 있음'}</span></td>
     <td>{formatUsd(item.marketCap)}</td>
     <td>{formatPercent(item.revenueGrowth)}</td>
@@ -46,7 +62,7 @@ export function ScreenerResults({ result, period, sortField, sortDirection, size
       </div>
     </div>
     <div className={styles.tableScroll}>
-      <table className={styles.table}><thead><tr><th>종목</th><th>현재가</th><th>모멘텀 ({periodLabel})</th><th>RSI (14)</th><th>200일선</th><th>시가총액</th><th>매출성장</th><th>ROE</th><th>PER</th></tr></thead>
+      <table className={styles.table}><thead><tr><th>종목</th><th>현재가</th><th>모멘텀 ({periodLabel})</th><th>RSI (14)</th><th>EMA 20</th><th>MACD Hist.</th><th>볼린저 %B</th><th>ATR 14</th><th>상대 거래량</th><th>200일선</th><th>시가총액</th><th>매출성장</th><th>ROE</th><th>PER</th></tr></thead>
       <tbody>{result?.items.map((item) => <ResultRow key={item.ticker} item={item} period={period} />)}</tbody></table>
       {result && result.items.length === 0 && <div className={styles.empty}>조건을 만족하는 종목이 없습니다.</div>}
     </div>

@@ -37,6 +37,14 @@ public class ScreenerService {
             add(where, args, momentumColumn(request.momentumPeriod()) + ">=?", request.minMomentumPct());
             add(where, args, "ss.rsi_14<=?", request.maxRsi());
             add(where, args, "ss.above_sma_200=?", request.aboveSma200());
+            if (request.aboveEma20() != null) {
+                where.append(request.aboveEma20() ? " AND ss.price>ss.ema_20" : " AND ss.price<=ss.ema_20");
+            }
+            add(where, args, "ss.macd_histogram>=?", request.minMacdHistogram());
+            add(where, args, "ss.bollinger_percent_b_20>=?", request.minBollingerPercentB());
+            add(where, args, "ss.bollinger_percent_b_20<=?", request.maxBollingerPercentB());
+            add(where, args, "ss.atr_pct_14<=?", request.maxAtrPct());
+            add(where, args, "ss.relative_volume_20>=?", request.minRelativeVolume());
             add(where, args, "ss.market_cap>=?", request.minMarketCap());
             add(where, args, "ss.revenue_ttm>=?", request.minRevenue());
             add(where, args, "ss.revenue_growth>=?", request.minRevenueGrowth());
@@ -71,6 +79,7 @@ public class ScreenerService {
         };
         int topN = Math.max(1, Math.min(request.topN(), 20));
         var response = search(new ScreenerSearchRequest(period, request.minMomentumPct(), request.maxRsi(), null,
+                null, null, null, null, null, null,
                 request.minMarketCap(), request.minRevenue(), null, null, null, null,
                 new ScreenerSort(sortFor(period), SortDirection.DESC), 0, topN));
         int trendWindow = request.trendMaWindow() == null ? 200 : request.trendMaWindow();
@@ -100,6 +109,10 @@ public class ScreenerService {
                 rs.getBigDecimal("momentum_3m"), rs.getBigDecimal("momentum_6m"), rs.getBigDecimal("momentum_12m"),
                 rs.getBigDecimal("volatility_20d"), rs.getBigDecimal("rsi_14"), rs.getBigDecimal("sma_50"),
                 rs.getBigDecimal("sma_100"), rs.getBigDecimal("sma_200"), (Boolean) rs.getObject("above_sma_200"),
+                rs.getBigDecimal("ema_20"), rs.getBigDecimal("ema_60"), rs.getBigDecimal("macd_line"),
+                rs.getBigDecimal("macd_signal"), rs.getBigDecimal("macd_histogram"),
+                rs.getBigDecimal("bollinger_percent_b_20"), rs.getBigDecimal("atr_pct_14"),
+                rs.getBigDecimal("relative_volume_20"),
                 rs.getBigDecimal("market_cap"), rs.getBigDecimal("revenue_ttm"), rs.getBigDecimal("revenue_growth"),
                 rs.getBigDecimal("roe"), rs.getBigDecimal("profit_margin"), rs.getBigDecimal("trailing_pe"),
                 rs.getBigDecimal("news_sentiment"), rs.getInt("news_count"));
@@ -112,6 +125,9 @@ public class ScreenerService {
     private static String sortColumn(ScreenerSortField field) { return switch (field) {
         case MOMENTUM_3M -> "ss.momentum_3m"; case MOMENTUM_6M -> "ss.momentum_6m"; case MOMENTUM_12M -> "ss.momentum_12m";
         case RSI_14 -> "ss.rsi_14"; case VOLATILITY_20D -> "ss.volatility_20d"; case MARKET_CAP -> "ss.market_cap";
+        case EMA_20 -> "ss.ema_20"; case MACD_HISTOGRAM -> "ss.macd_histogram";
+        case BOLLINGER_PERCENT_B_20 -> "ss.bollinger_percent_b_20"; case ATR_PCT_14 -> "ss.atr_pct_14";
+        case RELATIVE_VOLUME_20 -> "ss.relative_volume_20";
         case REVENUE_GROWTH -> "ss.revenue_growth"; case ROE -> "ss.roe"; case TRAILING_PE -> "ss.trailing_pe";
         case NEWS_SENTIMENT -> "ss.news_sentiment"; case TICKER -> "s.ticker"; }; }
     private static BigDecimal momentum(ScreenerSnapshotItem item, MomentumPeriod period) { return switch (period) {

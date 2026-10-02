@@ -8,6 +8,12 @@ export interface ScreenerFilterValues {
   minMomentumPct: string;
   maxRsi: string;
   aboveSma200: string;
+  aboveEma20: string;
+  minMacdHistogram: string;
+  minBollingerPercentB: string;
+  maxBollingerPercentB: string;
+  maxAtrPct: string;
+  minRelativeVolume: string;
   minMarketCapB: string;
   minRevenueB: string;
   minRevenueGrowth: string;
@@ -18,6 +24,8 @@ export interface ScreenerFilterValues {
 
 export const DEFAULT_FILTERS: ScreenerFilterValues = {
   momentumPeriod: 'SIX_MONTHS', minMomentumPct: '10', maxRsi: '70', aboveSma200: 'true',
+  aboveEma20: '', minMacdHistogram: '', minBollingerPercentB: '', maxBollingerPercentB: '',
+  maxAtrPct: '', minRelativeVolume: '',
   minMarketCapB: '10', minRevenueB: '', minRevenueGrowth: '', minRoe: '', maxTrailingPe: '', minNewsSentiment: '',
 };
 
@@ -34,6 +42,12 @@ export function toSearchRequest(values: ScreenerFilterValues): ScreenerSearchReq
     minMomentumPct: optionalNumber(values.minMomentumPct),
     maxRsi: optionalNumber(values.maxRsi),
     aboveSma200: values.aboveSma200 === '' ? undefined : values.aboveSma200 === 'true',
+    aboveEma20: values.aboveEma20 === '' ? undefined : values.aboveEma20 === 'true',
+    minMacdHistogram: optionalNumber(values.minMacdHistogram),
+    minBollingerPercentB: optionalNumber(values.minBollingerPercentB),
+    maxBollingerPercentB: optionalNumber(values.maxBollingerPercentB),
+    maxAtrPct: optionalNumber(values.maxAtrPct),
+    minRelativeVolume: optionalNumber(values.minRelativeVolume),
     minMarketCap: marketCapB == null ? undefined : marketCapB * 1_000_000_000,
     minRevenue: revenueB == null ? undefined : revenueB * 1_000_000_000,
     minRevenueGrowth: optionalNumber(values.minRevenueGrowth),
@@ -77,6 +91,12 @@ export function ScreenerFilters({ values, onChange, onReset, onSubmit, isLoading
         <summary>고급 필터 (추가 조건)</summary>
         <div className={styles.filterGrid}>
           <Field label="최소 매출 성장률 (%)"><input type="number" value={values.minRevenueGrowth} onChange={(e) => update('minRevenueGrowth', e.target.value)} /></Field>
+          <Field label="20일 EMA 위 위치"><select value={values.aboveEma20} onChange={(e) => update('aboveEma20', e.target.value)}><option value="">전체</option><option value="true">예 (위에 있음)</option><option value="false">아니요 (아래에 있음)</option></select></Field>
+          <Field label="최소 MACD 히스토그램"><input type="number" step="0.01" value={values.minMacdHistogram} placeholder="전체" onChange={(e) => update('minMacdHistogram', e.target.value)} /></Field>
+          <Field label="최소 볼린저 %B"><input type="number" step="0.1" value={values.minBollingerPercentB} placeholder="예: 0" onChange={(e) => update('minBollingerPercentB', e.target.value)} /></Field>
+          <Field label="최대 볼린저 %B"><input type="number" step="0.1" value={values.maxBollingerPercentB} placeholder="예: 1" onChange={(e) => update('maxBollingerPercentB', e.target.value)} /></Field>
+          <Field label="최대 ATR (14, %)"><input type="number" min="0" step="0.1" value={values.maxAtrPct} placeholder="전체" onChange={(e) => update('maxAtrPct', e.target.value)} /></Field>
+          <Field label="최소 상대 거래량 (20일)"><input type="number" min="0" step="0.1" value={values.minRelativeVolume} placeholder="예: 1.5" onChange={(e) => update('minRelativeVolume', e.target.value)} /></Field>
           <Field label="최소 ROE (%)"><input type="number" value={values.minRoe} onChange={(e) => update('minRoe', e.target.value)} /></Field>
           <Field label="최대 PER"><input type="number" min="0" value={values.maxTrailingPe} onChange={(e) => update('maxTrailingPe', e.target.value)} /></Field>
           <Field label="최소 뉴스 심리"><input type="number" step="0.1" value={values.minNewsSentiment} onChange={(e) => update('minNewsSentiment', e.target.value)} /></Field>

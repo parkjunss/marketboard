@@ -34,6 +34,7 @@ class ScreenerServiceTest {
 
         var response = service.search(new ScreenerSearchRequest(
                 MomentumPeriod.SIX_MONTHS, new BigDecimal("10"), new BigDecimal("70"), true,
+                true, BigDecimal.ZERO, null, BigDecimal.ONE, new BigDecimal("5"), new BigDecimal("1.5"),
                 new BigDecimal("10000000000"), null, new BigDecimal("5"), null, new BigDecimal("30"), null,
                 new ScreenerSort(ScreenerSortField.MOMENTUM_6M, SortDirection.DESC), 1, 20));
 
@@ -43,7 +44,8 @@ class ScreenerServiceTest {
         verify(jdbc).query(contains("WHERE status='COMPLETED' ORDER BY id DESC LIMIT 1"), any(RowMapper.class));
         assertThat(mockingDetails(jdbc).getInvocations())
                 .anySatisfy(invocation -> assertThat(invocation.getArguments()[0].toString())
-                        .contains("ss.momentum_6m>=?", "ss.above_sma_200=?", "ss.momentum_6m DESC", "LIMIT ? OFFSET ?"));
+                        .contains("ss.momentum_6m>=?", "ss.above_sma_200=?", "ss.price>ss.ema_20",
+                                "ss.relative_volume_20>=?", "ss.momentum_6m DESC", "LIMIT ? OFFSET ?"));
     }
 
     @Test
@@ -53,6 +55,7 @@ class ScreenerServiceTest {
         when(jdbc.query(startsWith("SELECT s.ticker"), any(RowMapper.class), any(Object[].class))).thenReturn(List.of());
 
         service.search(new ScreenerSearchRequest(null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null,
                 new ScreenerSort(ScreenerSortField.TICKER, SortDirection.ASC), 0, 20));
 
         verify(jdbc).query(contains("ORDER BY s.ticker ASC"), any(RowMapper.class), any(Object[].class));
@@ -63,7 +66,8 @@ class ScreenerServiceTest {
         when(jdbc.query(startsWith("SELECT id,snapshot_date"), any(RowMapper.class))).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.search(new ScreenerSearchRequest(
-                null, null, null, null, null, null, null, null, null, null, null, 0, 20)))
+                null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, 0, 20)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("완료된");
     }
@@ -82,7 +86,8 @@ class ScreenerServiceTest {
         when(rs.getString("ticker")).thenReturn("AAA");
         for (String column : List.of("price", "momentum_3m", "momentum_6m", "momentum_12m", "volatility_20d",
                 "rsi_14", "sma_50", "sma_100", "sma_200", "market_cap", "revenue_ttm", "revenue_growth",
-                "roe", "profit_margin", "trailing_pe", "news_sentiment")) {
+                "ema_20", "ema_60", "macd_line", "macd_signal", "macd_histogram", "bollinger_percent_b_20",
+                "atr_pct_14", "relative_volume_20", "roe", "profit_margin", "trailing_pe", "news_sentiment")) {
             when(rs.getBigDecimal(column)).thenReturn(BigDecimal.ONE);
         }
         when(rs.getObject("above_sma_200")).thenReturn(true);

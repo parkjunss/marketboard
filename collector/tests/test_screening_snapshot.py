@@ -11,19 +11,34 @@ def _prices(count=300):
     return pd.Series([100 * 1.001**day for day in range(count)])
 
 
+def _history(count=300):
+    close = _prices(count)
+    return pd.DataFrame({
+        "high": close * 1.01,
+        "low": close * 0.99,
+        "close": close,
+        "volume": [1_000_000 + day * 1_000 for day in range(count)],
+    })
+
+
 def test_technical_snapshot_contains_fixed_metrics():
-    metrics = screening_snapshot._technical_metrics(_prices())
+    metrics = screening_snapshot._technical_metrics(_history())
 
     assert metrics.keys() == {
         "price", "momentum3m", "momentum6m", "momentum12m", "volatility20d",
-        "rsi14", "sma50", "sma100", "sma200", "aboveSma200",
+        "rsi14", "sma50", "sma100", "sma200", "aboveSma200", "ema20", "ema60",
+        "macdLine", "macdSignal", "macdHistogram", "bollingerPercentB20", "atrPct14", "relativeVolume20",
     }
     assert metrics["momentum3m"] > 0
     assert metrics["aboveSma200"] is True
+    assert metrics["ema20"] > metrics["ema60"]
+    assert metrics["macdHistogram"] is not None
+    assert metrics["atrPct14"] > 0
+    assert metrics["relativeVolume20"] > 1
 
 
 def test_technical_snapshot_skips_insufficient_history():
-    assert screening_snapshot._technical_metrics(_prices(252)) is None
+    assert screening_snapshot._technical_metrics(_history(252)) is None
 
 
 def _row():
@@ -31,6 +46,8 @@ def _row():
         "ticker": "AAA", "price": 123.0, "momentum3m": 1.0, "momentum6m": 2.0,
         "momentum12m": 3.0, "volatility20d": 4.0, "rsi14": 50.0, "sma50": 110.0,
         "sma100": 105.0, "sma200": 100.0, "aboveSma200": True, "marketCap": 1_000,
+        "ema20": 115.0, "ema60": 108.0, "macdLine": 1.2, "macdSignal": 1.0,
+        "macdHistogram": 0.2, "bollingerPercentB20": 0.75, "atrPct14": 2.5, "relativeVolume20": 1.4,
         "totalRevenue": 500, "revenueGrowthPct": 5.0, "returnOnEquityPct": 6.0,
         "profitMarginPct": 7.0, "trailingPE": 20.0, "newsSentiment": 0.1, "newsCount": 2,
     }
@@ -68,7 +85,7 @@ def test_persist_marks_run_failed_without_deleting_previous_snapshot(monkeypatch
 
 def test_batch_marks_run_failed_when_calculation_fails(monkeypatch):
     monkeypatch.setattr(screening_snapshot, "_start_run", lambda started: 44)
-    monkeypatch.setattr(screening_snapshot, "_load_universe_closes", MagicMock(side_effect=RuntimeError("load failed")))
+    monkeypatch.setattr(screening_snapshot, "_load_universe_history", MagicMock(side_effect=RuntimeError("load failed")))
     mark_failed = MagicMock()
     monkeypatch.setattr(screening_snapshot, "_mark_failed", mark_failed)
 

@@ -38,6 +38,7 @@ export interface MomentumScreenerResult {
 export type MomentumPeriod = 'THREE_MONTHS' | 'SIX_MONTHS' | 'TWELVE_MONTHS';
 export type ScreenerSortField =
   | 'MOMENTUM_3M' | 'MOMENTUM_6M' | 'MOMENTUM_12M' | 'RSI_14' | 'VOLATILITY_20D'
+  | 'EMA_20' | 'MACD_HISTOGRAM' | 'BOLLINGER_PERCENT_B_20' | 'ATR_PCT_14' | 'RELATIVE_VOLUME_20'
   | 'MARKET_CAP' | 'REVENUE_GROWTH' | 'ROE' | 'TRAILING_PE' | 'NEWS_SENTIMENT' | 'TICKER';
 
 export interface ScreenerSearchRequest {
@@ -45,6 +46,12 @@ export interface ScreenerSearchRequest {
   minMomentumPct?: number;
   maxRsi?: number;
   aboveSma200?: boolean;
+  aboveEma20?: boolean;
+  minMacdHistogram?: number;
+  minBollingerPercentB?: number;
+  maxBollingerPercentB?: number;
+  maxAtrPct?: number;
+  minRelativeVolume?: number;
   minMarketCap?: number;
   minRevenue?: number;
   minRevenueGrowth?: number;
@@ -68,6 +75,14 @@ export interface ScreenerSnapshotItem {
   sma100: number | null;
   sma200: number | null;
   aboveSma200: boolean | null;
+  ema20: number | null;
+  ema60: number | null;
+  macdLine: number | null;
+  macdSignal: number | null;
+  macdHistogram: number | null;
+  bollingerPercentB20: number | null;
+  atrPct14: number | null;
+  relativeVolume20: number | null;
   marketCap: number | null;
   revenueTtm: number | null;
   revenueGrowth: number | null;

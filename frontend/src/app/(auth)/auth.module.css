@@ -1,0 +1,11 @@
+.page { display: grid; min-height: 100vh; padding: 20px; place-items: center; }
+.card { display: grid; width: min(100%, 400px); gap: 18px; padding: 28px; border: 1px solid var(--mb-border); border-radius: 14px; background: var(--mb-surface); }
+.card h1, .card p { margin: 0; }
+.card > p { color: var(--mb-text-muted); line-height: 1.55; }
+.card label { display: grid; gap: 8px; font-size: 13px; font-weight: 700; }
+.card input { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--mb-border); border-radius: 8px; background: var(--mb-canvas); color: var(--mb-text); font: inherit; }
+.card button { min-height: 44px; border: 0; border-radius: 8px; background: var(--mb-accent); color: #17201f; cursor: pointer; font-weight: 800; }
+.card a { color: var(--mb-accent); }
+.card .success { color: var(--mb-positive); }
+.card .error { color: var(--mb-negative); }
+@media (max-width: 480px) { .page { padding: 12px; } .card { padding: 22px 18px; } }

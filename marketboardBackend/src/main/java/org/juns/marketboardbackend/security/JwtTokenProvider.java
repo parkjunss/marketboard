@@ -25,11 +25,19 @@ public class JwtTokenProvider {
     }
 
     public String generateAccessToken(Long userId, String email, Role role) {
-        return buildToken(userId, email, role, TokenType.ACCESS, accessTokenExpirationMs);
+        return generateAccessToken(userId, email, null, role);
     }
 
     public String generateRefreshToken(Long userId, String email, Role role) {
-        return buildToken(userId, email, role, TokenType.REFRESH, refreshTokenExpirationMs);
+        return generateRefreshToken(userId, email, null, role);
+    }
+
+    public String generateAccessToken(Long userId, String email, String username, Role role) {
+        return buildToken(userId, email, username, role, TokenType.ACCESS, accessTokenExpirationMs);
+    }
+
+    public String generateRefreshToken(Long userId, String email, String username, Role role) {
+        return buildToken(userId, email, username, role, TokenType.REFRESH, refreshTokenExpirationMs);
     }
 
     public long getRefreshTokenExpirationMs() {
@@ -44,12 +52,13 @@ public class JwtTokenProvider {
                 .getPayload();
     }
 
-    private String buildToken(Long userId, String email, Role role, TokenType type, long expirationMs) {
+    private String buildToken(Long userId, String email, String username, Role role, TokenType type, long expirationMs) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(String.valueOf(userId))
                 .claim("email", email)
+                .claim("username", username)
                 .claim("role", role.name())
                 .claim("type", type.name())
                 .issuedAt(Date.from(now))

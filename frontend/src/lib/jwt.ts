@@ -3,6 +3,7 @@ import type { Role } from './types';
 export interface JwtClaims {
   sub: string;
   email: string;
+  username?: string;
   role: Role;
   type: 'ACCESS' | 'REFRESH';
   iat: number;

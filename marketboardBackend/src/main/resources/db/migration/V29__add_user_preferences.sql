@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN daily_report_enabled BOOLEAN NOT NULL DEFAULT FALSE;

@@ -49,6 +49,10 @@ public class AlertTriggerSubscriber implements MessageListener {
             }
             alert.markTriggered();
 
+            if (!alert.getUser().isPriceAlertEnabled()) {
+                return;
+            }
+
             AlertNotification notification = new AlertNotification(
                     alertId,
                     payload.get("symbol").asString(),

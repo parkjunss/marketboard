@@ -16,6 +16,7 @@ import type {
   OptionsLevelsResponse,
   PortfolioPositionResponse,
   PortfolioSummaryResponse,
+  ProfileResponse,
   PutCallRatioResponse,
   QuoteResponse,
   SectorPerformance,
@@ -127,6 +128,31 @@ export function refresh(refreshToken: string): Promise<TokenResponse> {
 
 export function logout(accessToken: string): Promise<void> {
   return request<void>('/api/auth/logout', { method: 'POST', accessToken });
+}
+
+export function forgotPassword(email: string): Promise<void> {
+  return request<void>('/api/auth/password/forgot', { method: 'POST', body: { email } });
+}
+
+export function resetPassword(token: string, newPassword: string): Promise<void> {
+  return request<void>('/api/auth/password/reset', { method: 'POST', body: { token, newPassword } });
+}
+
+export function getProfile(fetcher: Fetcher): Promise<ProfileResponse> {
+  return fetcher<ProfileResponse>('/api/profile');
+}
+
+export function updateProfile(fetcher: Fetcher, input: {
+  username: string;
+  dailyReportEnabled: boolean;
+  priceAlertEnabled: boolean;
+  importantInfoEnabled: boolean;
+}): Promise<ProfileResponse> {
+  return fetcher<ProfileResponse>('/api/profile', { method: 'PATCH', body: input });
+}
+
+export function changePassword(fetcher: Fetcher, input: { currentPassword: string; newPassword: string }): Promise<void> {
+  return fetcher<void>('/api/profile/password', { method: 'PUT', body: input });
 }
 
 /** Authenticated calls below take a fetcher (normally AuthContext's `authFetch`) so 401s trigger a refresh-and-retry. */

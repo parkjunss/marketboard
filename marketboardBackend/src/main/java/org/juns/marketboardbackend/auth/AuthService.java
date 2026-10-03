@@ -81,8 +81,8 @@ public class AuthService {
         if (!user.isActive()) {
             throw new AccountSuspendedException();
         }
-        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole());
-        String replacement = jwtTokenProvider.generateRefreshToken(user.getId(), user.getEmail(), user.getRole());
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getUsername(), user.getRole());
+        String replacement = jwtTokenProvider.generateRefreshToken(user.getId(), user.getEmail(), user.getUsername(), user.getRole());
         if (!refreshTokenService.rotate(userId, refreshToken, replacement)) {
             throw new InvalidTokenException();
         }
@@ -94,8 +94,8 @@ public class AuthService {
     }
 
     private TokenResponse issueTokens(User user) {
-        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole());
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), user.getEmail(), user.getRole());
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getUsername(), user.getRole());
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), user.getEmail(), user.getUsername(), user.getRole());
         refreshTokenService.store(user.getId(), refreshToken);
         return new TokenResponse(accessToken, refreshToken);
     }

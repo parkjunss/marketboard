@@ -11,6 +11,7 @@ const REFRESH_TOKEN_STORAGE_KEY = 'marketboard.refreshToken';
 export interface AuthUser {
   id: number;
   email: string;
+  username?: string;
   role: Role;
 }
 
@@ -41,7 +42,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 function userFromAccessToken(token: string): AuthUser | null {
   const claims = decodeJwt(token);
   if (!claims) return null;
-  return { id: Number(claims.sub), email: claims.email, role: claims.role };
+  return { id: Number(claims.sub), email: claims.email, username: claims.username, role: claims.role };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

@@ -57,6 +57,7 @@ function LoginForm() {
                 hasAutoFocus
               />
               <TextInput type="password" label="비밀번호" value={password} onChange={setPassword} isRequired />
+              <Text type="body" size="sm"><NextLink href="/forgot-password">비밀번호를 잊으셨나요?</NextLink></Text>
               <Button type="submit" variant="primary" label="로그인" isLoading={isSubmitting} />
             </VStack>
           </form>

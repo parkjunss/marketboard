@@ -5,6 +5,15 @@ export interface TokenResponse {
   refreshToken: string;
 }
 
+export interface ProfileResponse {
+  id: number;
+  email: string;
+  username: string;
+  dailyReportEnabled: boolean;
+  priceAlertEnabled: boolean;
+  importantInfoEnabled: boolean;
+}
+
 export interface QuoteResponse {
   symbol: string;
   name: string | null;

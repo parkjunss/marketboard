@@ -45,6 +45,15 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "daily_report_enabled", nullable = false)
+    private boolean dailyReportEnabled;
+
+    @Column(name = "price_alert_enabled", nullable = false)
+    private boolean priceAlertEnabled;
+
+    @Column(name = "important_info_enabled", nullable = false)
+    private boolean importantInfoEnabled;
+
     @Builder
     public User(String email, String passwordHash, String username, Role role) {
         this.email = email;
@@ -52,6 +61,7 @@ public class User {
         this.username = username;
         this.role = role;
         this.status = UserStatus.ACTIVE;
+        this.priceAlertEnabled = true;
     }
 
     @PrePersist
@@ -73,5 +83,17 @@ public class User {
 
     public void reactivate() {
         this.status = UserStatus.ACTIVE;
+    }
+
+    public void updateProfile(String username, boolean dailyReportEnabled,
+                              boolean priceAlertEnabled, boolean importantInfoEnabled) {
+        this.username = username;
+        this.dailyReportEnabled = dailyReportEnabled;
+        this.priceAlertEnabled = priceAlertEnabled;
+        this.importantInfoEnabled = importantInfoEnabled;
+    }
+
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 }

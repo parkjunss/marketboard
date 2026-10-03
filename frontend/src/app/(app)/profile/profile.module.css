@@ -1,0 +1,22 @@
+.page { display: grid; gap: 22px; padding: 34px 36px 56px; }
+.page header h1, .page header p { margin: 0; }
+.page header p { margin-top: 7px; color: var(--mb-text-muted); }
+.tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--mb-border); }
+.tabs button { min-height: 42px; padding: 0 16px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--mb-text-muted); cursor: pointer; white-space: nowrap; }
+.tabs button.activeTab { border-color: var(--mb-accent); color: var(--mb-text); font-weight: 800; }
+.card { display: grid; width: min(100%, 720px); align-content: start; gap: 18px; padding: 24px; border: 1px solid var(--mb-border); border-radius: 14px; background: var(--mb-surface); }
+.card h2 { margin: 0; font-size: 18px; }
+.card label { display: grid; gap: 8px; color: var(--mb-text-muted); font-size: 13px; font-weight: 700; }
+.card input:not([type='checkbox']) { min-height: 44px; padding: 0 12px; border: 1px solid var(--mb-border); border-radius: 8px; background: var(--mb-canvas); color: var(--mb-text); font: inherit; }
+.card input:disabled { opacity: .65; }
+.card button { min-height: 44px; border: 0; border-radius: 8px; background: var(--mb-accent); color: #17201f; cursor: pointer; font-weight: 800; }
+.card button:disabled { cursor: wait; opacity: .55; }
+.description { margin: -8px 0 0; color: var(--mb-text-muted); }
+.notificationRow { display: flex !important; min-height: 72px; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 0; border-top: 1px solid var(--mb-border); cursor: pointer; }
+.notificationRow > span { display: grid; gap: 5px; }
+.notificationRow strong { color: var(--mb-text); font-size: 14px; }
+.notificationRow small { color: var(--mb-text-muted); font-weight: 400; line-height: 1.45; }
+.notificationRow input { width: 42px; height: 22px; flex: 0 0 auto; accent-color: var(--mb-accent); cursor: pointer; }
+.success { margin: 0; color: var(--mb-positive); }
+.error { margin: 0; color: var(--mb-negative); }
+@media (max-width: 760px) { .page { padding: 24px 16px 40px; } .card { padding: 18px; } .tabs button { padding: 0 12px; } }

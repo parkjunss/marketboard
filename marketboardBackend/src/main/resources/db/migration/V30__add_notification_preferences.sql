@@ -1,0 +1,3 @@
+ALTER TABLE users
+    ADD COLUMN price_alert_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN important_info_enabled BOOLEAN NOT NULL DEFAULT FALSE;

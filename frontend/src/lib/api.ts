@@ -13,6 +13,7 @@ import type {
   MarketBreadthResponse,
   MarketIndexInfo,
   NewsItem,
+  NotificationListResponse,
   OptionsLevelsResponse,
   PortfolioPositionResponse,
   PortfolioSummaryResponse,
@@ -154,6 +155,10 @@ export function updateProfile(fetcher: Fetcher, input: {
 export function changePassword(fetcher: Fetcher, input: { currentPassword: string; newPassword: string }): Promise<void> {
   return fetcher<void>('/api/profile/password', { method: 'PUT', body: input });
 }
+
+export function getNotifications(fetcher: Fetcher): Promise<NotificationListResponse> { return fetcher<NotificationListResponse>('/api/notifications'); }
+export function markNotificationRead(fetcher: Fetcher, id: number): Promise<void> { return fetcher<void>(`/api/notifications/${id}/read`, { method: 'PUT' }); }
+export function markAllNotificationsRead(fetcher: Fetcher): Promise<void> { return fetcher<void>('/api/notifications/read-all', { method: 'PUT' }); }
 
 /** Authenticated calls below take a fetcher (normally AuthContext's `authFetch`) so 401s trigger a refresh-and-retry. */
 export type Fetcher = <T>(path: string, options?: { method?: string; body?: unknown }) => Promise<T>;

@@ -100,6 +100,7 @@ export function QuoteStreamProvider({ children }: { children: React.ReactNode })
         client.subscribe('/user/queue/alerts', (message: IMessage) => {
           const notification = JSON.parse(message.body) as AlertNotification;
           showToastRef.current({ body: describeAlert(notification), type: 'info', isAutoHide: false });
+          window.dispatchEvent(new Event('marketboard:notifications-changed'));
         });
       },
       onWebSocketClose: () => setIsConnected(false),

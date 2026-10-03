@@ -389,3 +389,7 @@ export interface PortfolioPositionResponse {
   priceFetchedAt: string | null;
   priceSessionDate: string | null;
 }
+
+export type NotificationType = 'PRICE_ALERT' | 'DAILY_REPORT' | 'IMPORTANT_INFO';
+export interface NotificationResponse { id: number; type: NotificationType; title: string; message: string; link: string | null; readAt: string | null; createdAt: string; }
+export interface NotificationListResponse { items: NotificationResponse[]; unreadCount: number; }

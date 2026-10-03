@@ -28,6 +28,8 @@
 .notificationButton { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border: 1px solid var(--mb-border); border-radius: 50%; color: var(--mb-text-muted); }
 .notificationButton:hover { border-color: var(--mb-accent); color: var(--mb-accent); }
 .notificationButton svg { width: 20px; }
+.notificationButton { position: relative; }
+.notificationBadge { position: absolute; top: -5px; right: -7px; display: grid; min-width: 19px; height: 19px; padding: 0 5px; place-items: center; border: 2px solid var(--mb-canvas); border-radius: 10px; background: #ef4444; color: #fff; font-size: 10px; font-weight: 800; line-height: 1; }
 .userChip { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .userChip > span { width: 34px; height: 34px; }
 .content { min-height: calc(100vh - 64px); }

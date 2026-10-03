@@ -3,6 +3,7 @@ package org.juns.marketboardbackend.alert;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import org.juns.marketboardbackend.alert.dto.AlertNotification;
+import org.juns.marketboardbackend.notification.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.connection.Message;
@@ -26,12 +27,15 @@ public class AlertTriggerSubscriber implements MessageListener {
     private final AlertRepository alertRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper;
+    private final NotificationService notifications;
 
     public AlertTriggerSubscriber(
-            AlertRepository alertRepository, SimpMessagingTemplate messagingTemplate, ObjectMapper objectMapper) {
+            AlertRepository alertRepository, SimpMessagingTemplate messagingTemplate, ObjectMapper objectMapper,
+            NotificationService notifications) {
         this.alertRepository = alertRepository;
         this.messagingTemplate = messagingTemplate;
         this.objectMapper = objectMapper;
+        this.notifications = notifications;
     }
 
     @Override
@@ -59,6 +63,7 @@ public class AlertTriggerSubscriber implements MessageListener {
                     AlertCondition.valueOf(payload.get("condition").asString()),
                     new BigDecimal(payload.get("targetPrice").asString()),
                     new BigDecimal(payload.get("price").asString()));
+            notifications.createPriceAlert(alert, notification.price());
             messagingTemplate.convertAndSendToUser(String.valueOf(userId), "/queue/alerts", notification);
         } catch (RuntimeException ex) {
             log.warn("Failed to process alert-trigger message from Redis", ex);

@@ -1,0 +1,18 @@
+.page { width: min(900px, 100%); margin: 0 auto; padding: 32px 24px 64px; }
+.header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.header p { margin: 0 0 8px; color: var(--mb-accent); font-size: 12px; font-weight: 800; letter-spacing: .14em; }
+.header h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 40px); }
+.header span { color: var(--mb-text-muted); }
+.header button { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 14px; border: 1px solid var(--mb-border); border-radius: 8px; background: var(--mb-surface); color: var(--mb-text); cursor: pointer; }
+.header button:disabled { opacity: .45; cursor: default; }
+.header button svg { width: 18px; }
+.list { overflow: hidden; display: grid; border: 1px solid var(--mb-border); border-radius: 14px; background: var(--mb-surface); }
+.item { display: flex; width: 100%; gap: 13px; padding: 20px; border: 0; border-bottom: 1px solid var(--mb-border); background: transparent; color: var(--mb-text); text-align: left; cursor: pointer; }
+.item:last-child { border-bottom: 0; } .item:hover { background: var(--mb-surface-raised); } .unread { background: rgba(158,231,227,.06); }
+.dot { width: 8px; height: 8px; flex: 0 0 auto; margin-top: 7px; border-radius: 50%; background: transparent; }
+.unread .dot { background: var(--mb-accent); box-shadow: 0 0 0 4px rgba(158,231,227,.12); }
+.body { display: grid; flex: 1; gap: 6px; min-width: 0; } .body > b { font-size: 15px; } .body > span:last-child { color: var(--mb-text-muted); line-height: 1.55; }
+.meta { display: flex; align-items: center; justify-content: space-between; gap: 16px; } .meta strong { color: var(--mb-accent); font-size: 12px; } .meta time { color: var(--mb-text-muted); font-size: 12px; }
+.state, .error, .empty { padding: 48px 24px; border: 1px solid var(--mb-border); border-radius: 14px; text-align: center; } .error { color: #fb7185; }
+.empty svg { width: 42px; color: var(--mb-text-muted); } .empty h2 { margin: 14px 0 6px; } .empty p { margin: 0; color: var(--mb-text-muted); }
+@media (max-width: 640px) { .page { padding: 20px 16px 48px; } .header { align-items: flex-start; flex-direction: column; } .header button { align-self: stretch; justify-content: center; } .item { padding: 16px; } .meta { align-items: flex-start; flex-direction: column; gap: 4px; } }

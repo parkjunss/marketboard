@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -9,6 +9,7 @@ import {
   MagnifyingGlassIcon, NewspaperIcon, ShieldCheckIcon, XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/lib/auth-context';
+import { getNotifications } from '@/lib/api';
 import styles from './app-shell.module.css';
 
 const marketNavigation = [
@@ -39,11 +40,20 @@ function isActive(pathname: string, href: string) {
 export function AppNavigation({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, authFetch } = useAuth();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
   const displayName = user?.username || user?.email?.split('@')[0] || '게스트';
   const visibleMarketNavigation = user ? marketNavigation : publicNavigation;
+
+  useEffect(() => {
+    if (!user) return;
+    const refreshUnreadCount = () => { void getNotifications(authFetch).then((result) => setUnreadCount(result.unreadCount)).catch(() => undefined); };
+    void getNotifications(authFetch).then((result) => setUnreadCount(result.unreadCount)).catch(() => undefined);
+    window.addEventListener('marketboard:notifications-changed', refreshUnreadCount);
+    return () => window.removeEventListener('marketboard:notifications-changed', refreshUnreadCount);
+  }, [authFetch, user]);
 
   function submitSearch(event: React.FormEvent) {
     event.preventDefault();
@@ -72,7 +82,7 @@ export function AppNavigation({ children }: { children: React.ReactNode }) {
     <div className={styles.workspace}>
       <header className={styles.topbar}>
         <form onSubmit={submitSearch}><MagnifyingGlassIcon /><input aria-label="티커 검색" placeholder="종목명 또는 티커를 검색하세요..." value={query} onChange={(event) => setQuery(event.target.value)} /></form>
-        {user && <Link className={styles.notificationButton} href="/profile#notifications" aria-label="알림 설정"><BellIcon /></Link>}
+        {user && <Link className={styles.notificationButton} href="/notifications" aria-label={`알림${unreadCount ? ` ${unreadCount}개 미확인` : ''}`}><BellIcon />{unreadCount > 0 && <span className={styles.notificationBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>}</Link>}
         <div className={styles.userChip}><span>{displayName.slice(0, 1).toUpperCase()}</span><strong>{displayName}</strong></div>
       </header>
       <div className={styles.content}>{children}</div>

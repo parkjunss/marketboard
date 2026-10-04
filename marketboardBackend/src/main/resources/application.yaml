@@ -124,6 +124,9 @@ market-index-history:
 news:
   # General market headlines refresh hourly; per-company news remains lazy on request.
   cron: ${NEWS_CRON:0 0 * * * *}
+  translation:
+    api-key: ${DEEPL_API_KEY:}
+    base-url: ${DEEPL_BASE_URL:https://api-free.deepl.com}
 
 collector-metrics:
   fixed-rate-ms: ${COLLECTOR_METRICS_FIXED_RATE_MS:3600000}

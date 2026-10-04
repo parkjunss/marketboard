@@ -19,8 +19,8 @@ export function NewsList({ items, compact = false }: { items: NewsItem[]; compac
       <NewsThumbnail item={item} />
       <div className={styles.content}>
         <div className={styles.meta}><span>{item.source || 'Market News'}</span><time>{new Date(item.datetime * 1000).toLocaleString('ko-KR')}</time></div>
-        <h2>{item.headline}</h2>
-        {!compact && item.summary && <p>{item.summary}</p>}
+        <h2>{item.headlineKo || item.headline}</h2>
+        {!compact && (item.summaryKo || item.summary) && <p>{item.summaryKo || item.summary}</p>}
       </div>
     </a>)}
   </div>;

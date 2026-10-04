@@ -3,6 +3,7 @@ package org.juns.marketboardbackend.alert;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.EntityGraph;
 
 public interface AlertRepository extends JpaRepository<Alert, Long> {
 
@@ -10,6 +11,7 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
 
     Optional<Alert> findByIdAndUser_Id(Long id, Long userId);
 
+    @EntityGraph(attributePaths = {"user", "symbol"})
     List<Alert> findByTriggeredAtIsNull();
 
     void deleteBySymbol_Id(Long symbolId);

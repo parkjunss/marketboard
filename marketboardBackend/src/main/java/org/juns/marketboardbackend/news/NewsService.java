@@ -30,17 +30,15 @@ public class NewsService {
     private final CollectorClient collectorClient;
     private final NewsSnapshotRepository repository;
     private final ObjectMapper objectMapper;
-    private final NewsTranslationService translationService;
 
-    public NewsService(CollectorClient collectorClient, NewsSnapshotRepository repository, ObjectMapper objectMapper,
-                       NewsTranslationService translationService) {
+    public NewsService(CollectorClient collectorClient, NewsSnapshotRepository repository, ObjectMapper objectMapper) {
         this.collectorClient = collectorClient;
         this.repository = repository;
         this.objectMapper = objectMapper;
-        this.translationService = translationService;
     }
 
     @Scheduled(cron = "${news.cron}")
+    @Transactional
     @CacheEvict(value = CacheConfig.NEWS_GENERAL, allEntries = true)
     public void refresh() {
         List<NewsItem> news = collectorClient.getGeneralNews();
@@ -52,17 +50,12 @@ public class NewsService {
             return;
         }
 
+        String payloadJson = objectMapper.writeValueAsString(news);
         NewsSnapshot snapshot = repository.findTopByOrderByIdDesc().orElse(null);
-        List<NewsItem> previous = snapshot == null
-                ? List.of()
-                : objectMapper.readValue(snapshot.getPayloadJson(), new TypeReference<List<NewsItem>>() {});
-        List<NewsItem> translatedNews = translationService.translateNewItems(news, previous);
-        String payloadJson = objectMapper.writeValueAsString(translatedNews);
         if (snapshot == null) {
             repository.save(NewsSnapshot.builder().payloadJson(payloadJson).build());
         } else {
             snapshot.update(payloadJson);
-            repository.save(snapshot);
         }
         log.info("News refreshed ({} items)", news.size());
     }

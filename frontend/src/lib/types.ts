@@ -136,8 +136,6 @@ export interface NewsItem {
   source: string;
   summary: string;
   url: string;
-  headlineKo: string | null;
-  summaryKo: string | null;
 }
 
 export type IndicatorTypeName = 'SMA20' | 'SMA50' | 'RSI14';

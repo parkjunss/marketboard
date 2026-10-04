@@ -105,8 +105,6 @@ services:
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       MAIL_FROM: ${MAIL_FROM}
       DAILY_REPORT_CRON: ${DAILY_REPORT_CRON:-0 0 8 * * *}
-      DEEPL_API_KEY: ${DEEPL_API_KEY:-}
-      DEEPL_BASE_URL: ${DEEPL_BASE_URL:-https://api-free.deepl.com}
       COLLECTOR_BASE_URL: http://collector:8000
       REALTIME_SYMBOL_LIMIT: ${REALTIME_SYMBOL_LIMIT:-30}
     ports:

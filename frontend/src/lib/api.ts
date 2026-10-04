@@ -64,6 +64,10 @@ function retryablePost<T>(fetcher: Fetcher, path: string, body: unknown): Promis
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
 
+export function googleLoginUrl(): string {
+  return `${API_BASE_URL}/oauth2/authorization/google`;
+}
+
 export class ApiError extends Error {
   status: number;
 
@@ -125,6 +129,10 @@ export function login(input: { email: string; password: string }): Promise<Token
 
 export function refresh(refreshToken: string): Promise<TokenResponse> {
   return request<TokenResponse>('/api/auth/refresh', { method: 'POST', body: { refreshToken } });
+}
+
+export function exchangeOAuthCode(code: string): Promise<TokenResponse> {
+  return request<TokenResponse>('/api/auth/oauth/exchange', { method: 'POST', body: { code } });
 }
 
 export function logout(accessToken: string): Promise<void> {

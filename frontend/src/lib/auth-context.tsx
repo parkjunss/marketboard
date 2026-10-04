@@ -26,6 +26,7 @@ interface AuthContextValue {
   accessToken: string | null;
   isInitializing: boolean;
   login: (email: string, password: string) => Promise<void>;
+  completeOAuthLogin: (code: string) => Promise<void>;
   signup: (input: {
     email: string;
     password: string;
@@ -121,6 +122,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const completeOAuthLogin = useCallback(async (code: string) => {
+    const version = ++sessionVersion.current;
+    const tokens = await api.exchangeOAuthCode(code);
+    if (sessionVersion.current === version) applyTokens(tokens.accessToken, tokens.refreshToken);
+  }, [applyTokens]);
+
   const logout = useCallback(async () => {
     const accessToken = accessTokenRef.current;
     clearTokens();
@@ -150,8 +157,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, accessToken, isInitializing, login, signup, logout, authFetch }),
-    [user, accessToken, isInitializing, login, signup, logout, authFetch],
+    () => ({ user, accessToken, isInitializing, login, completeOAuthLogin, signup, logout, authFetch }),
+    [user, accessToken, isInitializing, login, completeOAuthLogin, signup, logout, authFetch],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

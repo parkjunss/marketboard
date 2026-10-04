@@ -12,6 +12,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.juns.marketboardbackend.auth.GoogleOAuthSuccessHandler;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -22,13 +25,19 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RateLimitFilter rateLimitFilter;
+    private final ObjectProvider<GoogleOAuthSuccessHandler> googleOAuthSuccessHandler;
+    private final ObjectProvider<ClientRegistrationRepository> clientRegistrations;
 
     @Value("${app.cors.allowed-origins}")
     private List<String> allowedOrigins;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, RateLimitFilter rateLimitFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, RateLimitFilter rateLimitFilter,
+                          ObjectProvider<GoogleOAuthSuccessHandler> googleOAuthSuccessHandler,
+                          ObjectProvider<ClientRegistrationRepository> clientRegistrations) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.rateLimitFilter = rateLimitFilter;
+        this.googleOAuthSuccessHandler = googleOAuthSuccessHandler;
+        this.clientRegistrations = clientRegistrations;
     }
 
     @Bean
@@ -36,7 +45,7 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, exception) -> {
                     response.setStatus(401);
                     response.setContentType("application/json");
@@ -44,7 +53,8 @@ public class SecurityConfig {
                 }))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/refresh",
-                                "/api/auth/password/forgot", "/api/auth/password/reset").permitAll()
+                                "/api/auth/password/forgot", "/api/auth/password/reset",
+                                "/api/auth/oauth/exchange", "/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         // Public market-overview data (indices, breadth, sentiment, sector rotation) --
                         // none of it is user-specific, so it's shown on the unauthenticated /overview
@@ -61,6 +71,10 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(rateLimitFilter, JwtAuthenticationFilter.class);
+        if (clientRegistrations.getIfAvailable() != null) {
+            GoogleOAuthSuccessHandler handler = googleOAuthSuccessHandler.getObject();
+            http.oauth2Login(oauth -> oauth.successHandler(handler).failureHandler(handler));
+        }
         return http.build();
     }
 

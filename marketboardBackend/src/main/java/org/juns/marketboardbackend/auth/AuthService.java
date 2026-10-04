@@ -93,7 +93,7 @@ public class AuthService {
         refreshTokenService.revoke(userId);
     }
 
-    private TokenResponse issueTokens(User user) {
+    TokenResponse issueTokens(User user) {
         String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getUsername(), user.getRole());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId(), user.getEmail(), user.getUsername(), user.getRole());
         refreshTokenService.store(user.getId(), refreshToken);

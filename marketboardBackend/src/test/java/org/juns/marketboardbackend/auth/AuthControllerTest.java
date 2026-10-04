@@ -30,6 +30,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -38,7 +40,7 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import tools.jackson.databind.ObjectMapper;
 
-@WebMvcTest(AuthController.class)
+@WebMvcTest({AuthController.class, GoogleOAuthController.class})
 @Import(SecurityConfig.class)
 class AuthControllerTest {
 
@@ -52,6 +54,18 @@ class AuthControllerTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private GoogleOAuthService googleOAuthService;
+
+    @MockitoBean
+    private GoogleOAuthSuccessHandler googleOAuthSuccessHandler;
+
+    @MockitoBean
+    private ClientRegistrationRepository clientRegistrationRepository;
+
+    @MockitoBean
+    private OAuth2AuthorizedClientRepository authorizedClientRepository;
 
     @TestConfiguration
     static class JwtTestConfig implements WebMvcConfigurer {
@@ -177,6 +191,18 @@ class AuthControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(authService, never()).refresh(any());
+    }
+
+    @Test
+    void oauthExchange_validCode_returnsTokens() throws Exception {
+        when(googleOAuthService.exchange("one-time-code"))
+                .thenReturn(new TokenResponse("access-token", "refresh-token"));
+
+        mockMvc.perform(post("/api/auth/oauth/exchange")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"one-time-code\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("access-token"));
     }
 
     @Test

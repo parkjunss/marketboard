@@ -22,14 +22,19 @@ public class ReviewService {
             Resource<List<PortfolioSummaryResponse>> portfolios, Map<Long, List<PortfolioPositionResponse>> positions) {}
     public record Summary(Long id, int period, Instant createdAt) {}
     public record Detail(Long id, int period, Instant createdAt, Payload payload) {}
+    public record Decision(Long id, Long reviewId, ReviewDecision.Choice choice, String reason,
+                           java.time.LocalDate followUpDate, Instant createdAt) {}
     private final InvestmentReviewRepository repository;
     private final MarketIndexHistoryService indices;
     private final MarketBreadthService breadth;
     private final PortfolioService portfolios;
     private final ObjectMapper mapper;
+    private final ReviewDecisionRepository decisions;
     public ReviewService(InvestmentReviewRepository repository, MarketIndexHistoryService indices,
-            MarketBreadthService breadth, PortfolioService portfolios, ObjectMapper mapper) {
-        this.repository = repository; this.indices = indices; this.breadth = breadth; this.portfolios = portfolios; this.mapper = mapper;
+            MarketBreadthService breadth, PortfolioService portfolios, ObjectMapper mapper,
+            ReviewDecisionRepository decisions) {
+        this.repository = repository; this.indices = indices; this.breadth = breadth; this.portfolios = portfolios;
+        this.mapper = mapper; this.decisions = decisions;
     }
 
     // Suspend the write transaction so a missing source can be recorded without marking it rollback-only.
@@ -67,6 +72,23 @@ public class ReviewService {
     @Transactional(readOnly = true)
     public Detail get(Long userId, Long id) {
         return detail(repository.findByIdAndUserId(id, userId).orElseThrow(() -> new ResourceNotFoundException("점검 기록을 찾을 수 없습니다.")));
+    }
+    @Transactional
+    public Decision decide(Long userId, Long reviewId, ReviewDecision.Choice choice, String reason,
+                           java.time.LocalDate followUpDate) {
+        repository.findByIdAndUserId(reviewId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("점검 기록을 찾을 수 없습니다."));
+        return decision(decisions.save(new ReviewDecision(reviewId, userId, choice, reason,
+                choice == ReviewDecision.Choice.DEFER ? followUpDate : null)));
+    }
+    @Transactional(readOnly = true)
+    public List<Decision> decisions(Long userId, Long reviewId) {
+        repository.findByIdAndUserId(reviewId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("점검 기록을 찾을 수 없습니다."));
+        return decisions.findByReviewIdAndUserIdOrderByIdDesc(reviewId, userId).stream().map(this::decision).toList();
+    }
+    private Decision decision(ReviewDecision row) {
+        return new Decision(row.getId(), row.getReviewId(), row.getChoice(), row.getReason(), row.getFollowUpDate(), row.getCreatedAt());
     }
     private Detail detail(InvestmentReview row) {
         return new Detail(row.getId(), row.getPeriod(), row.getCreatedAt(), mapper.readValue(row.getPayloadJson(), Payload.class));

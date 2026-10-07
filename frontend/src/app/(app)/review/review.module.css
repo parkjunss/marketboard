@@ -13,6 +13,17 @@
 .eyebrow { color: var(--mb-accent) !important; font-size: 11px !important; font-weight: 650; letter-spacing: .12em; margin-bottom: 7px; }
 .toolbar { justify-content: flex-start; margin: 16px 0; }
 .topGrid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(340px, .7fr); gap: 16px; align-items: stretch; }
+.summaryGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+.summaryCard { display: grid; gap: 5px; padding: 16px; border: 1px solid var(--mb-border); border-radius: 8px; background: var(--mb-surface); }
+.summaryCard span, .summaryCard small, .decisionItem span, .decisionItem small { color: var(--mb-text-muted); font-size: 12px; }
+.summaryCard strong { font-size: 18px; }
+.decisionForm { display: grid; gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--mb-border); }
+.decisionForm label { display: grid; gap: 6px; font-size: 13px; }
+.decisionForm textarea, .decisionForm input { width: 100%; padding: 9px; border: 1px solid var(--mb-border); border-radius: 6px; background: var(--mb-surface-raised); color: var(--mb-text); font: inherit; }
+.decisionForm textarea { min-height: 88px; resize: vertical; }
+.decisionItem { padding: 12px; border: 1px solid var(--mb-border); border-radius: 6px; }
+.decisionItem span { margin-left: 8px; }
+.decisionItem p { margin: 6px 0; white-space: pre-wrap; }
 .reviewControl, .notice { border: 1px solid var(--mb-border); background: var(--mb-surface); padding: 20px; border-radius: 8px; }
 .notice { border-left: 3px solid var(--mb-accent); }
 .notice p { margin: 8px 0; }
@@ -36,4 +47,4 @@
 .page footer { margin-top: 18px; }
 .page select { max-width: 100%; background: var(--mb-surface-raised); color: var(--mb-text); border: 1px solid var(--mb-border); border-radius: 6px; padding: 8px; }
 @media (max-width: 1000px) { .topGrid { grid-template-columns: 1fr; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .page { padding: 18px 16px 40px; } .grid { grid-template-columns: 1fr; } .toolbar span { width: 100%; } .value { font-size: 24px; } .breadthStats { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .page { padding: 18px 16px 40px; } .grid, .summaryGrid { grid-template-columns: 1fr; } .toolbar span { width: 100%; } .value { font-size: 24px; } .breadthStats { grid-template-columns: 1fr; } }

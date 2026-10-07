@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { getMarketIndexHistory, getMarketBreadth, getPortfolios, createReview, getReviews, getReview } from '@/lib/api';
-import type { ReviewDetail, ReviewSummary, ReviewResource } from '@/lib/types';
+import { getMarketIndexHistory, getMarketBreadth, getPortfolios, createReview, getReviews, getReview, getReviewDecisions, createReviewDecision } from '@/lib/api';
+import type { ReviewDecision, ReviewDecisionChoice, ReviewDetail, ReviewSummary, ReviewResource } from '@/lib/types';
 import type { CandleResponse, MarketBreadthResponse, PortfolioSummaryResponse } from '@/lib/types';
 import { reviewChange } from '@/lib/investment-review';
 import styles from './review.module.css';
@@ -19,6 +19,7 @@ const indices = [
 ];
 type Resource<T> = { data: T; error?: never } | { data?: never; error: string };
 const quality = { EMPTY: '보유 없음', UNAVAILABLE: '평가 불가', PARTIAL: '부분 평가', UNVERIFIED: '품질 확인 필요', READY: '가격 관측 양호' };
+const decisionLabel = { EXECUTE: '실행', DEFER: '보류', HOLD: '유지' };
 const number = (value: number | null) => value === null ? '—' : value.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
 const restored = <T,>(resource: ReviewResource<T>): Resource<T> => resource.data === null
   ? { error: resource.error ?? '저장 당시 자료 없음' } : { data: resource.data };
@@ -34,6 +35,10 @@ export default function ReviewPage() {
   const [records, setRecords] = useState<ReviewSummary[]>([]);
   const [recordError, setRecordError] = useState<string | null>(null);
   const [recordBusy, setRecordBusy] = useState(false);
+  const [decisions, setDecisions] = useState<ReviewDecision[]>([]);
+  const [choice, setChoice] = useState<ReviewDecisionChoice>('HOLD');
+  const [reason, setReason] = useState('');
+  const [followUpDate, setFollowUpDate] = useState('');
   const generation = useRef(0);
 
   useEffect(() => {
@@ -55,6 +60,7 @@ export default function ReviewPage() {
       setSaved(detail); setPeriod(detail.period);
       setHistories(Object.fromEntries(Object.entries(detail.payload.histories).map(([key, value]) => [key, restored(value)])));
       setBreadth(restored(detail.payload.breadth)); setPortfolios(restored(detail.payload.portfolios));
+      void getReviewDecisions(authFetch, detail.id).then(setDecisions).catch(() => setDecisions([]));
       setRecords(previous => [{ id: detail.id, period: detail.period, createdAt: detail.createdAt }, ...previous.filter(row => row.id !== detail.id)].sort((a, b) => b.id - a.id).slice(0, 50));
     } catch (error) { setRecordError(error instanceof Error ? error.message : '점검 기록 처리에 실패했습니다.'); }
     finally { setRecordBusy(false); }
@@ -78,6 +84,23 @@ export default function ReviewPage() {
 
   const loading = !portfolios || !breadth || indices.some(index => !histories[index.slug]);
   const incomplete = portfolios?.data?.filter(portfolio => portfolio.valuationStatus !== 'READY' && portfolio.valuationStatus !== 'EMPTY') ?? [];
+  const changes = indices.map(index => {
+    const data = histories[index.slug]?.data;
+    return data ? reviewChange(data, period, index.slug === 'US10Y') : null;
+  });
+  const rising = changes.filter(result => result && result.change > 0).length;
+  const falling = changes.filter(result => result && result.change < 0).length;
+
+  async function saveDecision(event: React.FormEvent) {
+    event.preventDefault();
+    if (!saved || !reason.trim() || recordBusy) return;
+    setRecordBusy(true); setRecordError(null);
+    try {
+      const decision = await createReviewDecision(authFetch, saved.id, { choice, reason: reason.trim(), followUpDate: choice === 'DEFER' && followUpDate ? followUpDate : null });
+      setDecisions(previous => [decision, ...previous]); setReason(''); setFollowUpDate('');
+    } catch (error) { setRecordError(error instanceof Error ? error.message : '판단 기록 저장에 실패했습니다.'); }
+    finally { setRecordBusy(false); }
+  }
 
   return (
     <main className={styles.page}>
@@ -92,6 +115,12 @@ export default function ReviewPage() {
         <span>최근 {period}개 일봉 간격 비교 · 일정 설정과 별개</span>
       </div>
 
+      <section className={styles.summaryGrid} aria-label="점검 요약">
+        <article className={styles.summaryCard}><span>시장 변화</span><strong>상승 {rising} · 하락 {falling}</strong><small>확인 가능 {changes.filter(Boolean).length} / {indices.length}개</small></article>
+        <article className={styles.summaryCard}><span>보유 자료</span><strong>{incomplete.length ? `${incomplete.length}개 확인 필요` : portfolios?.data ? '관측 양호' : '확인 중'}</strong><small>포트폴리오 {portfolios?.data?.length ?? 0}개</small></article>
+        <article className={styles.summaryCard}><span>최근 판단</span><strong>{decisions[0] ? decisionLabel[decisions[0].choice] : '미기록'}</strong><small>{decisions[0] ? new Date(decisions[0].createdAt).toLocaleString('ko-KR') : '점검 저장 후 기록 가능'}</small></article>
+      </section>
+
       <div className={styles.topGrid}>
       <section className={styles.reviewControl} aria-label="점검 기록">
         <h2>{saved ? `저장된 점검 #${saved.id}` : '점검 근거 보관'}</h2>
@@ -105,6 +134,14 @@ export default function ReviewPage() {
         </div>
         {recordError && <p role="alert">{recordError}</p>}
         {saved && <p>저장 당시 근거를 표시하고 있습니다. 자료 누락도 그대로 보존하며, 동일 시점의 시장 전체를 보장하지 않습니다.</p>}
+        {saved && <form className={styles.decisionForm} onSubmit={saveDecision}>
+          <h3>판단 기록</h3>
+          <div className={styles.toolbar}>{(['EXECUTE', 'DEFER', 'HOLD'] as ReviewDecisionChoice[]).map(value => <button type="button" key={value} aria-pressed={choice === value} onClick={() => setChoice(value)}>{decisionLabel[value]}</button>)}</div>
+          <label>판단 근거<textarea required maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} /></label>
+          {choice === 'DEFER' && <label>다시 확인할 날짜<input type="date" value={followUpDate} onChange={event => setFollowUpDate(event.target.value)} /></label>}
+          <button disabled={recordBusy || !reason.trim()} type="submit">판단 저장</button>
+          {decisions.map(decision => <article key={decision.id} className={styles.decisionItem}><strong>{decisionLabel[decision.choice]}</strong><span>{new Date(decision.createdAt).toLocaleString('ko-KR')}</span><p>{decision.reason}</p>{decision.followUpDate && <small>재점검 {decision.followUpDate}</small>}</article>)}
+        </form>}
       </section>
 
       <section className={styles.notice} aria-labelledby="attention-title">

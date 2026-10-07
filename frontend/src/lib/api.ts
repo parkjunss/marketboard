@@ -32,7 +32,7 @@ import type { MomentumScreenerParams, MomentumScreenerResult } from './screener-
 import type { StockAnalysisResult } from './analysis-types';
 import { idempotentPost } from './idempotent-post';
 import { decodeJwt } from './jwt';
-import type { ReviewDetail, ReviewSummary } from './types';
+import type { ReviewDecision, ReviewDecisionChoice, ReviewDetail, ReviewSummary } from './types';
 import type { StockReportDetail, StockReportSummary } from './report-types';
 
 export function createStockReport(fetcher: Fetcher, ticker: string): Promise<StockReportDetail> {
@@ -53,6 +53,14 @@ export function getReviews(fetcher: Fetcher): Promise<ReviewSummary[]> {
 }
 export function getReview(fetcher: Fetcher, id: number): Promise<ReviewDetail> {
   return fetcher<ReviewDetail>(`/api/reviews/${id}`);
+}
+export function getReviewDecisions(fetcher: Fetcher, id: number): Promise<ReviewDecision[]> {
+  return fetcher<ReviewDecision[]>(`/api/reviews/${id}/decisions`);
+}
+export function createReviewDecision(fetcher: Fetcher, id: number, input: {
+  choice: ReviewDecisionChoice; reason: string; followUpDate: string | null;
+}): Promise<ReviewDecision> {
+  return fetcher<ReviewDecision>(`/api/reviews/${id}/decisions`, { method: 'POST', body: input });
 }
 
 function retryablePost<T>(fetcher: Fetcher, path: string, body: unknown): Promise<T> {

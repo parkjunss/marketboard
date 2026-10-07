@@ -338,6 +338,15 @@ export type PriceSource = 'LIVE' | 'CLOSE' | 'CACHED' | 'UNAVAILABLE';
 
 export interface ReviewResource<T> { data: T | null; error: string | null }
 export interface ReviewSummary { id: number; period: 5 | 21; createdAt: string }
+export type ReviewDecisionChoice = 'EXECUTE' | 'DEFER' | 'HOLD';
+export interface ReviewDecision {
+  id: number;
+  reviewId: number;
+  choice: ReviewDecisionChoice;
+  reason: string;
+  followUpDate: string | null;
+  createdAt: string;
+}
 export interface ReviewDetail extends ReviewSummary {
   payload: {
     schemaVersion: number;

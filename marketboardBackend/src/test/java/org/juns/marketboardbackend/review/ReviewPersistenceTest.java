@@ -36,8 +36,12 @@ class ReviewPersistenceTest {
             assertThatThrownBy(() -> reviews.get(-1L, saved.id())).isInstanceOf(ResourceNotFoundException.class);
             assertThat(idempotency.execute(user.getId(), "review-create", key, 5, ReviewService.Detail.class,
                     () -> { throw new AssertionError("must replay stored evidence"); })).isEqualTo(saved);
+            var decision = reviews.decide(user.getId(), saved.id(), ReviewDecision.Choice.DEFER, "가격 자료를 다시 확인", java.time.LocalDate.now().plusDays(7));
+            assertThat(reviews.decisions(user.getId(), saved.id())).containsExactly(decision);
+            assertThatThrownBy(() -> reviews.decisions(-1L, saved.id())).isInstanceOf(ResourceNotFoundException.class);
         } finally {
             jdbc.update("delete from idempotent_requests where user_id = ?", user.getId());
+            jdbc.update("delete from review_decisions where user_id = ?", user.getId());
             jdbc.update("delete from investment_reviews where user_id = ?", user.getId());
             users.deleteById(user.getId());
         }

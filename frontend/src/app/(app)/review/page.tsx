@@ -7,6 +7,7 @@ import { getMarketIndexHistory, getMarketBreadth, getPortfolios, createReview, g
 import type { ReviewDecision, ReviewDecisionChoice, ReviewDetail, ReviewSummary, ReviewResource } from '@/lib/types';
 import type { CandleResponse, MarketBreadthResponse, PortfolioSummaryResponse } from '@/lib/types';
 import { reviewChange } from '@/lib/investment-review';
+import { buildReviewInsights } from '@/lib/investment-review-insights';
 import styles from './review.module.css';
 
 const indices = [
@@ -86,10 +87,12 @@ export default function ReviewPage() {
   const incomplete = portfolios?.data?.filter(portfolio => portfolio.valuationStatus !== 'READY' && portfolio.valuationStatus !== 'EMPTY') ?? [];
   const changes = indices.map(index => {
     const data = histories[index.slug]?.data;
-    return data ? reviewChange(data, period, index.slug === 'US10Y') : null;
+    const result = data ? reviewChange(data, period, index.slug === 'US10Y') : null;
+    return result ? { ...result, slug: index.slug, name: index.name } : null;
   });
   const rising = changes.filter(result => result && result.change > 0).length;
   const falling = changes.filter(result => result && result.change < 0).length;
+  const insights = buildReviewInsights(changes.filter(result => result !== null), breadth?.data, portfolios?.data);
 
   async function saveDecision(event: React.FormEvent) {
     event.preventDefault();
@@ -121,6 +124,15 @@ export default function ReviewPage() {
         <article className={styles.summaryCard}><span>최근 판단</span><strong>{decisions[0] ? decisionLabel[decisions[0].choice] : '미기록'}</strong><small>{decisions[0] ? new Date(decisions[0].createdAt).toLocaleString('ko-KR') : '점검 저장 후 기록 가능'}</small></article>
       </section>
 
+      <section className={styles.insightBlock} aria-labelledby="insight-title">
+        <div className={styles.sectionHead}><div><p className={styles.eyebrow}>판단 지원</p><h2 id="insight-title">근거 수치와 위험 신호</h2></div><small>규칙 기반 참고 자료 · 자동 매매 신호 아님</small></div>
+        <div className={styles.insightMetrics}>{insights.metrics.map(metric => <article key={metric.label}><span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.detail}</small></article>)}</div>
+        <div className={styles.insightColumns}>
+          <article><h3>위험 신호</h3>{insights.risks.length ? <ul>{insights.risks.map(risk => <li key={risk}>{risk}</li>)}</ul> : <p>현재 규칙에서 감지된 주요 위험 신호가 없습니다.</p>}</article>
+          <article><h3>판단 근거 초안</h3><p>{insights.draft}</p>{saved && <button type="button" onClick={() => setReason(insights.draft)}>판단 근거에 복사</button>}</article>
+        </div>
+      </section>
+
       <div className={styles.topGrid}>
       <section className={styles.reviewControl} aria-label="점검 기록">
         <h2>{saved ? `저장된 점검 #${saved.id}` : '점검 근거 보관'}</h2>
@@ -145,8 +157,8 @@ export default function ReviewPage() {
       </section>
 
       <section className={styles.notice} aria-labelledby="attention-title">
-        <p className={styles.eyebrow}>먼저 확인할 사항</p><h2 id="attention-title">전략 규칙을 연결하기 전입니다</h2>
-        <p>현재는 시장과 보유 자료를 점검하는 단계입니다. 매수·매도·유지 신호와 목표 비중 편차는 아직 산출하지 않습니다.</p>
+        <p className={styles.eyebrow}>먼저 확인할 사항</p><h2 id="attention-title">최종 판단은 직접 확인하세요</h2>
+        <p>위험 신호와 초안은 현재 화면의 제한된 자료를 규칙으로 요약한 결과입니다. 매수·매도 신호와 목표 비중 편차는 산출하지 않습니다.</p>
         <p aria-live="polite">{!portfolios ? '보유 자료 확인 중…' : portfolios.data === undefined ? portfolios.error : incomplete.length ? `${incomplete.length}개 포트폴리오의 가격 누락·관측 시점 확인이 필요합니다.` : '아래에서 포트폴리오별 자료 상태를 확인하세요.'}</p>
         <Link href="/backtest">전략 연구 · 기존 백테스트 살펴보기 →</Link>
       </section>

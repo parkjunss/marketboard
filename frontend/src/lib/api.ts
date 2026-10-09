@@ -17,6 +17,8 @@ import type {
   OptionsLevelsResponse,
   PortfolioPositionResponse,
   PortfolioTransactionResponse,
+  PortfolioThesisResponse,
+  PortfolioWeightRuleResponse,
   PortfolioSummaryResponse,
   ProfileResponse,
   PutCallRatioResponse,
@@ -462,6 +464,43 @@ export function createPortfolioTransaction(
     `/api/portfolios/${portfolioId}/transactions`,
     input,
   );
+}
+
+export function getPortfolioRule(fetcher: Fetcher, portfolioId: number): Promise<PortfolioWeightRuleResponse | null> {
+  return fetcher<PortfolioWeightRuleResponse | null>(`/api/portfolios/${portfolioId}/rules`);
+}
+
+export function putPortfolioRule(
+  fetcher: Fetcher, portfolioId: number, maxPositionWeight: number,
+): Promise<PortfolioWeightRuleResponse> {
+  return fetcher<PortfolioWeightRuleResponse>(`/api/portfolios/${portfolioId}/rules`, {
+    method: 'PUT', body: { maxPositionWeight },
+  });
+}
+
+export function getPortfolioTheses(fetcher: Fetcher, portfolioId: number): Promise<PortfolioThesisResponse[]> {
+  return fetcher<PortfolioThesisResponse[]>(`/api/portfolios/${portfolioId}/theses`);
+}
+
+export function createPortfolioThesis(
+  fetcher: Fetcher,
+  portfolioId: number,
+  input: { ticker: string; thesis: string; invalidationCondition: string; targetWeight: number; maxWeight: number },
+): Promise<PortfolioThesisResponse> {
+  return fetcher<PortfolioThesisResponse>(`/api/portfolios/${portfolioId}/theses`, {
+    method: 'POST', body: input,
+  });
+}
+
+export function revisePortfolioThesis(
+  fetcher: Fetcher,
+  portfolioId: number,
+  thesisId: number,
+  input: { thesis: string; invalidationCondition: string; targetWeight: number; maxWeight: number },
+): Promise<PortfolioThesisResponse> {
+  return fetcher<PortfolioThesisResponse>(`/api/portfolios/${portfolioId}/theses/${thesisId}`, {
+    method: 'PUT', body: input,
+  });
 }
 
 export function addPortfolioPosition(

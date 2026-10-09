@@ -23,7 +23,8 @@ import { ArrowTrendingDownIcon, ArrowTrendingUpIcon, PlusIcon, TrashIcon } from 
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import { ApiError } from '@/lib/api';
-import type { PortfolioPositionResponse, PortfolioSummaryResponse, PortfolioTransactionResponse } from '@/lib/types';
+import type { PortfolioPositionResponse, PortfolioSummaryResponse, PortfolioThesisResponse,
+  PortfolioTransactionResponse, PortfolioWeightRuleResponse } from '@/lib/types';
 import styles from './portfolio.module.css';
 
 function formatMoney(value: number | null): string {
@@ -62,6 +63,9 @@ export default function PortfolioPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [positions, setPositions] = useState<{ key: number; data: PortfolioPositionResponse[] } | null>(null);
   const [transactions, setTransactions] = useState<{ key: number; data: PortfolioTransactionResponse[] } | null>(null);
+  const [strategy, setStrategy] = useState<{
+    key: number; rule: PortfolioWeightRuleResponse | null; theses: PortfolioThesisResponse[];
+  } | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [newPortfolioName, setNewPortfolioName] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
@@ -77,6 +81,15 @@ export default function PortfolioPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [positionError, setPositionError] = useState<{ key: number; message: string } | null>(null);
   const [transactionError, setTransactionError] = useState<{ key: number; message: string } | null>(null);
+  const [strategyError, setStrategyError] = useState<string | null>(null);
+  const [maxPositionPct, setMaxPositionPct] = useState<number | null>(null);
+  const [thesisTicker, setThesisTicker] = useState('');
+  const [thesisText, setThesisText] = useState('');
+  const [invalidationCondition, setInvalidationCondition] = useState('');
+  const [targetWeightPct, setTargetWeightPct] = useState<number | null>(null);
+  const [maxWeightPct, setMaxWeightPct] = useState<number | null>(null);
+  const [editingThesisId, setEditingThesisId] = useState<number | null>(null);
+  const [isSavingStrategy, setIsSavingStrategy] = useState(false);
 
   // No portfolio explicitly selected yet -> default to the first one, derived at render time
   // rather than set via an effect (avoids a second setState cascading off the initial fetch).
@@ -102,6 +115,15 @@ export default function PortfolioPage() {
     setTransactionError(null);
   }
 
+  async function refreshStrategy(portfolioId: number) {
+    const [rule, theses] = await Promise.all([
+      api.getPortfolioRule(authFetch, portfolioId), api.getPortfolioTheses(authFetch, portfolioId),
+    ]);
+    setStrategy({ key: portfolioId, rule, theses });
+    setMaxPositionPct(rule ? rule.maxPositionWeight * 100 : null);
+    setStrategyError(null);
+  }
+
   useEffect(() => {
     let cancelled = false;
     api.getPortfolios(authFetch).then((data) => {
@@ -123,17 +145,23 @@ export default function PortfolioPage() {
     Promise.all([
       api.getPortfolioPositions(authFetch, effectiveSelectedId),
       api.getPortfolioTransactions(authFetch, effectiveSelectedId),
-    ]).then(([positionData, transactionData]) => {
+      api.getPortfolioRule(authFetch, effectiveSelectedId),
+      api.getPortfolioTheses(authFetch, effectiveSelectedId),
+    ]).then(([positionData, transactionData, rule, theses]) => {
       if (!cancelled) {
         setPositions({ key: effectiveSelectedId, data: positionData });
         setTransactions({ key: effectiveSelectedId, data: transactionData });
+        setStrategy({ key: effectiveSelectedId, rule, theses });
+        setMaxPositionPct(rule ? rule.maxPositionWeight * 100 : null);
         setPositionError(null);
         setTransactionError(null);
+        setStrategyError(null);
       }
     }).catch(() => {
       if (!cancelled) {
         setPositionError({ key: effectiveSelectedId, message: '보유 종목 자료를 가져오지 못했습니다. 잠시 후 새로고침하세요.' });
         setTransactionError({ key: effectiveSelectedId, message: '거래 원장을 가져오지 못했습니다. 잠시 후 새로고침하세요.' });
+        setStrategyError('투자 가설과 비중 규칙을 가져오지 못했습니다.');
       }
     });
     return () => {
@@ -208,11 +236,60 @@ export default function PortfolioPage() {
     }
   }
 
+  async function saveWeightRule() {
+    if (effectiveSelectedId == null || maxPositionPct == null || isSavingStrategy) return;
+    setIsSavingStrategy(true); setStrategyError(null);
+    try {
+      await api.putPortfolioRule(authFetch, effectiveSelectedId, maxPositionPct / 100);
+      await refreshStrategy(effectiveSelectedId);
+    } catch (error) {
+      setStrategyError(error instanceof ApiError ? error.message : '최대 비중 규칙 저장에 실패했습니다.');
+    } finally { setIsSavingStrategy(false); }
+  }
+
+  function editThesis(row: PortfolioThesisResponse) {
+    setEditingThesisId(row.id);
+    setThesisTicker(row.ticker);
+    setThesisText(row.thesis);
+    setInvalidationCondition(row.invalidationCondition);
+    setTargetWeightPct(row.targetWeight * 100);
+    setMaxWeightPct(row.maxWeight * 100);
+    setStrategyError(null);
+  }
+
+  async function saveThesis() {
+    if (effectiveSelectedId == null || !thesisTicker.trim() || !thesisText.trim()
+      || !invalidationCondition.trim() || targetWeightPct == null || maxWeightPct == null
+      || isSavingStrategy) return;
+    setIsSavingStrategy(true); setStrategyError(null);
+    const input = {
+      thesis: thesisText.trim(), invalidationCondition: invalidationCondition.trim(),
+      targetWeight: targetWeightPct / 100, maxWeight: maxWeightPct / 100,
+    };
+    try {
+      if (editingThesisId == null) {
+        await api.createPortfolioThesis(authFetch, effectiveSelectedId, {
+          ticker: thesisTicker.trim().toUpperCase(), ...input,
+        });
+      } else {
+        await api.revisePortfolioThesis(authFetch, effectiveSelectedId, editingThesisId, input);
+      }
+      setEditingThesisId(null); setThesisTicker(''); setThesisText('');
+      setInvalidationCondition(''); setTargetWeightPct(null); setMaxWeightPct(null);
+      await refreshStrategy(effectiveSelectedId);
+    } catch (error) {
+      setStrategyError(error instanceof ApiError ? error.message : '투자 가설 저장에 실패했습니다.');
+    } finally { setIsSavingStrategy(false); }
+  }
+
   const selectedPortfolio = portfolios?.find((p) => p.id === effectiveSelectedId) ?? null;
   const rows: PositionRow[] = (positions?.key === effectiveSelectedId ? positions.data : []) as PositionRow[];
   const transactionRows: TransactionRow[] = (
     transactions?.key === effectiveSelectedId ? transactions.data : []
   ) as TransactionRow[];
+  const currentTheses = strategy?.key === effectiveSelectedId
+    ? strategy.theses.filter((row, index, all) => all.findIndex(candidate => candidate.ticker === row.ticker) === index)
+    : [];
 
   const columns: TableColumn<PositionRow>[] = [
     { key: 'ticker', header: '종목', width: proportional(1.2), renderCell: (row) => <div className={styles.symbolCell}><strong>{row.ticker}</strong><span>{row.name}</span></div> },
@@ -425,6 +502,50 @@ export default function PortfolioPage() {
           ) : (
             <Table data={rows} columns={columns} idKey="id" hasHover />
           )}
+
+          <Section padding={4} dividers={['top']}>
+            <VStack gap={3}>
+              <Heading level={5}>투자 가설과 비중 규칙</Heading>
+              <Text type="supporting" size="sm">비중은 0~100%로 입력하며, 가설 개정 시 이전 revision은 보존됩니다.</Text>
+              {strategyError && <Banner status="error" title="전략 규칙 확인 필요" description={strategyError} />}
+              <HStack gap={2} align="end" wrap="wrap">
+                <NumberInput label="종목 기본 최대 비중(%)" size="sm" value={maxPositionPct}
+                  onChange={setMaxPositionPct} min={0.0001} max={100} step={1} />
+                <Button label="비중 규칙 저장" size="sm" isLoading={isSavingStrategy} clickAction={saveWeightRule} />
+              </HStack>
+              <HStack gap={2} align="end" wrap="wrap">
+                <TextInput label="티커" size="sm" value={thesisTicker}
+                  onChange={(value) => setThesisTicker(value.toUpperCase())} />
+                <TextInput label="투자 가설" size="sm" value={thesisText} onChange={setThesisText} />
+                <TextInput label="무효화 조건" size="sm" value={invalidationCondition} onChange={setInvalidationCondition} />
+                <NumberInput label="목표 비중(%)" size="sm" value={targetWeightPct}
+                  onChange={setTargetWeightPct} min={0} max={100} step={1} />
+                <NumberInput label="최대 비중(%)" size="sm" value={maxWeightPct}
+                  onChange={setMaxWeightPct} min={0.0001} max={100} step={1} />
+                <Button label={editingThesisId == null ? '가설 추가' : '새 revision 저장'} size="sm"
+                  isLoading={isSavingStrategy} clickAction={saveThesis} />
+                {editingThesisId != null && <Button label="개정 취소" variant="secondary" size="sm" onClick={() => {
+                  setEditingThesisId(null); setThesisTicker(''); setThesisText(''); setInvalidationCondition('');
+                  setTargetWeightPct(null); setMaxWeightPct(null);
+                }} />}
+              </HStack>
+              {currentTheses.length === 0 ? (
+                <Text type="supporting" size="sm">등록된 투자 가설이 없습니다.</Text>
+              ) : currentTheses.map(row => (
+                <Card key={row.id} padding={3}>
+                  <HStack justify="between" align="center" wrap="wrap">
+                    <VStack gap={1}>
+                      <Heading level={6}>{row.ticker} · revision {row.revision}</Heading>
+                      <Text type="body">{row.thesis}</Text>
+                      <Text type="supporting" size="sm">무효화: {row.invalidationCondition}</Text>
+                      <Text type="supporting" size="sm">목표 {(row.targetWeight * 100).toFixed(1)}% · 최대 {(row.maxWeight * 100).toFixed(1)}%</Text>
+                    </VStack>
+                    <Button label="개정" variant="secondary" size="sm" onClick={() => editThesis(row)} />
+                  </HStack>
+                </Card>
+              ))}
+            </VStack>
+          </Section>
 
           <Section padding={4} dividers={['top']}>
             <VStack gap={2}>

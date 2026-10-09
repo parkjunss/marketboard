@@ -76,10 +76,11 @@ class ReviewApiTest {
             String reviewKey = UUID.randomUUID().toString();
             String review = mvc.perform(post("/api/reviews").header("Authorization", token).header("Idempotency-Key", reviewKey)
                     .contentType(MediaType.APPLICATION_JSON).content("{\"period\":5}"))
-                    .andExpect(status().isOk()).andExpect(jsonPath("$.payload.schemaVersion").value(2))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.payload.schemaVersion").value(3))
                     .andExpect(jsonPath("$.payload.calculationVersion")
-                            .value("observed-bars-v1+portfolio-ledger-v1"))
+                            .value("observed-bars-v1+portfolio-ledger-v1+strategy-rules-v1"))
                     .andExpect(jsonPath("$.payload.ledgerBasis.data['" + portfolioId + "'].transactionCount").value(1))
+                    .andExpect(jsonPath("$.payload.strategy.data['" + portfolioId + "'].theses").isEmpty())
                     .andExpect(jsonPath("$.payload.histories.SPX.error").isString())
                     .andReturn().getResponse().getContentAsString();
             long id = mapper.readTree(review).get("id").asLong();

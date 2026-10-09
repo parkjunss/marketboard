@@ -12,3 +12,18 @@ test('builds risk signals and an editable decision draft from observed data', ()
   assert.equal(result.risks.length, 4);
   assert.match(result.draft, /자동 매매 신호가 아니므로/);
 });
+
+test('connects thesis invalidation and portfolio weight rules to the review draft', () => {
+  const result = buildReviewInsights([], undefined, [], {
+    '1': {
+      rule: { portfolioId: 1, maxPositionWeight: 0.2, updatedAt: '2026-10-09T00:00:00Z' },
+      theses: [{ id: 1, portfolioId: 1, symbolId: 1, ticker: 'AAA', revision: 2,
+        thesis: '성장 지속', invalidationCondition: '매출 역성장', targetWeight: 0.25,
+        maxWeight: 0.3, createdAt: '2026-10-09T00:00:00Z' }],
+    },
+  });
+
+  assert.match(result.risks[0], /기본 최대 비중을 초과/);
+  assert.equal(result.metrics[3].value, '1개 연결');
+  assert.match(result.draft, /무효화 조건/);
+});

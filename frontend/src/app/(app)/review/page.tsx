@@ -57,7 +57,9 @@ export default function ReviewPage() {
       const supportedVersion =
         (detail.payload.schemaVersion === 1 && detail.payload.calculationVersion === 'observed-bars-v1')
         || (detail.payload.schemaVersion === 2
-          && detail.payload.calculationVersion === 'observed-bars-v1+portfolio-ledger-v1');
+          && detail.payload.calculationVersion === 'observed-bars-v1+portfolio-ledger-v1')
+        || (detail.payload.schemaVersion === 3
+          && detail.payload.calculationVersion === 'observed-bars-v1+portfolio-ledger-v1+strategy-rules-v1');
       if (!supportedVersion) {
         throw new Error('이 기록은 현재 화면에서 지원하지 않는 계산 버전입니다.');
       }
@@ -96,7 +98,10 @@ export default function ReviewPage() {
   });
   const rising = changes.filter(result => result && result.change > 0).length;
   const falling = changes.filter(result => result && result.change < 0).length;
-  const insights = buildReviewInsights(changes.filter(result => result !== null), breadth?.data, portfolios?.data);
+  const insights = buildReviewInsights(
+    changes.filter(result => result !== null), breadth?.data, portfolios?.data,
+    saved?.payload.strategy?.data ?? undefined,
+  );
 
   async function saveDecision(event: React.FormEvent) {
     event.preventDefault();
@@ -210,6 +215,13 @@ export default function ReviewPage() {
               </p>}
               {saved.payload.ledgerBasis?.error && <p className={styles.caption}>원장 기준점: {saved.payload.ledgerBasis.error}</p>}
               {!saved.payload.ledgerBasis && <p className={styles.caption}>원장 기준점 도입 전 저장 기록입니다.</p>}
+              {saved.payload.strategy?.data?.[String(portfolio.id)]?.rule && <p className={styles.caption}>
+                기본 최대 비중 {(saved.payload.strategy.data[String(portfolio.id)].rule!.maxPositionWeight * 100).toFixed(1)}%
+              </p>}
+              {saved.payload.strategy?.data?.[String(portfolio.id)]?.theses.map(thesis => <p key={thesis.id} className={styles.caption}>
+                {thesis.ticker} 가설 r{thesis.revision} · 목표 {(thesis.targetWeight * 100).toFixed(1)}% · 최대 {(thesis.maxWeight * 100).toFixed(1)}% · 무효화: {thesis.invalidationCondition}
+              </p>)}
+              {saved.payload.strategy?.error && <p className={styles.caption}>가설·비중 규칙: {saved.payload.strategy.error}</p>}
               {(saved.payload.positions[String(portfolio.id)] ?? []).map(position => <p key={position.id} className={styles.caption}>
               {position.ticker} · {position.quantity}주 · 평단 {number(position.avgCost)} · 가격 {number(position.currentPrice)} · {position.priceProvider} / {position.priceStatus} · {position.priceAsOf ?? position.priceSessionDate ?? '관측 시점 미상'} · 보유 버전 {position.version}
             </p>)}</details>}

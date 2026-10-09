@@ -2,6 +2,7 @@ package org.juns.marketboardbackend.portfolio;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PortfolioTransactionRepository extends JpaRepository<PortfolioTransaction, Long> {
@@ -13,4 +14,8 @@ public interface PortfolioTransactionRepository extends JpaRepository<PortfolioT
     boolean existsByPortfolio_Id(Long portfolioId);
 
     boolean existsByReversalOf_Id(Long transactionId);
+
+    @EntityGraph(attributePaths = {"portfolio", "symbol"})
+    List<PortfolioTransaction> findByTransactionTypeOrderBySourcePositionIdAsc(
+            PortfolioTransactionType transactionType);
 }

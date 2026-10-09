@@ -329,11 +329,11 @@ Authorization: Bearer <token>
 
 ### PR 2 — 기존 포지션 기초잔고 이관
 
-- [ ] 이관 전 백업·카운트·금액 검증값 저장
-- [ ] 기존 `portfolio_positions`를 `OPENING_BALANCE`로 매핑
-- [ ] 중복 적재 방지·재실행·부분 실패 복구
-- [ ] 수량·원가 총합 및 항목별 차이 0 검증
-- [ ] 쓰기 동결/잠금 경계와 롤백 계획 점검
+- [x] 이관 전 백업·카운트·금액 검증값 저장 절차를 운영 런북으로 문서화
+- [x] 기존 `portfolio_positions`를 `OPENING_BALANCE`로 매핑
+- [x] `source_position_id` UNIQUE 기반 중복 적재 방지와 재실행 검증
+- [x] 수량·원가 총합 및 항목별 차이 0 검증, 실패 시 전체 롤백
+- [x] 포지션 행 잠금, 기본 OFF 실행 플래그, 쓰기 동결·복구 절차 점검
 
 ### PR 3 — 수동 거래 + 투영 동기화
 

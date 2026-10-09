@@ -111,6 +111,9 @@ collector:
 
 marketboard:
   realtime-symbol-limit: ${REALTIME_SYMBOL_LIMIT:30}
+  portfolio-ledger:
+    writes-enabled: ${PORTFOLIO_LEDGER_WRITES_ENABLED:false}
+    opening-backfill-enabled: ${PORTFOLIO_LEDGER_OPENING_BACKFILL_ENABLED:false}
 
 indicators:
   cron: ${INDICATORS_CRON:0 0 8 * * *}

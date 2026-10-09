@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import {
+  ChartBarSquareIcon, CircleStackIcon, ClipboardDocumentCheckIcon,
+  LightBulbIcon, ShieldExclamationIcon,
+} from '@heroicons/react/24/outline';
 import { useAuth } from '@/lib/auth-context';
 import { getMarketIndexHistory, getMarketBreadth, getPortfolios, createReview, getReviews, getReview, getReviewDecisions, createReviewDecision } from '@/lib/api';
 import type { ReviewDecision, ReviewDecisionChoice, ReviewDetail, ReviewSummary, ReviewResource } from '@/lib/types';
@@ -117,66 +121,32 @@ export default function ReviewPage() {
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <div><p className={styles.eyebrow}>INVESTMENT REVIEW</p><h1>투자 점검</h1><p>시장 변화를 읽고, 보유 자료를 확인한 뒤 판단하세요.</p></div>
+        <div><h1>투자 점검</h1><p>시장 상황, 포트폴리오 위험, 투자 가설을 한 번에 점검합니다.</p></div>
+        <div className={styles.headerMeta}>
+          {saved && <span>불변 스냅샷 #{saved.id}</span>}
+          <span>계산 버전 {saved?.payload.schemaVersion ?? 3}</span>
+        </div>
         <button disabled={recordBusy} onClick={() => { generation.current++; setSaved(null); setHistories({}); setBreadth(null); setPortfolios(null); setRevision(value => value + 1); }}>{saved ? '현재 자료로 돌아가기' : loading ? '조회 다시 시작' : '다시 조회'}</button>
       </header>
 
-      <div className={styles.toolbar} aria-label="점검 주기">
+      <div className={styles.periodBar} aria-label="점검 주기">
         <button disabled={!!saved || recordBusy} aria-pressed={period === 5} onClick={() => setPeriod(5)}>주간 점검</button>
         <button disabled={!!saved || recordBusy} aria-pressed={period === 21} onClick={() => setPeriod(21)}>월간 점검</button>
         <span>최근 {period}개 일봉 간격 비교 · 일정 설정과 별개</span>
       </div>
 
       <section className={styles.summaryGrid} aria-label="점검 요약">
-        <article className={styles.summaryCard}><span>시장 변화</span><strong>상승 {rising} · 하락 {falling}</strong><small>확인 가능 {changes.filter(Boolean).length} / {indices.length}개</small></article>
-        <article className={styles.summaryCard}><span>보유 자료</span><strong>{incomplete.length ? `${incomplete.length}개 확인 필요` : portfolios?.data ? '관측 양호' : '확인 중'}</strong><small>포트폴리오 {portfolios?.data?.length ?? 0}개</small></article>
-        <article className={styles.summaryCard}><span>최근 판단</span><strong>{decisions[0] ? decisionLabel[decisions[0].choice] : '미기록'}</strong><small>{decisions[0] ? new Date(decisions[0].createdAt).toLocaleString('ko-KR') : '점검 저장 후 기록 가능'}</small></article>
+        <article className={styles.summaryCard}><ChartBarSquareIcon /><div><span>시장 상태</span><strong>{rising >= falling ? '중립 ~ 강세' : '주의 필요'}</strong><small>상승 {rising} · 하락 {falling}</small></div></article>
+        <article className={styles.summaryCard}><ShieldExclamationIcon /><div><span>포트폴리오 위험</span><strong>{insights.risks.length ? `${insights.risks.length}개 신호` : '안정'}</strong><small>{incomplete.length ? `${incomplete.length}개 자료 확인 필요` : '가격 관측 양호'}</small></div></article>
+        <article className={styles.summaryCard}><CircleStackIcon /><div><span>데이터 품질</span><strong>{incomplete.length ? '확인 필요' : portfolios?.data ? '양호' : '확인 중'}</strong><small>포트폴리오 {portfolios?.data?.length ?? 0}개 기준</small></div></article>
+        <article className={styles.summaryCard}><LightBulbIcon /><div><span>오늘의 핵심 판단</span><strong>{insights.risks.length ? '재검토 필요' : '주요 경고 없음'}</strong><small>{insights.risks[0] ?? '현재 규칙에서 감지된 위험 없음'}</small></div></article>
       </section>
 
-      <section className={styles.insightBlock} aria-labelledby="insight-title">
-        <div className={styles.sectionHead}><div><p className={styles.eyebrow}>판단 지원</p><h2 id="insight-title">근거 수치와 위험 신호</h2></div><small>규칙 기반 참고 자료 · 자동 매매 신호 아님</small></div>
-        <div className={styles.insightMetrics}>{insights.metrics.map(metric => <article key={metric.label}><span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.detail}</small></article>)}</div>
-        <div className={styles.insightColumns}>
-          <article><h3>위험 신호</h3>{insights.risks.length ? <ul>{insights.risks.map(risk => <li key={risk}>{risk}</li>)}</ul> : <p>현재 규칙에서 감지된 주요 위험 신호가 없습니다.</p>}</article>
-          <article><h3>판단 근거 초안</h3><p>{insights.draft}</p>{saved && <button type="button" onClick={() => setReason(insights.draft)}>판단 근거에 복사</button>}</article>
-        </div>
-      </section>
-
-      <div className={styles.topGrid}>
-      <section className={styles.reviewControl} aria-label="점검 기록">
-        <h2>{saved ? `저장된 점검 #${saved.id}` : '점검 근거 보관'}</h2>
-        <p className={styles.caption}>{saved ? `수집 ${saved.payload.startedAt} → ${saved.payload.capturedAt} · 저장 ${saved.createdAt} · 계산 ${saved.payload.calculationVersion}` : '서버가 자료를 새로 조회해 근거와 조회 실패 내역을 저장합니다. 현재 표시값과 다를 수 있습니다.'}</p>
-        <div className={styles.toolbar}>
-          <button disabled={recordBusy || !!saved} onClick={() => void openRecord()}>{recordBusy ? '처리 중…' : '새 자료로 점검 저장'}</button>
-          <label>최근 저장 기록 (최대 50개) <select disabled={recordBusy} value={saved?.id ?? ''} onChange={event => { if (event.target.value) void openRecord(Number(event.target.value)); }}>
-            <option value="">기록 선택</option>
-            {records.map(row => <option key={row.id} value={row.id}>#{row.id} · {row.period === 5 ? '주간' : '월간'} · {new Date(row.createdAt).toLocaleString('ko-KR')}</option>)}
-          </select></label>
-        </div>
-        {recordError && <p role="alert">{recordError}</p>}
-        {saved && <p>저장 당시 근거를 표시하고 있습니다. 자료 누락도 그대로 보존하며, 동일 시점의 시장 전체를 보장하지 않습니다.</p>}
-        {saved && <form className={styles.decisionForm} onSubmit={saveDecision}>
-          <h3>판단 기록</h3>
-          <div className={styles.toolbar}>{(['EXECUTE', 'DEFER', 'HOLD'] as ReviewDecisionChoice[]).map(value => <button type="button" key={value} aria-pressed={choice === value} onClick={() => setChoice(value)}>{decisionLabel[value]}</button>)}</div>
-          <label>판단 근거<textarea required maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} /></label>
-          {choice === 'DEFER' && <label>다시 확인할 날짜<input type="date" value={followUpDate} onChange={event => setFollowUpDate(event.target.value)} /></label>}
-          <button disabled={recordBusy || !reason.trim()} type="submit">판단 저장</button>
-          {decisions.map(decision => <article key={decision.id} className={styles.decisionItem}><strong>{decisionLabel[decision.choice]}</strong><span>{new Date(decision.createdAt).toLocaleString('ko-KR')}</span><p>{decision.reason}</p>{decision.followUpDate && <small>재점검 {decision.followUpDate}</small>}</article>)}
-        </form>}
-      </section>
-
-      <section className={styles.notice} aria-labelledby="attention-title">
-        <p className={styles.eyebrow}>먼저 확인할 사항</p><h2 id="attention-title">최종 판단은 직접 확인하세요</h2>
-        <p>위험 신호와 초안은 현재 화면의 제한된 자료를 규칙으로 요약한 결과입니다. 매수·매도 신호와 목표 비중 편차는 산출하지 않습니다.</p>
-        <p aria-live="polite">{!portfolios ? '보유 자료 확인 중…' : portfolios.data === undefined ? portfolios.error : incomplete.length ? `${incomplete.length}개 포트폴리오의 가격 누락·관측 시점 확인이 필요합니다.` : '아래에서 포트폴리오별 자료 상태를 확인하세요.'}</p>
-        <Link href="/backtest">전략 연구 · 기존 백테스트 살펴보기 →</Link>
-      </section>
-      </div>
-
+      <div className={styles.heroGrid}>
       <section className={styles.sectionBlock} aria-labelledby="market-title">
-        <div className={styles.sectionHead}><div><p className={styles.eyebrow}>01 / 시장 환경</p><h2 id="market-title">{period === 5 ? '주간' : '월간'} 변화의 근거</h2></div><Link href="/market">시장 상세 →</Link></div>
+        <div className={styles.sectionHead}><div><p className={styles.eyebrow}>시장 환경</p><h2 id="market-title">시장 점검</h2></div><Link href="/market">시장 상세 →</Link></div>
         <p className={styles.caption}>yfinance 일봉의 서버 저장 자료. 장 마감 확정·최신 거래일·중간 거래일 누락은 미검증이며, 지표별 기준일이 다를 수 있습니다.</p>
-        <div className={styles.grid}>
+        <div className={styles.marketGrid}>
           {indices.map(index => {
             const resource = histories[index.slug];
             const result = resource?.data ? reviewChange(resource.data, period, index.slug === 'US10Y') : null;
@@ -200,8 +170,26 @@ export default function ReviewPage() {
         </article>
       </section>
 
+      <section className={styles.decisionDraft} aria-labelledby="insight-title">
+        <div className={styles.sectionHead}><div><p className={styles.eyebrow}>판단 지원</p><h2 id="insight-title">판단 초안</h2></div><small>규칙 기반 · 최종 판단은 사용자 책임</small></div>
+        <p className={styles.draftText}>{insights.draft}</p>
+        <div className={styles.signalList}>{insights.risks.slice(0, 3).map(risk => <p key={risk}><ShieldExclamationIcon />{risk}</p>)}{!insights.risks.length && <p>현재 규칙에서 감지된 주요 위험 신호가 없습니다.</p>}</div>
+        <div className={styles.decisionActions}>
+          {(['EXECUTE', 'DEFER', 'HOLD'] as ReviewDecisionChoice[]).map(value => <button type="button" key={value} aria-pressed={choice === value} onClick={() => setChoice(value)}>{decisionLabel[value]}</button>)}
+          <button type="button" disabled={!saved} onClick={() => setReason(insights.draft)}><ClipboardDocumentCheckIcon /> 판단 기록 준비</button>
+        </div>
+      </section>
+      </div>
+
+      <section className={styles.analysisGrid} aria-label="위험과 가설 점검">
+        <article className={styles.panel}><div className={styles.sectionHead}><h2>위험 신호</h2><span>{insights.risks.length}개</span></div>{insights.risks.length ? <ul>{insights.risks.map(risk => <li key={risk}>{risk}</li>)}</ul> : <p>현재 규칙에서 감지된 주요 위험 신호가 없습니다.</p>}</article>
+        <article className={styles.panel}><div className={styles.sectionHead}><h2>투자 가설 점검</h2><Link href="/portfolio">가설 관리 →</Link></div><div className={styles.metricList}>{insights.metrics.map(metric => <div key={metric.label}><span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.detail}</small></div>)}</div></article>
+        <article className={styles.panel}><div className={styles.sectionHead}><h2>데이터 품질 / 커버리지</h2><span>{incomplete.length ? '확인 필요' : '양호'}</span></div><div className={styles.qualityList}><p><strong>보유 종목 평가</strong><span>{portfolios?.data?.reduce((sum, row) => sum + row.pricedPositionCount, 0) ?? 0}개 가격 확인</span></p><p><strong>가격 최신성</strong><span>{incomplete.length ? `${incomplete.length}개 포트폴리오 확인` : '주요 오류 없음'}</span></p><p><strong>시장 자료</strong><span>{changes.filter(Boolean).length} / {indices.length}개 확인</span></p></div></article>
+      </section>
+
+      <div className={styles.bottomGrid}>
       <section className={styles.sectionBlock} aria-labelledby="portfolio-title">
-        <div className={styles.sectionHead}><div><p className={styles.eyebrow}>02 / 보유 자료</p><h2 id="portfolio-title">평가 금액보다 자료 상태부터</h2></div><Link href="/portfolio">현재 보유·가격 확인 →</Link></div>
+        <div className={styles.sectionHead}><div><p className={styles.eyebrow}>재검토 대상</p><h2 id="portfolio-title">포트폴리오 점검</h2></div><Link href="/portfolio">현재 보유·가격 확인 →</Link></div>
         {!portfolios ? <p>포트폴리오 조회 중…</p> : portfolios.data === undefined ? <p role="status">{portfolios.error}</p> : portfolios.data.length === 0 ? <div className={styles.card}><h3>등록한 포트폴리오가 없습니다</h3><p>보유 종목과 수량을 등록하면 가격 누락과 평가 범위를 확인할 수 있습니다.</p><Link href="/portfolio">포트폴리오 등록 →</Link></div> :
           <div className={styles.grid}>{portfolios.data.map(portfolio => <article key={portfolio.id} className={styles.card}>
             <span className={styles.badge}>{quality[portfolio.valuationStatus]}</span><h3>{portfolio.name}</h3>
@@ -227,7 +215,23 @@ export default function ReviewPage() {
             </p>)}</details>}
           </article>)}</div>}
       </section>
-      <footer className={styles.notice}><p className={styles.eyebrow}>03 / 판단 준비</p><h2>근거를 확인한 뒤, 직접 결정하세요</h2><p>{period === 5 ? '시장 변화와 가격 자료 상태를 검토하세요.' : '보유 현황을 확인하고, 전략 목표 비중이 정해진 뒤 리밸런싱 여부를 검토하세요.'} 전략 버전 연결, 판단 기록 저장, 이메일·모바일 알림은 후속 단계입니다.</p></footer>
+
+      <section className={styles.reviewControl} aria-label="판단 기록">
+        <div className={styles.sectionHead}><h2>{saved ? `판단 기록 · 점검 #${saved.id}` : '판단 기록'}</h2><span>{decisions.length}건</span></div>
+        <div className={styles.recordTools}>
+          <button disabled={recordBusy || !!saved} onClick={() => void openRecord()}>{recordBusy ? '처리 중…' : '현재 근거 저장'}</button>
+          <select aria-label="최근 저장 기록" disabled={recordBusy} value={saved?.id ?? ''} onChange={event => { if (event.target.value) void openRecord(Number(event.target.value)); }}><option value="">저장 기록 선택</option>{records.map(row => <option key={row.id} value={row.id}>#{row.id} · {row.period === 5 ? '주간' : '월간'} · {new Date(row.createdAt).toLocaleString('ko-KR')}</option>)}</select>
+        </div>
+        {recordError && <p role="alert">{recordError}</p>}
+        {saved && <form className={styles.decisionForm} onSubmit={saveDecision}>
+          <label>판단 근거<textarea required maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} /></label>
+          {choice === 'DEFER' && <label>다시 확인할 날짜<input type="date" value={followUpDate} onChange={event => setFollowUpDate(event.target.value)} /></label>}
+          <button disabled={recordBusy || !reason.trim()} type="submit">{decisionLabel[choice]} 판단 저장</button>
+        </form>}
+        <div className={styles.history}>{decisions.map(decision => <article key={decision.id} className={styles.decisionItem}><strong>{decisionLabel[decision.choice]}</strong><span>{new Date(decision.createdAt).toLocaleString('ko-KR')}</span><p>{decision.reason}</p>{decision.followUpDate && <small>재점검 {decision.followUpDate}</small>}</article>)}</div>
+      </section>
+      </div>
+      <footer className={styles.disclaimer}>이 화면은 추천 종목 제안이 아니라 투자 판단 전 근거를 점검하기 위한 도구입니다. 모든 투자 결정은 사용자의 판단과 책임 아래 이루어져야 합니다.</footer>
     </main>
   );
 }

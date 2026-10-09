@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.juns.marketboardbackend.pricehistory.PriceHistoryRepository;
@@ -63,5 +64,13 @@ class QuoteQualityTest {
             assertThat(service(Map.of("price", "100", "source", "FINNHUB", "ts", invalid))
                     .resolvePrice("AAA").orElseThrow().status()).isEqualTo("UNVERIFIED");
         }
+    }
+
+    @Test
+    void dailyCloseFreshnessAllowsWeekendsButRejectsOldOrFutureSessions() {
+        LocalDate today = LocalDate.of(2026, 10, 9);
+        assertThat(QuoteService.dailyCloseStatus(today.minusDays(4), today)).isEqualTo("RECENT");
+        assertThat(QuoteService.dailyCloseStatus(today.minusDays(5), today)).isEqualTo("STALE");
+        assertThat(QuoteService.dailyCloseStatus(today.plusDays(1), today)).isEqualTo("UNVERIFIED");
     }
 }

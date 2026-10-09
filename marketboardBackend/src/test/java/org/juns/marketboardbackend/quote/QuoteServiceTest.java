@@ -60,7 +60,7 @@ class QuoteServiceTest {
         assertThat(resolved.get("LIVE").price()).isEqualByComparingTo("123.45");
         assertThat(resolved.get("LIVE").status()).isEqualTo("RECENT");
         assertThat(resolved.get("STALE").price()).isEqualByComparingTo("50.0000");
-        assertThat(resolved.get("STALE").status()).isEqualTo("UNVERIFIED");
+        assertThat(resolved.get("STALE").status()).isEqualTo("RECENT");
         assertThat(resolved.get("STALE").sessionDate()).isNotNull();
         assertThat(resolved).doesNotContainKey("MISSING");
     }
@@ -74,7 +74,7 @@ class QuoteServiceTest {
                 symbol.getId(), ts, "50", "50", "50", "50", 100L, "1d");
         ResolvedPrice single = quoteService.resolvePrice("old").orElseThrow();
         assertThat(single).isEqualTo(quoteService.resolvePrices(List.of("OLD")).get("OLD"));
-        assertThat(single.status()).isEqualTo("UNVERIFIED");
+        assertThat(single.status()).isEqualTo("STALE");
         assertThat(single.sessionDate()).isEqualTo(ts.atZone(java.time.ZoneId.of("America/New_York")).toLocalDate());
         assertThat(single.asOf()).isNull();
     }
@@ -90,6 +90,6 @@ class QuoteServiceTest {
         ResolvedPrice price = quoteService.resolvePrice("LIVE").orElseThrow();
         assertThat(price.price()).isEqualByComparingTo("50");
         assertThat(price.source()).isEqualTo("CLOSE");
-        assertThat(price.status()).isEqualTo("UNVERIFIED");
+        assertThat(price.status()).isEqualTo("RECENT");
     }
 }

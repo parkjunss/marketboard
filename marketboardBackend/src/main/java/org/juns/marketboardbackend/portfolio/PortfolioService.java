@@ -1,6 +1,7 @@
 package org.juns.marketboardbackend.portfolio;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.juns.marketboardbackend.common.exception.DuplicatePortfolioPositionException;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
@@ -44,8 +45,11 @@ public class PortfolioService {
 
     @Transactional(readOnly = true)
     public List<PortfolioSummaryResponse> getPortfolios(Long userId) {
-        return portfolioRepository.findByUser_IdOrderByCreatedAtAsc(userId).stream()
-                .map(portfolio -> PortfolioSummaryResponse.of(portfolio, buildPositionResponses(portfolio.getId())))
+        List<Portfolio> portfolios = portfolioRepository.findByUser_IdOrderByCreatedAtAsc(userId);
+        Map<Long, List<PortfolioPositionResponse>> positions = buildPositionResponsesByPortfolio(userId);
+        return portfolios.stream()
+                .map(portfolio -> PortfolioSummaryResponse.of(
+                        portfolio, positions.getOrDefault(portfolio.getId(), List.of())))
                 .toList();
     }
 
@@ -53,9 +57,11 @@ public class PortfolioService {
 
     @Transactional(readOnly = true)
     public List<ReviewEvidence> getReviewEvidence(Long userId) {
-        return portfolioRepository.findByUser_IdOrderByCreatedAtAsc(userId).stream().map(portfolio -> {
-            var positions = buildPositionResponses(portfolio.getId());
-            return new ReviewEvidence(PortfolioSummaryResponse.of(portfolio, positions), positions);
+        List<Portfolio> portfolios = portfolioRepository.findByUser_IdOrderByCreatedAtAsc(userId);
+        Map<Long, List<PortfolioPositionResponse>> positions = buildPositionResponsesByPortfolio(userId);
+        return portfolios.stream().map(portfolio -> {
+            var portfolioPositions = positions.getOrDefault(portfolio.getId(), List.of());
+            return new ReviewEvidence(PortfolioSummaryResponse.of(portfolio, portfolioPositions), portfolioPositions);
         }).toList();
     }
 
@@ -146,5 +152,18 @@ public class PortfolioService {
                 .map(position -> PortfolioPositionResponse.from(
                         position, prices.get(position.getSymbol().getTicker().toUpperCase())))
                 .toList();
+    }
+
+    private Map<Long, List<PortfolioPositionResponse>> buildPositionResponsesByPortfolio(Long userId) {
+        List<PortfolioPosition> positions = portfolioPositionRepository.findAllByUserId(userId);
+        Map<String, ResolvedPrice> prices = quoteService.resolvePrices(positions.stream()
+                .map(position -> position.getSymbol().getTicker()).distinct().toList());
+        Map<Long, List<PortfolioPositionResponse>> responses = new LinkedHashMap<>();
+        for (PortfolioPosition position : positions) {
+            responses.computeIfAbsent(position.getPortfolio().getId(), ignored -> new java.util.ArrayList<>())
+                    .add(PortfolioPositionResponse.from(position,
+                            prices.get(position.getSymbol().getTicker().toUpperCase())));
+        }
+        return responses;
     }
 }

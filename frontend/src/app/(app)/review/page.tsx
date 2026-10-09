@@ -54,7 +54,11 @@ export default function ReviewPage() {
     setRecordBusy(true); setRecordError(null);
     try {
       const detail = id === undefined ? await createReview(authFetch, period) : await getReview(authFetch, id);
-      if (detail.payload.schemaVersion !== 1 || detail.payload.calculationVersion !== 'observed-bars-v1') {
+      const supportedVersion =
+        (detail.payload.schemaVersion === 1 && detail.payload.calculationVersion === 'observed-bars-v1')
+        || (detail.payload.schemaVersion === 2
+          && detail.payload.calculationVersion === 'observed-bars-v1+portfolio-ledger-v1');
+      if (!supportedVersion) {
         throw new Error('이 기록은 현재 화면에서 지원하지 않는 계산 버전입니다.');
       }
       generation.current++;
@@ -200,7 +204,13 @@ export default function ReviewPage() {
             <p>가격 확인 {portfolio.pricedPositionCount} / {portfolio.positionCount}종목</p>
             <p className={styles.caption}>가격 누락 {portfolio.unpricedPositionCount} · 오래된 관측 {portfolio.stalePositionCount} · 미검증 {portfolio.unverifiedPositionCount}</p>
             <p className={styles.caption}>통화·환산 기준은 현재 API에 없어 합산 금액의 투자 판단 활용 전 확인이 필요합니다.</p>
-            {saved && <details><summary>저장 당시 보유 근거</summary>{(saved.payload.positions[String(portfolio.id)] ?? []).map(position => <p key={position.id} className={styles.caption}>
+            {saved && <details><summary>저장 당시 보유 근거</summary>
+              {saved.payload.ledgerBasis?.data?.[String(portfolio.id)] && <p className={styles.caption}>
+                원장 {saved.payload.ledgerBasis.data[String(portfolio.id)].transactionCount}건 · 마지막 거래 #{saved.payload.ledgerBasis.data[String(portfolio.id)].lastTransactionId ?? '없음'} · {saved.payload.ledgerBasis.data[String(portfolio.id)].lastOccurredAt ?? '거래 시각 없음'}
+              </p>}
+              {saved.payload.ledgerBasis?.error && <p className={styles.caption}>원장 기준점: {saved.payload.ledgerBasis.error}</p>}
+              {!saved.payload.ledgerBasis && <p className={styles.caption}>원장 기준점 도입 전 저장 기록입니다.</p>}
+              {(saved.payload.positions[String(portfolio.id)] ?? []).map(position => <p key={position.id} className={styles.caption}>
               {position.ticker} · {position.quantity}주 · 평단 {number(position.avgCost)} · 가격 {number(position.currentPrice)} · {position.priceProvider} / {position.priceStatus} · {position.priceAsOf ?? position.priceSessionDate ?? '관측 시점 미상'} · 보유 버전 {position.version}
             </p>)}</details>}
           </article>)}</div>}

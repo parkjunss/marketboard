@@ -8,6 +8,7 @@ import java.util.Optional;
 import org.juns.marketboardbackend.marketbreadth.MarketBreadthService;
 import org.juns.marketboardbackend.marketindex.MarketIndexHistoryService;
 import org.juns.marketboardbackend.portfolio.PortfolioService;
+import org.juns.marketboardbackend.portfolio.PortfolioTransactionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -21,11 +22,12 @@ class ReviewDecisionServiceTest {
     @Mock MarketIndexHistoryService indices;
     @Mock MarketBreadthService breadth;
     @Mock PortfolioService portfolios;
+    @Mock PortfolioTransactionService transactions;
     @Mock ObjectMapper mapper;
 
     @Test
     void decisionBelongsToOwnedReviewAndOnlyDeferredChoiceKeepsFollowUpDate() {
-        var service = new ReviewService(reviews, indices, breadth, portfolios, mapper, decisions);
+        var service = new ReviewService(reviews, indices, breadth, portfolios, mapper, decisions, transactions);
         when(reviews.findByIdAndUserId(3L, 7L)).thenReturn(Optional.of(mock(InvestmentReview.class)));
         when(decisions.save(any())).thenAnswer(call -> call.getArgument(0));
 

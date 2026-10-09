@@ -8,6 +8,7 @@ import org.juns.marketboardbackend.marketindex.MarketIndexHistoryService;
 import org.juns.marketboardbackend.marketbreadth.MarketBreadthService;
 import org.juns.marketboardbackend.marketbreadth.dto.MarketBreadthResponse;
 import org.juns.marketboardbackend.portfolio.PortfolioService;
+import org.juns.marketboardbackend.portfolio.PortfolioTransactionService;
 import org.juns.marketboardbackend.portfolio.dto.*;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
@@ -19,7 +20,16 @@ public class ReviewService {
     public record Resource<T>(T data, String error) {}
     public record Payload(int schemaVersion, String calculationVersion, int period, Instant startedAt, Instant capturedAt,
             Map<String, Resource<List<MarketIndexCandle>>> histories, Resource<MarketBreadthResponse> breadth,
-            Resource<List<PortfolioSummaryResponse>> portfolios, Map<Long, List<PortfolioPositionResponse>> positions) {}
+            Resource<List<PortfolioSummaryResponse>> portfolios, Map<Long, List<PortfolioPositionResponse>> positions,
+            Resource<Map<Long, PortfolioTransactionService.LedgerBasis>> ledgerBasis) {
+        public Payload(int schemaVersion, String calculationVersion, int period, Instant startedAt, Instant capturedAt,
+                Map<String, Resource<List<MarketIndexCandle>>> histories, Resource<MarketBreadthResponse> breadth,
+                Resource<List<PortfolioSummaryResponse>> portfolios,
+                Map<Long, List<PortfolioPositionResponse>> positions) {
+            this(schemaVersion, calculationVersion, period, startedAt, capturedAt,
+                    histories, breadth, portfolios, positions, new Resource<>(Map.of(), null));
+        }
+    }
     public record Summary(Long id, int period, Instant createdAt) {}
     public record Detail(Long id, int period, Instant createdAt, Payload payload) {}
     public record Decision(Long id, Long reviewId, ReviewDecision.Choice choice, String reason,
@@ -30,11 +40,12 @@ public class ReviewService {
     private final PortfolioService portfolios;
     private final ObjectMapper mapper;
     private final ReviewDecisionRepository decisions;
+    private final PortfolioTransactionService transactions;
     public ReviewService(InvestmentReviewRepository repository, MarketIndexHistoryService indices,
             MarketBreadthService breadth, PortfolioService portfolios, ObjectMapper mapper,
-            ReviewDecisionRepository decisions) {
+            ReviewDecisionRepository decisions, PortfolioTransactionService transactions) {
         this.repository = repository; this.indices = indices; this.breadth = breadth; this.portfolios = portfolios;
-        this.mapper = mapper; this.decisions = decisions;
+        this.mapper = mapper; this.decisions = decisions; this.transactions = transactions;
     }
 
     // Suspend the write transaction so a missing source can be recorded without marking it rollback-only.
@@ -54,7 +65,9 @@ public class ReviewService {
             for (var item : evidence.data()) positions.put(item.summary().id(), item.positions());
             summaries = new Resource<>(evidence.data().stream().map(PortfolioService.ReviewEvidence::summary).toList(), null);
         }
-        return new Payload(1, "observed-bars-v1", period, started, Instant.now(), histories, marketBreadth, summaries, positions);
+        var ledgerBasis = read(() -> transactions.getLedgerBasis(userId));
+        return new Payload(2, "observed-bars-v1+portfolio-ledger-v1", period, started, Instant.now(),
+                histories, marketBreadth, summaries, positions, ledgerBasis);
     }
     private <T> Resource<T> read(Supplier<T> supplier) {
         try { return new Resource<>(supplier.get(), null); }

@@ -16,6 +16,7 @@ import type {
   NotificationListResponse,
   OptionsLevelsResponse,
   PortfolioPositionResponse,
+  PortfolioTransactionResponse,
   PortfolioSummaryResponse,
   ProfileResponse,
   PutCallRatioResponse,
@@ -435,6 +436,32 @@ export function deletePortfolio(fetcher: Fetcher, id: number): Promise<void> {
 
 export function getPortfolioPositions(fetcher: Fetcher, portfolioId: number): Promise<PortfolioPositionResponse[]> {
   return fetcher<PortfolioPositionResponse[]>(`/api/portfolios/${portfolioId}/positions`);
+}
+
+export function getPortfolioTransactions(
+  fetcher: Fetcher,
+  portfolioId: number,
+): Promise<PortfolioTransactionResponse[]> {
+  return fetcher<PortfolioTransactionResponse[]>(`/api/portfolios/${portfolioId}/transactions`);
+}
+
+export function createPortfolioTransaction(
+  fetcher: Fetcher,
+  portfolioId: number,
+  input: {
+    ticker: string;
+    type: 'BUY' | 'SELL';
+    quantity: number;
+    unitPrice: number;
+    fee: number;
+    occurredAt: string;
+  },
+): Promise<PortfolioTransactionResponse> {
+  return retryablePost<PortfolioTransactionResponse>(
+    fetcher,
+    `/api/portfolios/${portfolioId}/transactions`,
+    input,
+  );
 }
 
 export function addPortfolioPosition(

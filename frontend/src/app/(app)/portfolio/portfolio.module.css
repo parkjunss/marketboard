@@ -18,4 +18,6 @@
 .negative { color: var(--mb-negative); }
 .positive svg, .negative svg { width: 15px; }
 .muted { color: var(--mb-text-muted); }
+.fieldLabel { display: grid; gap: 6px; color: var(--mb-text-muted); font-size: 12px; font-weight: 700; }
+.fieldLabel select, .fieldLabel input { min-height: 36px; padding: 7px 10px; border: 1px solid var(--mb-border); border-radius: 6px; background: var(--mb-canvas); color: var(--mb-text); }
 @media (max-width: 760px) { .page { padding: 20px 14px 40px; } .page > div { overflow-x: auto; } }

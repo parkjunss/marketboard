@@ -347,10 +347,10 @@ Authorization: Bearer <token>
 
 ### PR 4 — `/portfolio` 및 기존 `/review` 연동
 
-- [ ] 거래 폼/내역 표시, 기초잔고 표시
-- [ ] 기존 `investment_reviews` 스냅샷/`review_decisions` 유지
-- [ ] 자료 품질·원장 기준점·계산 버전 확장
-- [ ] 저장 기록 복원 및 판단 기록 기능 회귀 테스트
+- [x] 거래 폼/내역 표시, 기초잔고 표시
+- [x] 기존 `investment_reviews` 스냅샷/`review_decisions` 유지
+- [x] 자료 품질·원장 기준점·계산 버전 확장
+- [x] 저장 기록 복원 및 판단 기록 기능 회귀 테스트
 
 ### PR 5 — 투자 가설·비중 규칙
 

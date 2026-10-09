@@ -3,6 +3,9 @@ package org.juns.marketboardbackend.portfolio;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.time.Instant;
 import org.juns.marketboardbackend.common.exception.PortfolioLedgerConflictException;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
 import org.juns.marketboardbackend.portfolio.dto.PortfolioTransactionRequest;
@@ -15,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class PortfolioTransactionService {
+
+    public record LedgerBasis(long transactionCount, Long lastTransactionId, Instant lastOccurredAt) {}
 
     private final PortfolioRepository portfolios;
     private final PortfolioPositionRepository positions;
@@ -68,6 +73,16 @@ public class PortfolioTransactionService {
         return transactions.findByPortfolio_IdOrderByOccurredAtAscIdAsc(portfolioId).stream()
                 .map(PortfolioTransactionResponse::from)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, LedgerBasis> getLedgerBasis(Long userId) {
+        Map<Long, LedgerBasis> result = new LinkedHashMap<>();
+        for (var row : transactions.findLedgerBasisByUserId(userId)) {
+            result.put(row.getPortfolioId(), new LedgerBasis(
+                    row.getTransactionCount(), row.getLastTransactionId(), row.getLastOccurredAt()));
+        }
+        return result;
     }
 
     public void assertDirectPositionWriteAllowed() {

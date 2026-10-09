@@ -18,9 +18,8 @@ import lombok.NoArgsConstructor;
 import org.juns.marketboardbackend.symbol.Symbol;
 
 /**
- * A per-symbol snapshot within a {@link Portfolio}: current quantity and average cost, entered
- * directly by the user. There is no buy/sell transaction ledger — only unrealized P/L (current
- * price vs. avg_cost) is derivable from this table, not realized gains.
+ * A per-symbol projection of the current quantity and moving-average cost within a {@link Portfolio}.
+ * After ledger cutover, BUY and SELL transactions update this snapshot atomically.
  */
 @Entity
 @Table(name = "portfolio_positions")

@@ -17,6 +17,7 @@ import org.juns.marketboardbackend.dashboard.DashboardConfigRepository;
 import org.juns.marketboardbackend.portfolio.Portfolio;
 import org.juns.marketboardbackend.portfolio.PortfolioPositionRepository;
 import org.juns.marketboardbackend.portfolio.PortfolioRepository;
+import org.juns.marketboardbackend.portfolio.PortfolioTransactionRepository;
 import org.juns.marketboardbackend.watchlist.WatchlistItemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,13 +50,17 @@ class UserAdminServiceTest {
     @Mock
     private PortfolioPositionRepository portfolioPositionRepository;
 
+    @Mock
+    private PortfolioTransactionRepository portfolioTransactionRepository;
+
     private UserAdminService userAdminService;
 
     @BeforeEach
     void setUp() {
         userAdminService = new UserAdminService(
                 userRepository, refreshTokenService, watchlistItemRepository,
-                alertRepository, dashboardConfigRepository, portfolioRepository, portfolioPositionRepository);
+                alertRepository, dashboardConfigRepository, portfolioRepository, portfolioPositionRepository,
+                portfolioTransactionRepository);
     }
 
     private User user(long id) {
@@ -83,6 +88,7 @@ class UserAdminServiceTest {
         verify(watchlistItemRepository).deleteByUser_Id(5L);
         verify(alertRepository).deleteByUser_Id(5L);
         verify(dashboardConfigRepository).deleteByUser_Id(5L);
+        verify(portfolioTransactionRepository).deleteByPortfolio_Id(10L);
         verify(portfolioPositionRepository).deleteByPortfolio_Id(10L);
         verify(portfolioRepository).deleteAll(List.of(portfolio));
         verify(userRepository, times(1)).delete(target);

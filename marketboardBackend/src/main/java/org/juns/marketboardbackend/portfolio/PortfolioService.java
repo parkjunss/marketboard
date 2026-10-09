@@ -25,18 +25,21 @@ public class PortfolioService {
     private final UserRepository userRepository;
     private final SymbolResolutionService symbolResolutionService;
     private final QuoteService quoteService;
+    private final PortfolioTransactionRepository portfolioTransactionRepository;
 
     public PortfolioService(
             PortfolioRepository portfolioRepository,
             PortfolioPositionRepository portfolioPositionRepository,
             UserRepository userRepository,
             SymbolResolutionService symbolResolutionService,
-            QuoteService quoteService) {
+            QuoteService quoteService,
+            PortfolioTransactionRepository portfolioTransactionRepository) {
         this.portfolioRepository = portfolioRepository;
         this.portfolioPositionRepository = portfolioPositionRepository;
         this.userRepository = userRepository;
         this.symbolResolutionService = symbolResolutionService;
         this.quoteService = quoteService;
+        this.portfolioTransactionRepository = portfolioTransactionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -72,7 +75,12 @@ public class PortfolioService {
 
     @Transactional
     public void deletePortfolio(Long userId, Long portfolioId) {
-        Portfolio portfolio = getOwnedPortfolio(userId, portfolioId);
+        Portfolio portfolio = portfolioRepository.findOwnedByIdForUpdate(portfolioId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Portfolio not found: " + portfolioId));
+        if (portfolioTransactionRepository.existsByPortfolio_Id(portfolioId)) {
+            throw new org.juns.marketboardbackend.common.exception.PortfolioLedgerConflictException(
+                    "거래 원장이 있는 포트폴리오는 삭제할 수 없습니다.");
+        }
         portfolioPositionRepository.deleteByPortfolio_Id(portfolio.getId());
         portfolioRepository.delete(portfolio);
     }

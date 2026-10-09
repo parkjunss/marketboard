@@ -337,13 +337,13 @@ Authorization: Bearer <token>
 
 ### PR 3 — 수동 거래 + 투영 동기화
 
-- [ ] 기존 `portfolios` 소유권 검사 재사용
-- [ ] BUY/SELL API + 거래 이력 API
-- [ ] 원장과 `portfolio_positions` 동일 `@Transactional` 갱신
-- [ ] 동시 매도, 중복 키, 과다 매도, 시점 역순 입력 테스트
-- [ ] 기존 포지션 조회 API/쓰기 경로 호환 회귀 테스트
-- [ ] 거래가 있는 포트폴리오 삭제 거절 및 사용자 탈퇴 시 명시적 원장 삭제 테스트
-- [ ] 기존 포지션 POST/PATCH/DELETE의 원장 우회 차단
+- [x] 기존 `portfolios` 소유권 검사 재사용
+- [x] BUY/SELL API + 거래 이력 API
+- [x] 원장과 `portfolio_positions` 동일 `@Transactional` 갱신
+- [x] 동시 매도, 중복 키, 과다 매도, 시점 역순 입력 테스트
+- [x] 기존 포지션 조회 API/쓰기 경로 호환 회귀 테스트
+- [x] 거래가 있는 포트폴리오 삭제 거절 및 사용자 탈퇴 시 명시적 원장 삭제 테스트
+- [x] 기존 포지션 POST/PATCH/DELETE의 원장 우회 차단
 
 ### PR 4 — `/portfolio` 및 기존 `/review` 연동
 

@@ -10,6 +10,8 @@ public interface PortfolioPositionRepository extends JpaRepository<PortfolioPosi
 
     Optional<PortfolioPosition> findByIdAndPortfolio_Id(Long id, Long portfolioId);
 
+    Optional<PortfolioPosition> findByPortfolio_IdAndSymbol_Id(Long portfolioId, Long symbolId);
+
     boolean existsByPortfolio_IdAndSymbol_Id(Long portfolioId, Long symbolId);
 
     long countByPortfolio_Id(Long portfolioId);

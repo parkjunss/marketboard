@@ -31,6 +31,7 @@ class ReviewApiTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired PortfolioRepository portfolios;
     @Autowired PortfolioPositionRepository positions;
+    @Autowired PortfolioTransactionRepository transactions;
     @Autowired SymbolRepository symbols;
     @MockitoBean CollectorClient collector;
 
@@ -55,6 +56,9 @@ class ReviewApiTest {
             symbolId = symbol.getId();
             var position = positions.save(PortfolioPosition.builder().portfolio(portfolios.findById(portfolioId).orElseThrow())
                     .symbol(symbol).quantity(BigDecimal.TEN).avgCost(BigDecimal.ONE).build());
+            transactions.save(PortfolioTransaction.openingBalance(
+                    portfolios.findById(portfolioId).orElseThrow(), symbol, BigDecimal.TEN, BigDecimal.ONE,
+                    position.getId(), position.getUpdatedAt()));
             String positionPath = "/api/portfolios/"+portfolioId+"/positions/"+position.getId();
             mvc.perform(patch(positionPath).header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
                     .content("{\"quantity\":15,\"avgCost\":1,\"version\":0}"))
@@ -72,7 +76,11 @@ class ReviewApiTest {
             String reviewKey = UUID.randomUUID().toString();
             String review = mvc.perform(post("/api/reviews").header("Authorization", token).header("Idempotency-Key", reviewKey)
                     .contentType(MediaType.APPLICATION_JSON).content("{\"period\":5}"))
-                    .andExpect(status().isOk()).andExpect(jsonPath("$.payload.schemaVersion").value(1))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.payload.schemaVersion").value(3))
+                    .andExpect(jsonPath("$.payload.calculationVersion")
+                            .value("observed-bars-v1+portfolio-ledger-v1+strategy-rules-v1"))
+                    .andExpect(jsonPath("$.payload.ledgerBasis.data['" + portfolioId + "'].transactionCount").value(1))
+                    .andExpect(jsonPath("$.payload.strategy.data['" + portfolioId + "'].theses").isEmpty())
                     .andExpect(jsonPath("$.payload.histories.SPX.error").isString())
                     .andReturn().getResponse().getContentAsString();
             long id = mapper.readTree(review).get("id").asLong();
@@ -93,6 +101,7 @@ class ReviewApiTest {
                     .contentType(MediaType.APPLICATION_JSON).content(input)).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("FAILED"));
             verify(collector, times(1)).runBacktest(any());
         } finally {
+            jdbc.update("delete from portfolio_transactions where portfolio_id in (select id from portfolios where user_id = ?)", user.getId());
             jdbc.update("delete from portfolio_positions where portfolio_id in (select id from portfolios where user_id = ?)", user.getId());
             for (String table : List.of("idempotent_requests", "investment_reviews", "backtest_runs", "portfolios"))
                 jdbc.update("delete from " + table + " where user_id = ?", user.getId());

@@ -358,7 +358,54 @@ export interface ReviewDetail extends ReviewSummary {
     breadth: ReviewResource<MarketBreadthResponse>;
     portfolios: ReviewResource<PortfolioSummaryResponse[]>;
     positions: Record<string, PortfolioPositionResponse[]>;
+    ledgerBasis?: ReviewResource<Record<string, PortfolioLedgerBasis>>;
+    strategy?: ReviewResource<Record<string, PortfolioStrategySnapshot>>;
   };
+}
+
+export interface PortfolioLedgerBasis {
+  transactionCount: number;
+  lastTransactionId: number | null;
+  lastOccurredAt: string | null;
+}
+
+export interface PortfolioWeightRuleResponse {
+  portfolioId: number;
+  maxPositionWeight: number;
+  updatedAt: string;
+}
+
+export interface PortfolioThesisResponse {
+  id: number;
+  portfolioId: number;
+  symbolId: number;
+  ticker: string;
+  revision: number;
+  thesis: string;
+  invalidationCondition: string;
+  targetWeight: number;
+  maxWeight: number;
+  createdAt: string;
+}
+
+export interface PortfolioStrategySnapshot {
+  rule: PortfolioWeightRuleResponse | null;
+  theses: PortfolioThesisResponse[];
+}
+
+export type PortfolioTransactionType = 'OPENING_BALANCE' | 'BUY' | 'SELL' | 'REVERSAL';
+
+export interface PortfolioTransactionResponse {
+  id: number;
+  portfolioId: number;
+  ticker: string;
+  type: PortfolioTransactionType;
+  quantity: number | null;
+  unitPrice: number | null;
+  fee: number;
+  currency: 'USD';
+  occurredAt: string;
+  createdAt: string;
 }
 
 export interface PortfolioSummaryResponse {

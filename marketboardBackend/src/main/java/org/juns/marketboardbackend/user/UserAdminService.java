@@ -9,6 +9,7 @@ import org.juns.marketboardbackend.dashboard.DashboardConfigRepository;
 import org.juns.marketboardbackend.portfolio.Portfolio;
 import org.juns.marketboardbackend.portfolio.PortfolioPositionRepository;
 import org.juns.marketboardbackend.portfolio.PortfolioRepository;
+import org.juns.marketboardbackend.portfolio.PortfolioTransactionRepository;
 import org.juns.marketboardbackend.user.dto.UserResponse;
 import org.juns.marketboardbackend.user.dto.UserUpdateRequest;
 import org.juns.marketboardbackend.watchlist.WatchlistItemRepository;
@@ -25,6 +26,7 @@ public class UserAdminService {
     private final DashboardConfigRepository dashboardConfigRepository;
     private final PortfolioRepository portfolioRepository;
     private final PortfolioPositionRepository portfolioPositionRepository;
+    private final PortfolioTransactionRepository portfolioTransactionRepository;
 
     public UserAdminService(
             UserRepository userRepository,
@@ -33,7 +35,8 @@ public class UserAdminService {
             AlertRepository alertRepository,
             DashboardConfigRepository dashboardConfigRepository,
             PortfolioRepository portfolioRepository,
-            PortfolioPositionRepository portfolioPositionRepository) {
+            PortfolioPositionRepository portfolioPositionRepository,
+            PortfolioTransactionRepository portfolioTransactionRepository) {
         this.userRepository = userRepository;
         this.refreshTokenService = refreshTokenService;
         this.watchlistItemRepository = watchlistItemRepository;
@@ -41,6 +44,7 @@ public class UserAdminService {
         this.dashboardConfigRepository = dashboardConfigRepository;
         this.portfolioRepository = portfolioRepository;
         this.portfolioPositionRepository = portfolioPositionRepository;
+        this.portfolioTransactionRepository = portfolioTransactionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -85,6 +89,7 @@ public class UserAdminService {
         dashboardConfigRepository.deleteByUser_Id(id);
         List<Portfolio> portfolios = portfolioRepository.findByUser_IdOrderByCreatedAtAsc(id);
         for (Portfolio portfolio : portfolios) {
+            portfolioTransactionRepository.deleteByPortfolio_Id(portfolio.getId());
             portfolioPositionRepository.deleteByPortfolio_Id(portfolio.getId());
         }
         portfolioRepository.deleteAll(portfolios);

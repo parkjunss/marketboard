@@ -7,6 +7,7 @@ import org.juns.marketboardbackend.common.exception.DuplicateSymbolException;
 import org.juns.marketboardbackend.common.exception.DuplicateWatchlistItemException;
 import org.juns.marketboardbackend.common.exception.InvalidCredentialsException;
 import org.juns.marketboardbackend.common.exception.InvalidTokenException;
+import org.juns.marketboardbackend.common.exception.PortfolioLedgerConflictException;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
 import org.juns.marketboardbackend.common.exception.SelfDeleteNotAllowedException;
 import org.springframework.http.HttpStatus;
@@ -66,7 +67,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
     }
 
-    @ExceptionHandler({DuplicateWatchlistItemException.class, DuplicateSymbolException.class, DuplicatePortfolioPositionException.class})
+    @ExceptionHandler({DuplicateWatchlistItemException.class, DuplicateSymbolException.class,
+            DuplicatePortfolioPositionException.class, PortfolioLedgerConflictException.class})
     public ResponseEntity<ErrorResponse> handleConflict(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
     }

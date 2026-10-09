@@ -23,7 +23,8 @@ import { ArrowTrendingDownIcon, ArrowTrendingUpIcon, PlusIcon, TrashIcon } from 
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import { ApiError } from '@/lib/api';
-import type { PortfolioPositionResponse, PortfolioSummaryResponse } from '@/lib/types';
+import type { PortfolioPositionResponse, PortfolioSummaryResponse, PortfolioThesisResponse,
+  PortfolioTransactionResponse, PortfolioWeightRuleResponse } from '@/lib/types';
 import styles from './portfolio.module.css';
 
 function formatMoney(value: number | null): string {
@@ -44,52 +45,51 @@ function PriceSourceBadge({ row }: { row: PortfolioPositionResponse }) {
 }
 
 interface PositionRow extends PortfolioPositionResponse, Record<string, unknown> {}
+interface TransactionRow extends PortfolioTransactionResponse, Record<string, unknown> {}
 
-type DeleteTarget =
-  | { type: 'position'; positionId: number; ticker: string }
-  | { type: 'portfolio'; portfolioId: number; name: string };
+type DeleteTarget = { portfolioId: number; name: string };
+
+function localDateTimeNow(): string {
+  const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000);
+  return now.toISOString().slice(0, 16);
+}
 
 export default function PortfolioPage() {
   const { authFetch } = useAuth();
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [editing, setEditing] = useState<{ portfolioId: number; row: PortfolioPositionResponse } | null>(null);
-  const [editQuantity, setEditQuantity] = useState<number | null>(null);
-  const [editCost, setEditCost] = useState<number | null>(null);
-  const [editError, setEditError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-
-  async function saveEdit() {
-    if (!editing || editQuantity == null || editCost == null || isSaving) return;
-    setIsSaving(true);
-    setEditError(null);
-    try {
-      await api.updatePortfolioPosition(authFetch, editing.portfolioId, editing.row.id,
-        { quantity: editQuantity, avgCost: editCost, version: editing.row.version });
-      const id = editing.portfolioId;
-      setEditing(null);
-      await Promise.all([refreshPositions(id), refreshPortfolios()]).catch(() => {
-        setLoadError('보유 수정은 저장됐지만 최신 평가 조회에 실패했습니다. 페이지를 새로고침하세요.');
-      });
-    } catch (error) {
-      setEditError(error instanceof ApiError ? error.message : '저장 결과를 확인하지 못했습니다. 최신 자료를 조회하세요.');
-    } finally { setIsSaving(false); }
-  }
-
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [portfolios, setPortfolios] = useState<PortfolioSummaryResponse[] | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [positions, setPositions] = useState<{ key: number; data: PortfolioPositionResponse[] } | null>(null);
+  const [transactions, setTransactions] = useState<{ key: number; data: PortfolioTransactionResponse[] } | null>(null);
+  const [strategy, setStrategy] = useState<{
+    key: number; rule: PortfolioWeightRuleResponse | null; theses: PortfolioThesisResponse[];
+  } | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [newPortfolioName, setNewPortfolioName] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
 
   const [ticker, setTicker] = useState('');
+  const [tradeType, setTradeType] = useState<'BUY' | 'SELL'>('BUY');
   const [quantity, setQuantity] = useState<number | null>(null);
-  const [avgCost, setAvgCost] = useState<number | null>(null);
+  const [unitPrice, setUnitPrice] = useState<number | null>(null);
+  const [fee, setFee] = useState<number | null>(0);
+  const [occurredAt, setOccurredAt] = useState(localDateTimeNow);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [positionError, setPositionError] = useState<{ key: number; message: string } | null>(null);
+  const [transactionError, setTransactionError] = useState<{ key: number; message: string } | null>(null);
+  const [strategyError, setStrategyError] = useState<string | null>(null);
+  const [maxPositionPct, setMaxPositionPct] = useState<number | null>(null);
+  const [thesisTicker, setThesisTicker] = useState('');
+  const [thesisText, setThesisText] = useState('');
+  const [invalidationCondition, setInvalidationCondition] = useState('');
+  const [targetWeightPct, setTargetWeightPct] = useState<number | null>(null);
+  const [maxWeightPct, setMaxWeightPct] = useState<number | null>(null);
+  const [editingThesisId, setEditingThesisId] = useState<number | null>(null);
+  const [isSavingStrategy, setIsSavingStrategy] = useState(false);
 
   // No portfolio explicitly selected yet -> default to the first one, derived at render time
   // rather than set via an effect (avoids a second setState cascading off the initial fetch).
@@ -107,6 +107,21 @@ export default function PortfolioPage() {
     const data = await api.getPortfolioPositions(authFetch, portfolioId);
     setPositions({ key: portfolioId, data });
     setPositionError(null);
+  }
+
+  async function refreshTransactions(portfolioId: number) {
+    const data = await api.getPortfolioTransactions(authFetch, portfolioId);
+    setTransactions({ key: portfolioId, data });
+    setTransactionError(null);
+  }
+
+  async function refreshStrategy(portfolioId: number) {
+    const [rule, theses] = await Promise.all([
+      api.getPortfolioRule(authFetch, portfolioId), api.getPortfolioTheses(authFetch, portfolioId),
+    ]);
+    setStrategy({ key: portfolioId, rule, theses });
+    setMaxPositionPct(rule ? rule.maxPositionWeight * 100 : null);
+    setStrategyError(null);
   }
 
   useEffect(() => {
@@ -127,13 +142,27 @@ export default function PortfolioPage() {
   useEffect(() => {
     if (effectiveSelectedId == null) return undefined;
     let cancelled = false;
-    api.getPortfolioPositions(authFetch, effectiveSelectedId).then((data) => {
+    Promise.all([
+      api.getPortfolioPositions(authFetch, effectiveSelectedId),
+      api.getPortfolioTransactions(authFetch, effectiveSelectedId),
+      api.getPortfolioRule(authFetch, effectiveSelectedId),
+      api.getPortfolioTheses(authFetch, effectiveSelectedId),
+    ]).then(([positionData, transactionData, rule, theses]) => {
       if (!cancelled) {
-        setPositions({ key: effectiveSelectedId, data });
+        setPositions({ key: effectiveSelectedId, data: positionData });
+        setTransactions({ key: effectiveSelectedId, data: transactionData });
+        setStrategy({ key: effectiveSelectedId, rule, theses });
+        setMaxPositionPct(rule ? rule.maxPositionWeight * 100 : null);
         setPositionError(null);
+        setTransactionError(null);
+        setStrategyError(null);
       }
     }).catch(() => {
-      if (!cancelled) setPositionError({ key: effectiveSelectedId, message: '보유 종목 자료를 가져오지 못했습니다. 잠시 후 새로고침하세요.' });
+      if (!cancelled) {
+        setPositionError({ key: effectiveSelectedId, message: '보유 종목 자료를 가져오지 못했습니다. 잠시 후 새로고침하세요.' });
+        setTransactionError({ key: effectiveSelectedId, message: '거래 원장을 가져오지 못했습니다. 잠시 후 새로고침하세요.' });
+        setStrategyError('투자 가설과 비중 규칙을 가져오지 못했습니다.');
+      }
     });
     return () => {
       cancelled = true;
@@ -161,50 +190,106 @@ export default function PortfolioPage() {
     setSelectedId(remaining.length > 0 ? remaining[0].id : null);
   }
 
-  async function handleAddPosition() {
-    if (effectiveSelectedId == null || !ticker.trim() || quantity == null || avgCost == null) return;
+  async function handleCreateTransaction() {
+    if (effectiveSelectedId == null || !ticker.trim() || quantity == null
+      || unitPrice == null || fee == null || !occurredAt) return;
     setIsSubmitting(true);
     setFormError(null);
     try {
-      await api.addPortfolioPosition(authFetch, effectiveSelectedId, {
+      await api.createPortfolioTransaction(authFetch, effectiveSelectedId, {
         ticker: ticker.trim().toUpperCase(),
+        type: tradeType,
         quantity,
-        avgCost,
+        unitPrice,
+        fee,
+        occurredAt: new Date(occurredAt).toISOString(),
       });
       setTicker('');
       setQuantity(null);
-      setAvgCost(null);
-      await Promise.all([refreshPositions(effectiveSelectedId), refreshPortfolios()]);
+      setUnitPrice(null);
+      setFee(0);
+      setOccurredAt(localDateTimeNow());
+      await Promise.all([
+        refreshPositions(effectiveSelectedId),
+        refreshTransactions(effectiveSelectedId),
+        refreshPortfolios(),
+      ]);
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : '포지션 추가에 실패했습니다.');
+      setFormError(err instanceof ApiError ? err.message : '거래 기록에 실패했습니다.');
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  async function handleRemovePosition(positionId: number) {
-    if (effectiveSelectedId == null) return;
-    await api.removePortfolioPosition(authFetch, effectiveSelectedId, positionId);
-    await Promise.all([refreshPositions(effectiveSelectedId), refreshPortfolios()]);
   }
 
   async function handleConfirmDelete() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      if (deleteTarget.type === 'position') {
-        await handleRemovePosition(deleteTarget.positionId);
-      } else {
-        await handleDeletePortfolio(deleteTarget.portfolioId);
-      }
+      await handleDeletePortfolio(deleteTarget.portfolioId);
       setDeleteTarget(null);
+      setDeleteError(null);
+    } catch (error) {
+      setDeleteTarget(null);
+      setDeleteError(error instanceof ApiError ? error.message : '포트폴리오 삭제 결과를 확인하지 못했습니다.');
     } finally {
       setIsDeleting(false);
     }
   }
 
+  async function saveWeightRule() {
+    if (effectiveSelectedId == null || maxPositionPct == null || isSavingStrategy) return;
+    setIsSavingStrategy(true); setStrategyError(null);
+    try {
+      await api.putPortfolioRule(authFetch, effectiveSelectedId, maxPositionPct / 100);
+      await refreshStrategy(effectiveSelectedId);
+    } catch (error) {
+      setStrategyError(error instanceof ApiError ? error.message : '최대 비중 규칙 저장에 실패했습니다.');
+    } finally { setIsSavingStrategy(false); }
+  }
+
+  function editThesis(row: PortfolioThesisResponse) {
+    setEditingThesisId(row.id);
+    setThesisTicker(row.ticker);
+    setThesisText(row.thesis);
+    setInvalidationCondition(row.invalidationCondition);
+    setTargetWeightPct(row.targetWeight * 100);
+    setMaxWeightPct(row.maxWeight * 100);
+    setStrategyError(null);
+  }
+
+  async function saveThesis() {
+    if (effectiveSelectedId == null || !thesisTicker.trim() || !thesisText.trim()
+      || !invalidationCondition.trim() || targetWeightPct == null || maxWeightPct == null
+      || isSavingStrategy) return;
+    setIsSavingStrategy(true); setStrategyError(null);
+    const input = {
+      thesis: thesisText.trim(), invalidationCondition: invalidationCondition.trim(),
+      targetWeight: targetWeightPct / 100, maxWeight: maxWeightPct / 100,
+    };
+    try {
+      if (editingThesisId == null) {
+        await api.createPortfolioThesis(authFetch, effectiveSelectedId, {
+          ticker: thesisTicker.trim().toUpperCase(), ...input,
+        });
+      } else {
+        await api.revisePortfolioThesis(authFetch, effectiveSelectedId, editingThesisId, input);
+      }
+      setEditingThesisId(null); setThesisTicker(''); setThesisText('');
+      setInvalidationCondition(''); setTargetWeightPct(null); setMaxWeightPct(null);
+      await refreshStrategy(effectiveSelectedId);
+    } catch (error) {
+      setStrategyError(error instanceof ApiError ? error.message : '투자 가설 저장에 실패했습니다.');
+    } finally { setIsSavingStrategy(false); }
+  }
+
   const selectedPortfolio = portfolios?.find((p) => p.id === effectiveSelectedId) ?? null;
   const rows: PositionRow[] = (positions?.key === effectiveSelectedId ? positions.data : []) as PositionRow[];
+  const transactionRows: TransactionRow[] = (
+    transactions?.key === effectiveSelectedId ? transactions.data : []
+  ) as TransactionRow[];
+  const currentTheses = strategy?.key === effectiveSelectedId
+    ? strategy.theses.filter((row, index, all) => all.findIndex(candidate => candidate.ticker === row.ticker) === index)
+    : [];
 
   const columns: TableColumn<PositionRow>[] = [
     { key: 'ticker', header: '종목', width: proportional(1.2), renderCell: (row) => <div className={styles.symbolCell}><strong>{row.ticker}</strong><span>{row.name}</span></div> },
@@ -213,33 +298,22 @@ export default function PortfolioPage() {
     { key: 'currentPrice', header: '현재가', width: proportional(1), renderCell: (row) => <div className={styles.priceCell}><strong>{formatMoney(row.currentPrice)}</strong><PriceSourceBadge row={row} /></div> },
     { key: 'marketValue', header: '평가금액', width: proportional(1), renderCell: (row) => <Text type="body">{formatMoney(row.marketValue)}</Text> },
     { key: 'unrealizedPnl', header: '평가손익', width: proportional(1.4), renderCell: (row) => <PnlText value={row.unrealizedPnl} pct={row.unrealizedPnlPct} /> },
-    { key: 'actions', header: '', width: proportional(0.5), renderCell: (row) => <HStack gap={1}>
-      <Button isDisabled={isSaving} variant="secondary" size="sm" label="수정" onClick={() => {
-        if (effectiveSelectedId == null) return;
-        setEditing({ portfolioId: effectiveSelectedId, row });
-        setEditQuantity(row.quantity); setEditCost(row.avgCost); setEditError(null);
-      }} />
-      <IconButton icon={<Icon icon={TrashIcon} size="sm" />} label={`${row.ticker} 포지션 삭제`} variant="ghost" clickAction={() => setDeleteTarget({ type: 'position', positionId: row.id, ticker: row.ticker })} />
-    </HStack> },
+  ];
+
+  const transactionColumns: TableColumn<TransactionRow>[] = [
+    { key: 'occurredAt', header: '거래 시각', width: proportional(1.4), renderCell: (row) => <Text type="body">{new Date(row.occurredAt).toLocaleString('ko-KR')}</Text> },
+    { key: 'type', header: '유형', width: proportional(0.8), renderCell: (row) => <Text type="body">{{ OPENING_BALANCE: '기초잔고', BUY: '매수', SELL: '매도', REVERSAL: '정정' }[row.type]}</Text> },
+    { key: 'ticker', header: '종목', width: proportional(0.8), renderCell: (row) => <Text type="body">{row.ticker}</Text> },
+    { key: 'quantity', header: '수량', width: proportional(0.8), renderCell: (row) => <Text type="body">{row.quantity ?? '—'}</Text> },
+    { key: 'unitPrice', header: '단가', width: proportional(0.8), renderCell: (row) => <Text type="body">{formatMoney(row.unitPrice)}</Text> },
+    { key: 'fee', header: '수수료', width: proportional(0.7), renderCell: (row) => <Text type="body">{formatMoney(row.fee)}</Text> },
   ];
 
   return (
     <div className={styles.page}>
     <VStack gap={0}>
       {createError && <Banner status="error" title="생성 확인 필요" description={createError} />}
-      {editing && <Section padding={4} dividers={['bottom']}><VStack gap={2}>
-        <Heading level={4}>{editing.row.ticker} 보유 수정 · 버전 {editing.row.version}</Heading>
-        <NumberInput label="보유 수량" value={editQuantity} onChange={setEditQuantity} min={0.000001} />
-        <NumberInput label="평단가" value={editCost} onChange={setEditCost} min={0} />
-        {editError && <Banner status="error" title="수정 확인 필요" description={editError} />}
-        <HStack gap={2}>
-          <Button isDisabled={isSaving} label={isSaving ? '저장 중…' : '변경 저장'} clickAction={saveEdit} />
-          <Button isDisabled={isSaving} variant="secondary" label="최신 조회 후 다시 편집" clickAction={async () => {
-            await refreshPositions(editing.portfolioId); setEditing(null);
-          }} />
-          <Button isDisabled={isSaving} variant="secondary" label="취소" onClick={() => setEditing(null)} />
-        </HStack>
-      </VStack></Section>}
+      {deleteError && <Banner status="error" title="삭제할 수 없음" description={deleteError} />}
       <Section padding={4} dividers={['bottom']}>
         <VStack gap={1}>
           <Heading level={3}>포트폴리오</Heading>
@@ -367,7 +441,7 @@ export default function PortfolioPage() {
                 label="포트폴리오 삭제"
                 variant="ghost"
                 clickAction={() =>
-                  setDeleteTarget({ type: 'portfolio', portfolioId: selectedPortfolio.id, name: selectedPortfolio.name })
+                  { setDeleteError(null); setDeleteTarget({ portfolioId: selectedPortfolio.id, name: selectedPortfolio.name }); }
                 }
               />
             </HStack>
@@ -379,9 +453,16 @@ export default function PortfolioPage() {
 
           <Section padding={4} dividers={['bottom']}>
             <VStack gap={3}>
-              <Heading level={5}>포지션 추가</Heading>
-              {formError && <Banner status="error" title="추가 실패" description={formError} />}
+              <Heading level={5}>거래 기록</Heading>
+              <Text type="supporting" size="sm">매수·매도 거래가 보유 수량과 이동평균 단가에 즉시 반영됩니다.</Text>
+              {formError && <Banner status="error" title="거래 기록 실패" description={formError} />}
               <HStack gap={3} align="end" wrap="wrap">
+                <label className={styles.fieldLabel}>유형
+                  <select value={tradeType} onChange={(event) => setTradeType(event.target.value as 'BUY' | 'SELL')}>
+                    <option value="BUY">매수</option>
+                    <option value="SELL">매도</option>
+                  </select>
+                </label>
                 <TextInput
                   label="티커"
                   size="sm"
@@ -390,13 +471,17 @@ export default function PortfolioPage() {
                   onChange={(value) => setTicker(value.toUpperCase())}
                 />
                 <NumberInput label="수량" size="sm" value={quantity} onChange={setQuantity} min={0} step={1} />
-                <NumberInput label="평단가" size="sm" value={avgCost} onChange={setAvgCost} min={0} step={0.01} />
+                <NumberInput label="거래 단가" size="sm" value={unitPrice} onChange={setUnitPrice} min={0} step={0.01} />
+                <NumberInput label="수수료" size="sm" value={fee} onChange={setFee} min={0} step={0.01} />
+                <label className={styles.fieldLabel}>거래 시각
+                  <input type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} />
+                </label>
                 <Button
                   variant="primary"
                   size="sm"
-                  label="추가"
+                  label="기록"
                   isLoading={isSubmitting}
-                  clickAction={handleAddPosition}
+                  clickAction={handleCreateTransaction}
                 />
               </HStack>
             </VStack>
@@ -411,12 +496,72 @@ export default function PortfolioPage() {
           ) : rows.length === 0 ? (
             <Section padding={4}>
               <Center height={200}>
-                <EmptyState title="포지션이 없습니다" description="위에서 티커/수량/평단가를 입력해 추가하세요" />
+                <EmptyState title="보유 종목이 없습니다" description="위에서 첫 매수 거래를 기록하세요" />
               </Center>
             </Section>
           ) : (
             <Table data={rows} columns={columns} idKey="id" hasHover />
           )}
+
+          <Section padding={4} dividers={['top']}>
+            <VStack gap={3}>
+              <Heading level={5}>투자 가설과 비중 규칙</Heading>
+              <Text type="supporting" size="sm">비중은 0~100%로 입력하며, 가설 개정 시 이전 revision은 보존됩니다.</Text>
+              {strategyError && <Banner status="error" title="전략 규칙 확인 필요" description={strategyError} />}
+              <HStack gap={2} align="end" wrap="wrap">
+                <NumberInput label="종목 기본 최대 비중(%)" size="sm" value={maxPositionPct}
+                  onChange={setMaxPositionPct} min={0.0001} max={100} step={1} />
+                <Button label="비중 규칙 저장" size="sm" isLoading={isSavingStrategy} clickAction={saveWeightRule} />
+              </HStack>
+              <HStack gap={2} align="end" wrap="wrap">
+                <TextInput label="티커" size="sm" value={thesisTicker}
+                  onChange={(value) => setThesisTicker(value.toUpperCase())} />
+                <TextInput label="투자 가설" size="sm" value={thesisText} onChange={setThesisText} />
+                <TextInput label="무효화 조건" size="sm" value={invalidationCondition} onChange={setInvalidationCondition} />
+                <NumberInput label="목표 비중(%)" size="sm" value={targetWeightPct}
+                  onChange={setTargetWeightPct} min={0} max={100} step={1} />
+                <NumberInput label="최대 비중(%)" size="sm" value={maxWeightPct}
+                  onChange={setMaxWeightPct} min={0.0001} max={100} step={1} />
+                <Button label={editingThesisId == null ? '가설 추가' : '새 revision 저장'} size="sm"
+                  isLoading={isSavingStrategy} clickAction={saveThesis} />
+                {editingThesisId != null && <Button label="개정 취소" variant="secondary" size="sm" onClick={() => {
+                  setEditingThesisId(null); setThesisTicker(''); setThesisText(''); setInvalidationCondition('');
+                  setTargetWeightPct(null); setMaxWeightPct(null);
+                }} />}
+              </HStack>
+              {currentTheses.length === 0 ? (
+                <Text type="supporting" size="sm">등록된 투자 가설이 없습니다.</Text>
+              ) : currentTheses.map(row => (
+                <Card key={row.id} padding={3}>
+                  <HStack justify="between" align="center" wrap="wrap">
+                    <VStack gap={1}>
+                      <Heading level={6}>{row.ticker} · revision {row.revision}</Heading>
+                      <Text type="body">{row.thesis}</Text>
+                      <Text type="supporting" size="sm">무효화: {row.invalidationCondition}</Text>
+                      <Text type="supporting" size="sm">목표 {(row.targetWeight * 100).toFixed(1)}% · 최대 {(row.maxWeight * 100).toFixed(1)}%</Text>
+                    </VStack>
+                    <Button label="개정" variant="secondary" size="sm" onClick={() => editThesis(row)} />
+                  </HStack>
+                </Card>
+              ))}
+            </VStack>
+          </Section>
+
+          <Section padding={4} dividers={['top']}>
+            <VStack gap={2}>
+              <Heading level={5}>거래 원장</Heading>
+              <Text type="supporting" size="sm">기초잔고는 원장 전환 시점의 기존 보유분이며 수동으로 수정할 수 없습니다.</Text>
+              {transactionError?.key === effectiveSelectedId ? (
+                <Banner status="error" title="원장 조회 실패" description={transactionError.message} />
+              ) : transactions?.key !== effectiveSelectedId ? (
+                <Center height={100}><Spinner size="md" label="원장 불러오는 중" /></Center>
+              ) : transactionRows.length === 0 ? (
+                <EmptyState title="거래 내역이 없습니다" description="첫 매수 거래를 기록하세요" />
+              ) : (
+                <Table data={transactionRows} columns={transactionColumns} idKey="id" hasHover />
+              )}
+            </VStack>
+          </Section>
         </VStack>
       ) : null}
 
@@ -425,14 +570,10 @@ export default function PortfolioPage() {
         onOpenChange={(isOpen) => {
           if (!isOpen) setDeleteTarget(null);
         }}
-        title={deleteTarget?.type === 'position' ? '포지션을 삭제할까요?' : '포트폴리오를 삭제할까요?'}
-        description={
-          deleteTarget?.type === 'position'
-            ? `${deleteTarget.ticker} 포지션을 이 포트폴리오에서 제거합니다. 되돌릴 수 없습니다.`
-            : deleteTarget?.type === 'portfolio'
-              ? `"${deleteTarget.name}" 포트폴리오와 보유한 모든 포지션이 삭제됩니다. 되돌릴 수 없습니다.`
-              : ''
-        }
+        title="포트폴리오를 삭제할까요?"
+        description={deleteTarget
+          ? `"${deleteTarget.name}" 포트폴리오를 삭제합니다. 거래 내역이 있으면 삭제할 수 없습니다.`
+          : ''}
         actionLabel="삭제"
         isActionLoading={isDeleting}
         onAction={handleConfirmDelete}

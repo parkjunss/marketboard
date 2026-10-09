@@ -2,6 +2,9 @@ package org.juns.marketboardbackend.quote;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -28,6 +31,7 @@ import org.springframework.stereotype.Service;
 public class QuoteService {
 
     private static final String QUOTE_KEY_PREFIX = "quote:";
+    private static final ZoneId NEW_YORK = ZoneId.of("America/New_York");
 
     private final StringRedisTemplate redisTemplate;
     private final SymbolRepository symbolRepository;
@@ -109,11 +113,17 @@ public class QuoteService {
             if (cached == null || cached.asOf() == null || candle.getTs().isAfter(cached.asOf())) {
                 // Daily ts is the bar's session timestamp, NOT its closing observation time.
                 // Legacy history has no provider/adjustment metadata or exchange calendar check.
+                LocalDate sessionDate = candle.getTs().atZone(NEW_YORK).toLocalDate();
                 resolved.put(ticker, new ResolvedPrice(candle.getClose(), "CLOSE", "UNKNOWN", null, null,
-                        candle.getTs().atZone(java.time.ZoneId.of("America/New_York")).toLocalDate(), "UNVERIFIED"));
+                        sessionDate, dailyCloseStatus(sessionDate, LocalDate.now(NEW_YORK))));
             }
         }
         return resolved;
+    }
+
+    static String dailyCloseStatus(LocalDate sessionDate, LocalDate today) {
+        long age = ChronoUnit.DAYS.between(sessionDate, today);
+        return age < 0 ? "UNVERIFIED" : age <= 4 ? "RECENT" : "STALE";
     }
 
     private Optional<ResolvedPrice> readResolvedQuote(String ticker, Instant now) {

@@ -27,10 +27,15 @@ public class PortfolioController {
 
     private final PortfolioService portfolioService;
     private final org.juns.marketboardbackend.common.IdempotencyService idempotency;
+    private final PortfolioTransactionService transactionService;
 
-    public PortfolioController(PortfolioService portfolioService, org.juns.marketboardbackend.common.IdempotencyService idempotency) {
+    public PortfolioController(
+            PortfolioService portfolioService,
+            org.juns.marketboardbackend.common.IdempotencyService idempotency,
+            PortfolioTransactionService transactionService) {
         this.portfolioService = portfolioService;
         this.idempotency = idempotency;
+        this.transactionService = transactionService;
     }
 
     @GetMapping
@@ -72,6 +77,7 @@ public class PortfolioController {
             @AuthenticationPrincipal AuthenticatedUser principal,
             @PathVariable Long id,
             @Valid @RequestBody PortfolioPositionRequest request) {
+        transactionService.assertDirectPositionWriteAllowed();
         PortfolioPositionResponse response = portfolioService.addPosition(principal.id(), id, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -82,12 +88,14 @@ public class PortfolioController {
             @PathVariable Long id,
             @PathVariable Long positionId,
             @Valid @RequestBody PortfolioPositionUpdateRequest request) {
+        transactionService.assertDirectPositionWriteAllowed();
         return portfolioService.updatePosition(principal.id(), id, positionId, request);
     }
 
     @DeleteMapping("/{id}/positions/{positionId}")
     public ResponseEntity<Void> removePosition(
             @AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id, @PathVariable Long positionId) {
+        transactionService.assertDirectPositionWriteAllowed();
         portfolioService.removePosition(principal.id(), id, positionId);
         return ResponseEntity.noContent().build();
     }

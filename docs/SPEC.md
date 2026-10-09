@@ -173,6 +173,10 @@ Decision은 reviewId,choice(EXECUTE/DEFER/HOLD),reason,decidedAt를 가진다. r
 
 ## 9. F10/F11/F12 포트폴리오·모의 운용·복기
 
+**거래 원장 MVP:** USD 주식의 `OPENING_BALANCE`, `BUY`, `SELL`, `REVERSAL`만 먼저 지원한다. 원가는 이동평균법으로 계산하고 매수 수수료는 취득원가에 포함하며 매도 수수료는 매도대금에서 차감한다. 이는 투자점검용 계산이며 세무 신고용 원가로 표현하지 않는다.
+
+원장 쓰기는 `marketboard.portfolio-ledger-writes-enabled=false`로 배포한다. 기초잔고 건수·수량·평균단가 검증 후 `true`로 전환하며, 전환 뒤에는 포지션 POST/PATCH/DELETE 직접 편집을 허용하지 않는다. 거래가 한 건이라도 있는 포트폴리오 삭제는 `409 Conflict`로 거절한다. 원장과 포지션 투영은 같은 DB 트랜잭션에서 함께 갱신한다. 수량은 `DECIMAL(18,6)`, 단가·수수료는 `DECIMAL(18,4)`를 사용한다.
+
 계좌 모드는 ACTUAL/PAPER로 분리한다. 거래 이벤트는 OPENING_BALANCE/BUY/SELL/DEPOSIT/WITHDRAW/DIVIDEND/FEE/SPLIT이며 eventTime,currency,quantity,price,fee,source,externalId,decisionId?를 가진다. 유형별 필수값을 검증하고 BUY/SELL 수량·가격은 양수, 비용은 음수 불허, 초기 롱온리에서는 초과 매도·현금 부족을 차단한다.
 
 개발 기본 원가법은 이동평균이다. 세무 신고용 계산으로 표현하지 않는다. 기존 보유는 전환일 기초 잔고로 이관하고 과거 매수일을 추정하지 않는다. 같은 외부 ID의 재가져오기는 중복 생성하지 않는다. 수동 입력에는 사용자별 idempotency key를 사용한다. 정정은 취소/대체 연결로 추적한다.

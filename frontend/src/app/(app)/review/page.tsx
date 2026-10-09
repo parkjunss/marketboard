@@ -6,6 +6,7 @@ import {
   ChartBarSquareIcon, CircleStackIcon, ClipboardDocumentCheckIcon,
   LightBulbIcon, ShieldExclamationIcon,
 } from '@heroicons/react/24/outline';
+import { Sparkline } from '@/components/Sparkline';
 import { useAuth } from '@/lib/auth-context';
 import { getMarketIndexHistory, getMarketBreadth, getPortfolios, createReview, getReviews, getReview, getReviewDecisions, createReviewDecision } from '@/lib/api';
 import type { ReviewDecision, ReviewDecisionChoice, ReviewDetail, ReviewSummary, ReviewResource } from '@/lib/types';
@@ -155,6 +156,9 @@ export default function ReviewPage() {
               {!resource ? <p>조회 중…</p> : resource.error ? <p role="status">{resource.error}</p> : !result ? <p>자료 부족 또는 일봉 오류 · 비교 불가</p> : <>
                 <p className={styles.value}>{number(result.value)}{index.slug === 'US10Y' ? '%' : index.slug === 'USDKRW' ? '원' : ''}</p>
                 <p className={result.change >= 0 ? styles.positive : styles.negative}>{result.change > 0 ? '+' : ''}{number(result.change)} {result.unit}</p>
+                <div className={styles.sparkline} aria-label={`${index.name} 최근 추세`}>
+                  <Sparkline values={resource.data?.slice(-30).map(candle => candle.close) ?? []} width={220} height={42} isPositive={result.change >= 0} />
+                </div>
                 <p className={styles.caption}>{result.from} → {result.to}</p>
               </>}
             </article>;

@@ -19,7 +19,7 @@
 - Layout follows the reference hierarchy: four status cards, market and decision split, three diagnostic panels, then portfolio review and decision history.
 - Typography uses the existing MarketBoard font stack and weights instead of copying the reference font.
 - Colors, borders, radii, and focus states use the existing MarketBoard theme tokens.
-- The reference contains sparkline charts and branded stock marks that are not present in the current data/component contract. They were not replaced with drawn or placeholder assets.
+- Market cards use the existing `Sparkline` component and their last 30 observed closes, preserving the reference's at-a-glance trend reading without adding a chart dependency.
 - Copy is based on current MarketBoard evidence and explicitly preserves user responsibility for the final judgment.
 
 **Focused comparison evidence**
@@ -32,7 +32,7 @@
 
 - Initial render showed the expected single-column mobile layout at the browser default viewport.
 - Re-captured at 1440 × 1000 and then 1680 × 945 to validate the desktop grid against the source proportions.
-- No post-comparison P0/P1/P2 fix was required.
+- A follow-up comparison added responsive sparklines to all six market cards; the revised 1680 × 945 capture preserved the grid proportions and produced no console errors.
 
 **Implementation checklist**
 
@@ -43,6 +43,6 @@
 
 **Follow-up polish**
 
-- P3: add real mini charts only if the product later exposes a reusable sparkline component for these review series.
+- P3: axis labels and tooltips can be considered later if users need exact intraperiod values rather than directional context.
 
 final result: passed

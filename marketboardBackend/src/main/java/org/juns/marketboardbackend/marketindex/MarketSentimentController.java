@@ -7,6 +7,7 @@ import org.juns.marketboardbackend.collector.PutCallRatioResponse;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
 import org.juns.marketboardbackend.sentiment.OptionsLevelsService;
 import org.juns.marketboardbackend.sentiment.PutCallRatioService;
+import org.juns.marketboardbackend.sentiment.PutCallRatioTrendResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -43,8 +44,8 @@ public class MarketSentimentController {
     }
 
     @GetMapping("/put-call-ratio")
-    public PutCallRatioResponse getPutCallRatio() {
-        return putCallRatioService.getLatest();
+    public PutCallRatioTrendResponse getPutCallRatio() {
+        return putCallRatioService.getLatestTrend();
     }
 
     @GetMapping("/put-call-ratio/{ticker}")

@@ -36,15 +36,20 @@ public class PutCallRatioSnapshot {
     @Column(name = "computed_at", nullable = false)
     private Instant computedAt;
 
+    @Column(name = "ratio_history_json", nullable = false, columnDefinition = "TEXT")
+    private String ratioHistoryJson;
+
     @Builder
-    public PutCallRatioSnapshot(String ticker, String payloadJson) {
+    public PutCallRatioSnapshot(String ticker, String payloadJson, String ratioHistoryJson) {
         this.ticker = ticker;
         this.payloadJson = payloadJson;
+        this.ratioHistoryJson = ratioHistoryJson;
         this.computedAt = Instant.now();
     }
 
-    public void update(String payloadJson) {
+    public void update(String payloadJson, String ratioHistoryJson) {
         this.payloadJson = payloadJson;
+        this.ratioHistoryJson = ratioHistoryJson;
         this.computedAt = Instant.now();
     }
 }

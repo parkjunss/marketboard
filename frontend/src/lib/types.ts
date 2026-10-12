@@ -272,6 +272,7 @@ export interface PutCallRatioResponse {
   callVolume: number;
   putVolume: number;
   putCallRatio: number;
+  history?: Array<{ timestamp: string; ratio: number }>;
 }
 
 export interface OptionsLevel {

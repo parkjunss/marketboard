@@ -51,6 +51,21 @@ class PutCallRatioServiceTest {
         putCallRatioService.refresh();
 
         assertThat(putCallRatioService.getLatest()).isEqualTo(response);
+        assertThat(putCallRatioService.getLatestTrend().history()).hasSize(1);
+    }
+
+    @Test
+    void refreshBuildsPutCallRatioHistory() {
+        when(collectorClient.getPutCallRatio("SPY"))
+                .thenReturn(Optional.of(new PutCallRatioResponse("SPY", 8, 1_000_000, 800_000, 0.8)))
+                .thenReturn(Optional.of(new PutCallRatioResponse("SPY", 8, 900_000, 990_000, 1.1)));
+
+        putCallRatioService.refresh();
+        putCallRatioService.refresh();
+
+        assertThat(putCallRatioService.getLatestTrend().history())
+                .extracting(PutCallRatioPoint::ratio)
+                .containsExactly(0.8, 1.1);
     }
 
     @Test

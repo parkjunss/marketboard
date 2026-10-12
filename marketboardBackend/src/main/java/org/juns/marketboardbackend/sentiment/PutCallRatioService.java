@@ -2,7 +2,10 @@ package org.juns.marketboardbackend.sentiment;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import tools.jackson.core.type.TypeReference;
 import org.juns.marketboardbackend.collector.CollectorClient;
 import org.juns.marketboardbackend.collector.PutCallRatioResponse;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
@@ -38,6 +41,7 @@ public class PutCallRatioService {
     // Shorter than SymbolProfileService/FinancialsService's 24h -- options positioning is more
     // dynamic than a company profile or a quarterly financial statement.
     private static final Duration TICKER_CACHE_TTL = Duration.ofMinutes(30);
+    private static final int HISTORY_LIMIT = 30;
 
     private final CollectorClient collectorClient;
     private final PutCallRatioSnapshotRepository repository;
@@ -74,6 +78,14 @@ public class PutCallRatioService {
                 .orElseThrow(() -> new ResourceNotFoundException("Put/call ratio not computed yet")));
     }
 
+    @Transactional(readOnly = true)
+    public PutCallRatioTrendResponse getLatestTrend() {
+        PutCallRatioSnapshot snapshot = repository
+                .findByTickerIgnoreCase(SPY_TICKER)
+                .orElseThrow(() -> new ResourceNotFoundException("Put/call ratio not computed yet"));
+        return PutCallRatioTrendResponse.from(deserialize(snapshot), readHistory(snapshot));
+    }
+
     /** Individual stock detail pages -- see the class-level comment for why this is lazy, not scheduled. */
     @Transactional
     public PutCallRatioResponse getForTicker(String ticker) {
@@ -101,10 +113,18 @@ public class PutCallRatioService {
     private void upsert(String ticker, PutCallRatioResponse response) {
         String payloadJson = objectMapper.writeValueAsString(response);
         PutCallRatioSnapshot snapshot = repository.findByTickerIgnoreCase(ticker).orElse(null);
+        List<PutCallRatioPoint> history = snapshot == null ? new ArrayList<>() : new ArrayList<>(readHistory(snapshot));
+        history.add(new PutCallRatioPoint(Instant.now(), response.putCallRatio()));
+        history = history.subList(Math.max(0, history.size() - HISTORY_LIMIT), history.size());
+        String historyJson = objectMapper.writeValueAsString(history);
         if (snapshot == null) {
-            repository.save(PutCallRatioSnapshot.builder().ticker(ticker).payloadJson(payloadJson).build());
+            repository.save(PutCallRatioSnapshot.builder()
+                    .ticker(ticker)
+                    .payloadJson(payloadJson)
+                    .ratioHistoryJson(historyJson)
+                    .build());
         } else {
-            snapshot.update(payloadJson);
+            snapshot.update(payloadJson, historyJson);
         }
     }
 
@@ -114,5 +134,9 @@ public class PutCallRatioService {
 
     private PutCallRatioResponse deserialize(PutCallRatioSnapshot snapshot) {
         return objectMapper.readValue(snapshot.getPayloadJson(), PutCallRatioResponse.class);
+    }
+
+    private List<PutCallRatioPoint> readHistory(PutCallRatioSnapshot snapshot) {
+        return objectMapper.readValue(snapshot.getRatioHistoryJson(), new TypeReference<>() {});
     }
 }

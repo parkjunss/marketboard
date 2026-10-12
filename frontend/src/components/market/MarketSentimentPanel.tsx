@@ -8,6 +8,7 @@ import { Heading, Text } from '@astryxdesign/core/Text';
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import type { FearGreedResponse, PutCallRatioResponse } from '@/lib/types';
+import { Sparkline } from '@/components/Sparkline';
 
 // CNN's 5-way rating maps onto this app's red=상승(탐욕)/blue=하락(공포) convention -- fear
 // correlates with selling, greed with buying, so it lines up with the existing price-direction
@@ -60,7 +61,12 @@ function PutCallCard({ data }: { data: PutCallRatioResponse }) {
       <Text type="supporting" size="sm">
         Put/Call 거래량 비율 ({data.ticker}, 근접 만기 {data.expirationsUsed}개 합산)
       </Text>
-      <Heading level={3}>{data.putCallRatio.toFixed(2)}</Heading>
+      <HStack gap={3} align="center">
+        <Heading level={3}>{data.putCallRatio.toFixed(2)}</Heading>
+        {data.history && data.history.length > 1 && (
+          <Sparkline values={data.history.map((point) => point.ratio)} width={120} height={32} />
+        )}
+      </HStack>
       <Text type="supporting" size="sm">
         1보다 높으면 풋(하락 베팅) 거래량이 콜보다 많다는 뜻 — 방향성 자체보다 평소 대비 급등락 여부를 참고하세요.
       </Text>

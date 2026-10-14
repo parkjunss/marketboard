@@ -1,0 +1,25 @@
+{
+  "captures": [
+    {
+      "label": "initial",
+      "evidence_id": "ev_5117b2de91bd5acef3402e2224e010893ef9adda6adcef2cb534ec1e8d7aa9fe"
+    },
+    {
+      "label": "crosshair-left",
+      "evidence_id": "ev_27e263498768235c8f890390853367f222aa4a21f2b3169bf033e1d5a375cc9f"
+    },
+    {
+      "label": "crosshair-right",
+      "evidence_id": "ev_eaac63f1cb1b2dbcbeefdc1499ed4109a04500827a6978ff0c1caa4da97bc0a8"
+    },
+    {
+      "label": "horizontal-attempt",
+      "evidence_id": "ev_a7b3f686650841377d6b96264e1795012200bf46ebd7b46619840b3cf7e3c021"
+    },
+    {
+      "label": "trend-attempt",
+      "evidence_id": "ev_7214a353f00927ac8fdfc4c29fffead8d7ba62c62d444a13896205a545db5775"
+    }
+  ],
+  "interaction": "Playwright mouse and keyboard; REA passive snapshots"
+}

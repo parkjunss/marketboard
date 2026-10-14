@@ -1,0 +1,6 @@
+# Full REA observations and failed-attempt duplicates stay local.
+*.json
+!index.json
+horizontal-created.*
+horizontal-moved.*
+horizontal-delete.*

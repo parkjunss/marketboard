@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   createChart,
   CandlestickSeries,
@@ -10,10 +10,12 @@ import {
   type IChartApi,
   type ISeriesApi,
   type UTCTimestamp,
+  type MouseEventParams,
 } from 'lightweight-charts';
 import { Card } from '@astryxdesign/core/Card';
 import { useTheme } from '@astryxdesign/core/theme';
 import type { CandleResponse } from '@/lib/types';
+import { formatCandleInfo } from '@/lib/candle-chart-info';
 
 const UP_COLOR = '#00e5a0';
 const DOWN_COLOR = '#ff5c67';
@@ -148,6 +150,8 @@ function points(candles: CandleResponse[], values: (number | null)[]) {
 
 export function CandleChart({ candles, height = 420, smaOverlays = [], indicators = {} }: CandleChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const [hovered, setHovered] = useState<{ source: CandleResponse[]; index: number } | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const smaSeriesRef = useRef<ISeriesApi<'Line'>[]>([]);
   const emaSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
@@ -171,6 +175,7 @@ export function CandleChart({ candles, height = 420, smaOverlays = [], indicator
       rightPriceScale: { borderColor: tokens['--color-border'] },
       autoSize: true,
     });
+    chartRef.current = chart;
     chart.panes()[0].setStretchFactor(3);
     candleSeriesRef.current = chart.addSeries(CandlestickSeries, {
       upColor: UP_COLOR,
@@ -228,6 +233,7 @@ export function CandleChart({ candles, height = 420, smaOverlays = [], indicator
 
     return () => {
       chart.remove();
+      chartRef.current = null;
       candleSeriesRef.current = null;
       smaSeriesRef.current = [];
       emaSeriesRef.current = null;
@@ -285,7 +291,29 @@ export function CandleChart({ candles, height = 420, smaOverlays = [], indicator
           .filter((point): point is { time: UTCTimestamp; value: number; color: string } => point.value != null),
       );
     }
-  }, [candles, indicators, smaOverlays]);
+  }, [candles, indicators, smaOverlays, tokens]);
 
-  return <Card ref={containerRef} padding={0} height={height} width="100%" />;
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return undefined;
+    const indices = new Map(candles.map((candle, index) => [new Date(candle.ts).getTime() / 1000, index]));
+    const onCrosshair = (event: MouseEventParams) => {
+      const index = event.point && typeof event.time === 'number' ? indices.get(event.time) : undefined;
+      setHovered(index == null ? null : { source: candles, index });
+    };
+    chart.subscribeCrosshairMove(onCrosshair);
+    return () => {
+      if (chartRef.current === chart) chart.unsubscribeCrosshairMove(onCrosshair);
+    };
+  }, [candles, tokens]);
+
+  const index = hovered?.source === candles ? hovered.index : candles.length - 1;
+  return (
+    <div style={{ width: '100%' }}>
+      <div aria-label="선택 봉 상세 정보" style={{ color: tokens['--color-text-primary'], fontSize: 12, padding: '8px 0', minHeight: 34 }}>
+        {formatCandleInfo(candles[index], candles[index - 1]?.close)}
+      </div>
+      <Card ref={containerRef} padding={0} height={height} width="100%" />
+    </div>
+  );
 }

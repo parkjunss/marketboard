@@ -1,0 +1,12 @@
+{
+  "browser": {"mode": "launch", "executable_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "headless": true},
+  "start_url": {"url": "https://www.tradingview.com/chart/?symbol=NASDAQ%3AAAPL"},
+  "environment": {"viewport": {"width": 1440, "height": 900}, "locale": "en-US", "timezone": "America/New_York"},
+  "actions": [
+    {"step_id": "initial_chart", "action": "wait_for_timeout", "duration_ms": 12000},
+    {"step_id": "intervals", "action": "click", "locator": {"kind": "role", "role": "button", "name": "1 day"}, "timeout_ms": 5000},
+    {"step_id": "close_trend", "action": "press", "locator": {"kind": "css", "selector": "body"}, "key": "Escape"},
+    {"step_id": "comparison", "action": "click", "locator": {"kind": "role", "role": "button", "name": "Compare symbols"}, "timeout_ms": 5000}
+  ],
+  "capture": {"after_each_step": ["accessibility"], "at_end": ["url"], "events": ["page-errors"]}
+}

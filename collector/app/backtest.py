@@ -249,6 +249,34 @@ def _portfolio_value_for_strategy(
     return _buy_and_hold_value(closes, tickers, initial_capital)
 
 
+def performance_metrics(portfolio_value: pd.Series, risk_free_rate: float = 0.0) -> dict:
+    daily_returns = portfolio_value.pct_change().dropna()
+    total_return_pct = (portfolio_value.iloc[-1] / portfolio_value.iloc[0] - 1) * 100
+
+    years = (portfolio_value.index[-1] - portfolio_value.index[0]).days / 365.25
+    cagr_pct = ((portfolio_value.iloc[-1] / portfolio_value.iloc[0]) ** (1 / years) - 1) * 100 if years > 0 else None
+
+    running_max = portfolio_value.cummax()
+    drawdown_pct = (portfolio_value - running_max) / running_max * 100
+    max_drawdown_pct = drawdown_pct.min()
+
+    volatility_pct = daily_returns.std() * (TRADING_DAYS_PER_YEAR**0.5) * 100 if len(daily_returns) > 1 else None
+    annualized_return = daily_returns.mean() * TRADING_DAYS_PER_YEAR if len(daily_returns) > 1 else None
+    sharpe_ratio = (
+        (annualized_return - risk_free_rate) / (daily_returns.std() * (TRADING_DAYS_PER_YEAR**0.5))
+        if annualized_return is not None and daily_returns.std() > 0
+        else None
+    )
+
+    return {
+        "totalReturnPct": round(float(total_return_pct), 2),
+        "cagrPct": round(float(cagr_pct), 2) if cagr_pct is not None else None,
+        "maxDrawdownPct": round(float(max_drawdown_pct), 2),
+        "volatilityPct": round(float(volatility_pct), 2) if volatility_pct is not None else None,
+        "sharpeRatio": round(float(sharpe_ratio), 2) if sharpe_ratio is not None else None,
+    }
+
+
 def _compute_backtest(
     closes: pd.DataFrame,
     tickers: list[str],
@@ -281,24 +309,6 @@ def _compute_backtest(
         for d, pv, bv in zip(closes.index, portfolio_value, benchmark_value)
     ]
 
-    daily_returns = portfolio_value.pct_change().dropna()
-    total_return_pct = (portfolio_value.iloc[-1] / portfolio_value.iloc[0] - 1) * 100
-
-    years = (closes.index[-1] - closes.index[0]).days / 365.25
-    cagr_pct = ((portfolio_value.iloc[-1] / portfolio_value.iloc[0]) ** (1 / years) - 1) * 100 if years > 0 else None
-
-    running_max = portfolio_value.cummax()
-    drawdown_pct = (portfolio_value - running_max) / running_max * 100
-    max_drawdown_pct = drawdown_pct.min()
-
-    volatility_pct = daily_returns.std() * (TRADING_DAYS_PER_YEAR**0.5) * 100 if len(daily_returns) > 1 else None
-    annualized_return = daily_returns.mean() * TRADING_DAYS_PER_YEAR if len(daily_returns) > 1 else None
-    sharpe_ratio = (
-        (annualized_return - risk_free_rate) / (daily_returns.std() * (TRADING_DAYS_PER_YEAR**0.5))
-        if annualized_return is not None and daily_returns.std() > 0
-        else None
-    )
-
     ticker_stats = []
     for t in portfolio_tickers:
         r, v = _return_and_volatility(closes[t])
@@ -308,13 +318,7 @@ def _compute_backtest(
 
     return {
         "equityCurve": equity_curve,
-        "metrics": {
-            "totalReturnPct": round(float(total_return_pct), 2),
-            "cagrPct": round(float(cagr_pct), 2) if cagr_pct is not None else None,
-            "maxDrawdownPct": round(float(max_drawdown_pct), 2),
-            "volatilityPct": round(float(volatility_pct), 2) if volatility_pct is not None else None,
-            "sharpeRatio": round(float(sharpe_ratio), 2) if sharpe_ratio is not None else None,
-        },
+        "metrics": performance_metrics(portfolio_value, risk_free_rate),
         "tickerStats": ticker_stats,
         "benchmarkStats": {
             "ticker": BENCHMARK_TICKER,

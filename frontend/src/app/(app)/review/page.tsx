@@ -122,7 +122,7 @@ export default function ReviewPage() {
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <div><h1>투자 점검</h1><p>시장 상황, 포트폴리오 위험, 투자 가설을 한 번에 점검합니다.</p></div>
+          <div><h1>투자 점검</h1><p>시장 상황, 포트폴리오 위험, 투자 가설을 한 번에 점검합니다.</p><Link href="/etf">ETF 전략 검토 · 모의 운용 · 리밸런싱 제안 →</Link></div>
         <div className={styles.headerMeta}>
           {saved && <span>불변 스냅샷 #{saved.id}</span>}
           <span>계산 버전 {saved?.payload.schemaVersion ?? 3}</span>

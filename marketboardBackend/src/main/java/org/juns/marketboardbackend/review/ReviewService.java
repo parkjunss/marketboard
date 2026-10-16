@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.function.Supplier;
 import org.juns.marketboardbackend.collector.MarketIndexCandle;
+import org.juns.marketboardbackend.collector.EtfResearchEvidence;
 import org.juns.marketboardbackend.marketindex.MarketIndexHistoryService;
 import org.juns.marketboardbackend.marketbreadth.MarketBreadthService;
 import org.juns.marketboardbackend.marketbreadth.dto.MarketBreadthResponse;
@@ -23,7 +24,16 @@ public class ReviewService {
             Map<String, Resource<List<MarketIndexCandle>>> histories, Resource<MarketBreadthResponse> breadth,
             Resource<List<PortfolioSummaryResponse>> portfolios, Map<Long, List<PortfolioPositionResponse>> positions,
             Resource<Map<Long, PortfolioTransactionService.LedgerBasis>> ledgerBasis,
-            Resource<Map<Long, PortfolioStrategyService.StrategySnapshot>> strategy) {
+            Resource<Map<Long, PortfolioStrategyService.StrategySnapshot>> strategy,
+            EtfResearchEvidence etf) {
+        public Payload(int schemaVersion, String calculationVersion, int period, Instant startedAt, Instant capturedAt,
+                Map<String, Resource<List<MarketIndexCandle>>> histories, Resource<MarketBreadthResponse> breadth,
+                Resource<List<PortfolioSummaryResponse>> portfolios, Map<Long, List<PortfolioPositionResponse>> positions,
+                Resource<Map<Long, PortfolioTransactionService.LedgerBasis>> ledgerBasis,
+                Resource<Map<Long, PortfolioStrategyService.StrategySnapshot>> strategy) {
+            this(schemaVersion, calculationVersion, period, startedAt, capturedAt, histories, breadth, portfolios, positions,
+                    ledgerBasis, strategy, null);
+        }
         public Payload(int schemaVersion, String calculationVersion, int period, Instant startedAt, Instant capturedAt,
                 Map<String, Resource<List<MarketIndexCandle>>> histories, Resource<MarketBreadthResponse> breadth,
                 Resource<List<PortfolioSummaryResponse>> portfolios,

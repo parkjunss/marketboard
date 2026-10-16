@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import type { ScreenerSearchResponse, ScreenerSortField } from '@/lib/screener-types';
 import { DEFAULT_FILTERS, ScreenerFilters, toSearchRequest, type ScreenerFilterValues } from '@/components/screener/ScreenerFilters';
 import { ScreenerResults } from '@/components/screener/ScreenerResults';
+import { EtfMomentumPanel } from '@/components/screener/EtfMomentumPanel';
 import { PERIOD_OPTIONS } from '@/components/screener/screener-format';
 import styles from '@/components/screener/screener.module.css';
 
@@ -61,6 +62,7 @@ export default function ScreenerPage() {
   return <main className={styles.page}>
     <h1 className={styles.title}>스크리너</h1>
     <p className={styles.subtitle}>다양한 조건으로 미국 주식을 검색하고 투자 기회를 찾아보세요.</p>
+    <EtfMomentumPanel />
     {error && <Banner status="error" title="조회 실패" description={error} />}
     <ScreenerFilters values={filters} onChange={setFilters} onReset={reset} onSubmit={submit} isLoading={isLoading} />
     <ScreenerResults

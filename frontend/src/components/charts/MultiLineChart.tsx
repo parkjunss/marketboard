@@ -92,7 +92,7 @@ export function MultiLineChart({
             strokeLinecap="round"
           />
         ))}
-        {categories.map((category, i) => (
+        {categories.map((category, i) => (i % Math.max(1, Math.ceil(categories.length / 10)) === 0 || i === categories.length - 1) && (
           <text
             key={String(category)}
             x={PADDING_LEFT + i * stepX}

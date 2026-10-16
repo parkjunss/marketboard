@@ -5,13 +5,16 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import requests
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import config, mysql_writer
 from app.aggregator import CandleAggregator
 from app.alerts import check_alerts
 from app.backfill import backfill_missing_symbols, backfill_symbol
 from app.backtest import InsufficientDataError, InvalidStrategyParamsError, run_backtest
+from app.etf_momentum import run_etf_momentum
+from app.etf_backtest import run_etf_comparison
+from app.etf_workflow import capture_research, run_paper, run_rebalance_proposal
 from app.financials import get_financials
 from app.finnhub_source import FinnhubWebSocketSource
 from app.market_indices import get_index_history, get_sector_performance, list_indices
@@ -268,6 +271,100 @@ async def backtest_run(payload: BacktestRunPayload):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+class EtfComparisonPayload(BaseModel):
+    startDate: date
+    endDate: date
+    initialCapital: float = Field(ge=1, le=1_000_000_000, allow_inf_nan=False)
+    feeBps: float = Field(ge=0, le=100, allow_inf_nan=False)
+    slippageBps: float = Field(ge=0, le=100, allow_inf_nan=False)
+
+
+class EtfCapturePayload(BaseModel):
+    configuration: EtfComparisonPayload
+    strategyId: str = Field(pattern="^(SPY_HOLD|MOMENTUM|MOMENTUM_TREND)$")
+
+
+@app.post("/strategies/etf-capture")
+async def etf_capture(payload: EtfCapturePayload):
+    try:
+        return await asyncio.to_thread(capture_research, payload.configuration.model_dump(), payload.strategyId)
+    except (ValueError, InsufficientDataError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("ETF evidence capture failed")
+        raise HTTPException(status_code=502, detail="ETF 근거 저장용 계산 실패") from exc
+
+
+class EtfPaperPayload(BaseModel):
+    calculationVersion: str
+    strategyId: str = Field(pattern="^(SPY_HOLD|MOMENTUM|MOMENTUM_TREND)$")
+    initialCapital: float = Field(ge=1, le=1_000_000_000, allow_inf_nan=False)
+    feeBps: float = Field(ge=0, le=100, allow_inf_nan=False)
+    slippageBps: float = Field(ge=0, le=100, allow_inf_nan=False)
+    state: dict
+    signals: list[dict] = Field(max_length=150)
+
+
+@app.post("/strategies/etf-paper")
+async def etf_paper(payload: EtfPaperPayload):
+    try:
+        return await asyncio.to_thread(run_paper, payload.model_dump())
+    except (ValueError, InsufficientDataError) as exc:
+        return {"events": [], "state": payload.state, "message": str(exc)}
+    except Exception as exc:
+        logger.exception("ETF paper valuation failed")
+        raise HTTPException(status_code=502, detail="모의 운용 평가 실패") from exc
+
+
+class EtfHolding(BaseModel):
+    ticker: str = Field(min_length=1, max_length=20)
+    quantity: float = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
+    version: int = Field(ge=0)
+
+
+class EtfRebalancePayload(BaseModel):
+    strategyId: str = Field(pattern="^(SPY_HOLD|MOMENTUM|MOMENTUM_TREND)$")
+    holdings: list[EtfHolding] = Field(max_length=100)
+    cashUsd: float = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
+    feeBps: float = Field(ge=0, le=100, allow_inf_nan=False)
+    slippageBps: float = Field(ge=0, le=100, allow_inf_nan=False)
+    maxPositionWeight: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
+
+
+@app.post("/strategies/etf-rebalance")
+async def etf_rebalance(payload: EtfRebalancePayload):
+    try:
+        return await asyncio.to_thread(run_rebalance_proposal, payload.model_dump())
+    except (ValueError, InsufficientDataError) as exc:
+        return {"ready": False, "message": str(exc), "rows": []}
+    except Exception as exc:
+        logger.exception("ETF rebalance proposal failed")
+        raise HTTPException(status_code=502, detail="리밸런싱 제안 계산 실패") from exc
+
+
+@app.post("/backtest/etf-comparison")
+async def etf_comparison(payload: EtfComparisonPayload):
+    try:
+        return await asyncio.to_thread(run_etf_comparison, payload.startDate, payload.endDate,
+                                       payload.initialCapital, payload.feeBps, payload.slippageBps)
+    except InsufficientDataError as exc:
+        return {"ready": False, "message": str(exc), "strategies": []}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("ETF comparison failed")
+        raise HTTPException(status_code=502, detail="ETF 전략 비교에 실패했습니다.") from exc
+
+
+@app.get("/strategies/etf-momentum")
+async def etf_momentum():
+    try:
+        return await asyncio.to_thread(run_etf_momentum)
+    except Exception as exc:
+        logger.exception("ETF momentum calculation failed")
+        raise HTTPException(status_code=502, detail="ETF 전략 계산에 실패했습니다.") from exc
 
 
 @app.get("/screener/momentum")

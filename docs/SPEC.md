@@ -20,6 +20,26 @@
 
 비교는 같은 기간·통화·가격 보정 기준으로 한다. JSON에서 결측은 null과 사유로 반환하고 NaN/Infinity·0 대체를 금지한다. 부분 결과는 부분임을 표시한다.
 
+### 1.1 계산 책임 (2026-10-16 확정)
+
+투자 지표·전략 순위·배분·위험 판단·성과·전략 기준일은 서버에서 계산한다. 프론트엔드는 입력/조회/표시만 수행하며 숫자·날짜·퍼센트 포맷 외의 투자 계산을 추가하지 않는다. 서버 실패 시 로컬 계산으로 대체하지 않는다. [ADR 0002](adr/0002-server-owned-investment-calculations.md) 참조.
+
+ETF 조회 계약: `GET /api/screener/etf-momentum` (인증 필수). Spring이 Collector `GET /strategies/etf-momentum`의 결과를 전달한다. 브라우저가 기준일·종목군·순위 규칙을 결정하지 않는다.
+
+- 200: `{asOf,startDate,endDate,ready,rows,cashWeight}`. 각 행은 `{ticker,rank,momentum,close,sma200,sessionDate,weight,reason}`.
+- `momentum`: 퍼센트, `close`/`sma200`: USD, `weight`/`cashWeight`: 0~1 비중. `rank`: 1부터 시작.
+- 데이터 부족/불일치: 200, `ready=false`, 모든 `rank`/`weight` 및 `cashWeight=null`, 행별 사유. 계산 가능한 개별 지표는 유지한다.
+- 계산 서버 실패: 503 `{message}`. 미인증: 401. 실패를 현금 100% 신호로 반환하지 않는다.
+- 세부 규칙·데이터 한계는 [ETF 구현 방안](MarketBoard_ETF_Momentum_Implementation_Plan.md) 참조.
+
+### 1.2 ETF 전략 비교 백테스트 (2026-10-16)
+
+- 인증된 `POST /api/backtest/etf-comparison`: `{startDate,endDate,initialCapital,feeBps,slippageBps}`. 조회성 계산이며 실행 이력을 저장하지 않는다.
+- 자본 1~10억 USD, 비용 각각 0~100bp, 최대 3660일, 시작일 1991년 이후, 시작일 < 종료일 < 뉴욕 오늘. 입력 실패 400, 미인증 401.
+- SPY 보유/ETF 모멘텀/ETF 모멘텀+200일선 세 전략을 같은 기간·비용으로 비교한다. 월말 신호 뒤 첫 관측 거래일 시가 체결, 현금 이자 0%, 종료일 강제 매도 없음.
+- 200/`ready=true`: 요청 및 실제 기간, 비용 조건, `strategies`별 `metrics`, `equityCurve`(서버 계산 `returnPct` 포함), `trades`, `rebalances`, `regimes`, `totalFees`, `totalSlippage`, `turnoverPct`.
+- 데이터 부족/거래일 불일치 시 전체 비교 보류: 200/`ready=false`/`message`/빈 `strategies`. 계산 서버 실패는 503. 상세 계산 및 데이터 한계는 [ETF 구현 방안](MarketBoard_ETF_Momentum_Implementation_Plan.md) 참조.
+
 ## 2. F01 회원가입·로그인
 
 ### 2.1 현재 계약과 목표 입력 규칙
@@ -217,3 +237,12 @@ Decision은 reviewId,choice(EXECUTE/DEFER/HOLD),reason,decidedAt를 가진다. r
 현재 인증 동작은 `marketboardBackend/src/main/java/org/juns/marketboardbackend/` 아래의 `auth/dto/SignupRequest.java`, `auth/AuthController.java`, `auth/AuthService.java`, `security/RateLimitFilter.java`, `common/GlobalExceptionHandler.java` 및 `marketboardBackend/src/main/resources/application.yaml`, `frontend/src/lib/auth-context.tsx`에서 확인했다. 개발 시 최신 소스를 재확인한다.
 
 각 구현 작업은 Fxx와 Axx를 연결하고 결과를 PROGRESS에 기록한다. 자동화 검사 통과, 실제 데이터/API 확인, 브라우저 확인, 운영 배포 확인을 구분한다. 문서 변경은 관련 기능 ID·입력 계약·수용 조건을 함께 갱신한다.
+# ETF 후속 API와 저장 계약 (2026-10-16)
+
+- `POST /api/etf/reviews`: `{configuration, strategyId}` + `Idempotency-Key`; 기존 ReviewService.Payload의 선택 `etf` 필드에 서버 산출 결과/입력 일봉 저장.
+- `GET /api/etf/reviews`: 소유자 최근 검토 50건 내 ETF 요약. 상세/판단은 기존 `/api/reviews/{id}`와 `/decisions` 사용.
+- `POST /api/etf/paper`: `{reviewId}` + `Idempotency-Key`; 최근 판단 EXECUTE 필요. GET은 소유 계좌 목록.
+- `POST /api/etf/paper/{id}/refresh`, `/stop`; `GET /api/etf/paper/{id}/snapshots`: 소유자만 접근.
+- `POST /api/etf/rebalance`: `{reviewId, portfolioId, cashUsd}`; 서버 보유/버전/비중 제한과 최신 공통 완료 일봉 기준 조정 제안.
+- V38: 모의 계좌 + 불변 신호/평가 기록, 행 잠금과 종류/날짜별 유일 제약. 실제 포지션/거래 원장 쓰기 없음.
+- Collector `/strategies/etf-capture`, `/etf-paper`, `/etf-rebalance`가 금융 계산을 소유한다. 입력 제한 및 데이터 누락 시 보류 규칙은 [계획](MarketBoard_ETF_Momentum_Implementation_Plan.md) 참조.

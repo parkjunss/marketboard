@@ -16,6 +16,7 @@ export interface AuthUser {
 }
 
 interface RequestOptions {
+  signal?: AbortSignal;
   headers?: Record<string, string>;
   method?: string;
   body?: unknown;

@@ -15,6 +15,7 @@ import { TabList, Tab } from '@astryxdesign/core/TabList';
 import { ScatterChart, type ScatterPoint } from '@/components/charts/ScatterChart';
 import { BacktestWorkbench } from '@/components/backtest/BacktestWorkbench';
 import { StrategySetupCard } from '@/components/backtest/StrategySetupCard';
+import { EtfComparisonPanel } from '@/components/backtest/EtfComparisonPanel';
 import { useAuth } from '@/lib/auth-context';
 import { ApiError } from '@/lib/api';
 import * as api from '@/lib/api';
@@ -276,6 +277,7 @@ export default function BacktestPage() {
 
       <Section padding={4}>
         <VStack gap={4}>
+          <EtfComparisonPanel />
           <StrategySetupCard
             name={name}
             setName={setName}

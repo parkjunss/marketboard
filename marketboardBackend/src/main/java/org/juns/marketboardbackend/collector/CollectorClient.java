@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.juns.marketboardbackend.config.CacheConfig;
+import org.juns.marketboardbackend.backtest.dto.EtfComparisonRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Server-to-server client for the Python collector's internal FastAPI (no auth/CORS —
@@ -60,6 +62,55 @@ public class CollectorClient {
             return Optional.ofNullable(restClient.get().uri("/health").retrieve().body(CollectorHealth.class));
         } catch (RestClientException ex) {
             log.warn("Collector health check failed: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public Optional<EtfMomentumResult> getEtfMomentum() {
+        try {
+            return Optional.ofNullable(restClient.get().uri("/strategies/etf-momentum")
+                    .retrieve().body(EtfMomentumResult.class));
+        } catch (RestClientException ex) {
+            log.warn("ETF momentum calculation failed via collector: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public Optional<EtfResearchEvidence> captureEtfResearch(EtfComparisonRequest configuration, String strategyId) {
+        return etfPost("/strategies/etf-capture", Map.of("configuration", configuration, "strategyId", strategyId), EtfResearchEvidence.class);
+    }
+
+    public Optional<JsonNode> advanceEtfPaper(Object payload) {
+        return etfPost("/strategies/etf-paper", payload, JsonNode.class);
+    }
+
+    public Optional<JsonNode> proposeEtfRebalance(Object payload) {
+        return etfPost("/strategies/etf-rebalance", payload, JsonNode.class);
+    }
+
+    public Optional<EtfComparisonResult> compareEtfStrategies(EtfComparisonRequest request) {
+        return etfPost("/backtest/etf-comparison", request, EtfComparisonResult.class);
+    }
+
+    private <T> Optional<T> etfPost(String path, Object request, Class<T> type) {
+        try {
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + path))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(request)))
+                    .build();
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                log.warn("ETF comparison failed via collector: HTTP {}", response.statusCode());
+                return Optional.empty();
+            }
+            return Optional.ofNullable(objectMapper.readValue(response.body(), type));
+        } catch (IOException | tools.jackson.core.JacksonException ex) {
+            log.warn("ETF comparison failed via collector: {}", ex.getMessage());
+            return Optional.empty();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
             return Optional.empty();
         }
     }

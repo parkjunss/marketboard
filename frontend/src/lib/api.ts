@@ -33,6 +33,8 @@ import type {
 } from './types';
 import type { MomentumScreenerParams, MomentumScreenerResult } from './screener-types';
 import type { StockAnalysisResult } from './analysis-types';
+import type { EtfMomentumResult } from './etf-momentum-types';
+import type { EtfComparisonRequest, EtfComparisonResult } from './etf-comparison-types';
 import { idempotentPost } from './idempotent-post';
 import { decodeJwt } from './jwt';
 import type { ReviewDecision, ReviewDecisionChoice, ReviewDetail, ReviewSummary } from './types';
@@ -66,7 +68,7 @@ export function createReviewDecision(fetcher: Fetcher, id: number, input: {
   return fetcher<ReviewDecision>(`/api/reviews/${id}/decisions`, { method: 'POST', body: input });
 }
 
-function retryablePost<T>(fetcher: Fetcher, path: string, body: unknown): Promise<T> {
+export function retryablePost<T>(fetcher: Fetcher, path: string, body: unknown): Promise<T> {
   const stored = localStorage.getItem('marketboard.refreshToken');
   const claims = stored ? decodeJwt(stored) : null;
   if (!claims) return Promise.reject(new Error('로그인이 필요합니다.'));
@@ -180,7 +182,17 @@ export function markNotificationRead(fetcher: Fetcher, id: number): Promise<void
 export function markAllNotificationsRead(fetcher: Fetcher): Promise<void> { return fetcher<void>('/api/notifications/read-all', { method: 'PUT' }); }
 
 /** Authenticated calls below take a fetcher (normally AuthContext's `authFetch`) so 401s trigger a refresh-and-retry. */
-export type Fetcher = <T>(path: string, options?: { method?: string; body?: unknown }) => Promise<T>;
+export type Fetcher = <T>(path: string, options?: { method?: string; body?: unknown; signal?: AbortSignal }) => Promise<T>;
+
+export function compareEtfStrategies(fetcher: Fetcher, request: EtfComparisonRequest): Promise<EtfComparisonResult> {
+  return fetcher<EtfComparisonResult>('/api/backtest/etf-comparison', {
+    method: 'POST', body: request, signal: AbortSignal.timeout(40_000),
+  });
+}
+
+export function getEtfMomentum(fetcher: Fetcher): Promise<EtfMomentumResult> {
+  return fetcher<EtfMomentumResult>('/api/screener/etf-momentum');
+}
 
 export function getQuotes(fetcher: Fetcher): Promise<QuoteResponse[]> {
   return fetcher<QuoteResponse[]>('/api/quotes');

@@ -62,6 +62,12 @@ def build_etf_momentum(histories: dict, as_of: date) -> dict:
         latest = bars[-1]
         start = next((bar for bar in reversed(bars) if bar[0] <= start_date), None)
         end = next((bar for bar in reversed(bars) if bar[0] <= end_date), None)
+        # Keep observable metrics even when history quality prevents portfolio weights.
+        sma = fsum(close / 200 for _, close in bars[-200:]) if len(bars) >= 200 else None
+        momentum = (end[1] / start[1] - 1) * 100 if start is not None and end is not None else None
+        row.update(close=latest[1], sessionDate=latest[0].isoformat(),
+                   sma200=sma if sma is not None and isfinite(sma) else None,
+                   momentum=momentum if momentum is not None and isfinite(momentum) else None)
         if (len(bars) < 200 or start is None or end is None
                 or (as_of - latest[0]).days > 7
                 or (start_date - start[0]).days > 7 or (end_date - end[0]).days > 7):
@@ -70,15 +76,12 @@ def build_etf_momentum(histories: dict, as_of: date) -> dict:
         dates = [day for day, _ in bars if day >= start[0]]
         # shortcut: use gap/date agreement until an exchange calendar is added before live trading.
         if any((right - left).days > 7 for left, right in zip(dates, dates[1:])):
-            row["reason"] = "일봉 이력에 7일 초과 공백"
+            row["reason"] = "일봉 이력에 7일 초과 공백 · 수치는 관측 일봉 기준, 비중 제안 보류"
             continue
-        momentum = (end[1] / start[1] - 1) * 100
-        sma = fsum(close / 200 for _, close in bars[-200:])
         if not isfinite(momentum) or not isfinite(sma):
             row["reason"] = "계산 가능한 가격 범위 초과"
             continue
         date_sets.append(dates)
-        row.update(momentum=momentum, close=latest[1], sma200=sma, sessionDate=latest[0].isoformat())
 
     ready = len(date_sets) == len(ETF_UNIVERSE) and all(dates == date_sets[0] for dates in date_sets)
     cash_weight = None

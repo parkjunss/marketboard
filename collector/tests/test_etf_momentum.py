@@ -114,6 +114,30 @@ def test_sorting_does_not_mutate_input_and_naive_utc_matches_aware(histories):
     assert strategy.build_etf_momentum(naive, AS_OF) == expected
 
 
+def test_gap_preserves_metrics_from_observed_bars_without_inventing_weights(histories):
+    del histories["SPY"][100:120]
+    result = strategy.build_etf_momentum(histories, AS_OF)
+    row = next(row for row in result["rows"] if row["ticker"] == "SPY")
+    bars = [(ts.date(), close) for ts, close in histories["SPY"] if ts.date() <= AS_OF]
+    prices = dict(bars)
+    assert row["close"] == bars[-1][1]
+    assert row["sessionDate"] == AS_OF.isoformat()
+    assert row["sma200"] == pytest.approx(sum(close for _, close in bars[-200:]) / 200)
+    assert row["momentum"] == pytest.approx((prices[date(2025, 8, 29)] / prices[date(2024, 9, 30)] - 1) * 100)
+    assert "7일 초과 공백" in row["reason"]
+    assert not result["ready"] and row["weight"] is None
+
+
+def test_short_history_keeps_close_but_does_not_label_short_average_as_sma200(histories):
+    histories["SPY"] = histories["SPY"][-100:]
+    result = strategy.build_etf_momentum(histories, AS_OF)
+    row = next(row for row in result["rows"] if row["ticker"] == "SPY")
+    assert row["close"] is not None
+    assert row["sessionDate"] == AS_OF.isoformat()
+    assert row["sma200"] is None and row["momentum"] is None
+    assert not result["ready"] and row["weight"] is None
+
+
 def test_run_uses_one_server_cutoff_for_data_and_calculation(monkeypatch, histories):
     monkeypatch.setattr(strategy, "last_completed_month", lambda: AS_OF)
     def load(as_of):

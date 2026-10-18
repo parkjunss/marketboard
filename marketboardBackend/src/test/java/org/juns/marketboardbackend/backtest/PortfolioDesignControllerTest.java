@@ -27,7 +27,7 @@ class PortfolioDesignControllerTest {
     private static final String PATH="/api/portfolio/design";
     private static final String REQUEST="""
         {"tickers":["SPY","QQQ"],"startDate":"2024-01-01","endDate":"2024-12-31",
-         "capital":10000,"cash":1000,"maxWeightPct":80,"riskFreePct":3,"riskLimitPct":15}
+         "capital":10000,"cash":1000,"maxWeightPct":80,"riskLimitPct":15}
         """;
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;

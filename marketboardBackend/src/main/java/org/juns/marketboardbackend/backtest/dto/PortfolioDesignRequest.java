@@ -14,7 +14,6 @@ public record PortfolioDesignRequest(
         @NotNull @DecimalMin("1") @DecimalMax("1000000000") BigDecimal capital,
         @NotNull @DecimalMin("0") @DecimalMax("1000000000") BigDecimal cash,
         @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("100") BigDecimal maxWeightPct,
-        @NotNull @DecimalMin("0") @DecimalMax("20") BigDecimal riskFreePct,
         @NotNull @DecimalMin(value="0", inclusive=false) @DecimalMax("200") BigDecimal riskLimitPct) {
     public PortfolioDesignRequest {
         if (tickers != null) tickers = tickers.stream().map(t -> t == null ? null : t.trim().toUpperCase(Locale.ROOT)).distinct().toList();

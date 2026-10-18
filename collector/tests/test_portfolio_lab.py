@@ -10,7 +10,7 @@ from app.portfolio_lab import PortfolioLabRequest, calculate, daily_returns, sol
 
 def request(**kwargs):
     return PortfolioLabRequest.model_validate(dict(tickers=['SPY', 'QQQ'], startDate='2024-01-01', endDate='2024-12-31',
-        capital=10000, cash=1000, maxWeightPct=80, riskFreePct=3, riskLimitPct=30) | kwargs)
+        capital=10000, cash=1000, maxWeightPct=80, riskLimitPct=30) | kwargs)
 
 
 @pytest.fixture
@@ -29,6 +29,27 @@ def test_minimum_variance_matches_two_asset_analytic_solution():
     assert np.sqrt(w@cov@w) < .2
 
 
+def test_returns_use_actual_endpoints_and_buy_and_hold_weights(histories):
+    result = calculate(request(), histories, {})
+    start, end = date.fromisoformat(result['commonStart']), date.fromisoformat(result['commonEnd'])
+    actual = {}
+    for ticker, bars in histories.items():
+        prices = {ts.date(): close for ts, _, close in bars}
+        actual[ticker] = (prices[end]/prices[start]-1)*100
+    for asset in result['assets']:
+        assert asset['commonPeriodReturnPct'] == pytest.approx(actual[asset['ticker']])
+        assert 'meanReturnPct' not in asset
+    for candidate in result['candidates']+result['frontier']:
+        expected = sum(row['weightPct']/100*actual[row['ticker']] for row in candidate['allocations'])
+        assert candidate['periodReturnPct'] == pytest.approx(expected)
+        assert 'sharpe' not in candidate
+
+
+def test_cumulative_return_includes_price_change_across_omitted_gap(histories):
+    del histories['SPY'][80:85]
+    test_returns_use_actual_endpoints_and_buy_and_hold_weights(histories)
+
+
 def test_frontier_allocation_constraints_and_capital_scaling(histories):
     first = calculate(request(), histories, {})
     second = calculate(request(capital=20000, cash=2000), histories, {})
@@ -41,7 +62,7 @@ def test_frontier_allocation_constraints_and_capital_scaling(histories):
         assert candidate['integerShareCash'] is None
     for a, b in zip(first['frontier'], second['frontier']):
         assert a['volatilityPct'] == pytest.approx(b['volatilityPct'])
-    assert all(a['meanReturnPct'] <= b['meanReturnPct']+1e-5 and a['volatilityPct'] <= b['volatilityPct']+1e-5
+    assert all(a['periodReturnPct'] <= b['periodReturnPct']+1e-5 and a['volatilityPct'] <= b['volatilityPct']+1e-5
                for a, b in zip(first['frontier'], first['frontier'][1:]))
     json.dumps(first, allow_nan=False)
 

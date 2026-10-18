@@ -17,7 +17,6 @@ class PortfolioLabRequest(BaseModel):
     capital: float = Field(ge=1, le=1_000_000_000, allow_inf_nan=False)
     cash: float = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
     maxWeightPct: float = Field(gt=0, le=100, allow_inf_nan=False)
-    riskFreePct: float = Field(ge=0, le=20, allow_inf_nan=False)
     riskLimitPct: float = Field(gt=0, le=200, allow_inf_nan=False)
 
     @field_validator('tickers')
@@ -85,14 +84,14 @@ def solve_weights(mu, covariance, cap, target=None, risk_limit=None):
 def calculate(request, histories, latest):
     p = request
     assets, returns, prices = [], {}, {}
-    warnings = ['과거 평균·공분산의 표본 내 추정치이며 미래 수익 예측이 아닙니다.',
+    warnings = ['수익률은 표시 기간 시작·종료 종가의 실제 변화율입니다. 같은 기간으로 비중을 최적화한 사후 비교이며 미래 성과가 아닙니다.',
                 '가격 조정 일관성은 미확인입니다. 결측 보간 없이 동일 구간만 사용합니다.',
                 '휴장일 캘린더 대신 평일 간격을 보수적으로 검사해 휴일을 낀 구간도 제외할 수 있습니다.',
-                '고정 현금 수익률은 0%이며 무위험 수익률 입력은 샤프 비교에만 사용합니다. 거래비용·세금은 제외합니다.']
+                '현금 수익률은 0%입니다. 기간 초 비중으로 매수 후 보유한 수익률이며 거래비용·세금은 제외합니다. 변동성만 연환산합니다.']
     for ticker in p.tickers:
         row = dict(ticker=ticker, observations=0, returnObservations=0, startDate=None, endDate=None,
-                   totalReturnPct=None, meanReturnPct=None, volatilityPct=None, maxDrawdownPct=None,
-                   price=None, priceDate=None, issue=None, commonMeanReturnPct=None, commonVolatilityPct=None)
+                   totalReturnPct=None, volatilityPct=None, maxDrawdownPct=None,
+                   price=None, priceDate=None, issue=None, commonPeriodReturnPct=None, commonVolatilityPct=None)
         assets.append(row)
         try:
             values = observed_prices(histories.get(ticker, []), p.startDate, p.endDate)
@@ -118,15 +117,15 @@ def calculate(request, histories, latest):
                    endDate=max(values).isoformat(), totalReturnPct=float((a[-1]/a[0]-1)*100),
                    maxDrawdownPct=float(np.min(a/np.maximum.accumulate(a)-1)*100))
         if len(r) >= 2:
-            row.update(meanReturnPct=float(r.mean()*25200), volatilityPct=float(r.std(ddof=1)*np.sqrt(252)*100))
+            row.update(volatilityPct=float(r.std(ddof=1)*np.sqrt(252)*100))
         if len(r) < 60:
             row['issue'] = '최적화에 필요한 유효 일간 수익률 60개 미만'
     result = dict(status='INSUFFICIENT_DATA', message=None, configuration=p.model_dump(mode='json'),
                   assets=assets, commonObservations=0, excludedIntervals=0, commonStart=None, commonEnd=None,
-                  correlation=None, candidates=[], frontier=[], warnings=warnings, calculationVersion='portfolio-lab-v1')
+                  correlation=None, candidates=[], frontier=[], warnings=warnings, calculationVersion='portfolio-lab-v2-period-return')
     if p.cash == p.capital:
         result.update(status='READY', message='전액 현금 조건입니다. 위험자산 최적화는 수행하지 않았습니다.', candidates=[dict(
-            id='cash', label='전액 현금', meanReturnPct=0, volatilityPct=0, sharpe=None, allocations=[],
+            id='cash', label='전액 현금', periodReturnPct=0, volatilityPct=0, allocations=[],
             cashAmount=float(Decimal(str(p.capital)).quantize(Decimal('.01'), rounding=ROUND_FLOOR)),
             integerShareCash=float(Decimal(str(p.capital)).quantize(Decimal('.01'), rounding=ROUND_FLOOR)))])
         return result
@@ -140,13 +139,15 @@ def calculate(request, histories, latest):
         return result
     result.update(commonStart=common[0][0].isoformat(), commonEnd=common[-1][1].isoformat())
     matrix = np.array([[returns[t][interval] for t in p.tickers] for interval in common])
-    mu, covariance = matrix.mean(axis=0)*252, np.cov(matrix, rowvar=False)*252
+    first, last = common[0][0], common[-1][1]
+    mu = np.array([prices[t][last]/prices[t][first]-1 for t in p.tickers])
+    covariance = np.cov(matrix, rowvar=False)*252
     if not np.isfinite(mu).all() or not np.isfinite(covariance).all():
         result.update(status='DEGENERATE_DATA', message='수익률 또는 공분산의 숫자 범위를 초과했습니다.')
         return result
     std = np.sqrt(np.diag(covariance))
     for index, asset in enumerate(assets):
-        asset.update(commonMeanReturnPct=float(mu[index]*100), commonVolatilityPct=float(std[index]*100))
+        asset.update(commonPeriodReturnPct=float(mu[index]*100), commonVolatilityPct=float(std[index]*100))
     result['correlation'] = [[float(covariance[i,j]/(std[i]*std[j])) if std[i]*std[j] > 0 else None
                               for j in range(len(mu))] for i in range(len(mu))]
     fraction = (p.capital-p.cash)/p.capital
@@ -168,8 +169,8 @@ def calculate(request, histories, latest):
                              purchaseAmount=float(Decimal(str(quote))*quantity) if quantity is not None else None))
         cash = total-sum(Decimal(str(row['amount'])) for row in rows)
         remainder = total-sum(Decimal(str(row['purchaseAmount'])) for row in rows) if all(r['quantity'] is not None for r in rows) else None
-        return dict(id=key, label=label, meanReturnPct=ret*100, volatilityPct=vol*100,
-                    sharpe=(ret-p.riskFreePct/100)/vol if vol > 1e-12 else None, allocations=rows,
+        return dict(id=key, label=label, periodReturnPct=ret*100, volatilityPct=vol*100,
+                    allocations=rows,
                     cashAmount=float(cash), integerShareCash=float(remainder) if remainder is not None else None)
     cap = min(1, p.maxWeightPct/100/fraction)
     if np.linalg.eigvalsh(covariance).min() <= 1e-12:
@@ -185,13 +186,13 @@ def calculate(request, histories, latest):
         result['frontier'] = [candidate(solve_weights(mu, covariance, cap, float(target)), f'투자선 {i+1}', f'frontier-{i}') for i, target in enumerate(targets)]
         if np.sqrt(minimum@covariance@minimum)*fraction <= p.riskLimitPct/100+1e-9:
             selected = solve_weights(mu, covariance, cap, risk_limit=p.riskLimitPct/100/fraction)
-            result['candidates'].append(candidate(selected, '위험 한도 내 수익 추정치 최대', 'risk-limit'))
+            result['candidates'].append(candidate(selected, '위험 한도 내 과거 기간 수익률 최대', 'risk-limit'))
         else:
             warnings.append('설정한 위험 한도를 만족하는 조합이 없습니다. 최소 변동성 후보를 비교하세요.')
     except ValueError as exc:
         result.update(status='SOLVER_FAILED', message=str(exc), frontier=[])
         return result
-    result.update(status='READY', message='과거 자료 기반 배분안입니다. 후보를 선택해 금액과 비중을 비교하세요.')
+    result.update(status='READY', message='동일한 과거 기간을 기준으로 계산한 배분안입니다. 후보를 선택해 금액과 비중을 비교하세요.')
     return result
 
 

@@ -1,5 +1,14 @@
 # 포트폴리오 설계 — Spec
 
+## 2026-10-18 설계 저장
+
+- `GET /api/portfolio/designs`: 로그인 소유자의 최근 50개 요약(이름·선택 ID·저장 시각·기록 ID). 목록에서는 결과 JSON을 조회하지 않는다.
+- `GET /api/portfolio/designs/{id}`: 소유자 조건으로 저장 당시 전체 조건과 결과 조회. 다른 계정의 ID는 404로 응답한다.
+- `POST /api/portfolio/designs`: 이름(1~100자), 선택 ID(최대 40자), 검증된 `configuration`, UUID `Idempotency-Key`를 받는다. 클라이언트 성과 JSON을 저장하지 않고 collector에서 재계산한다. READY이며 선택 ID가 실제 후보/투자선에 있는 경우에만 저장한다. 계산 서버 미응답은 503, 계산 불가/후보 소실은 400으로 표시한다.
+- V39 `saved_portfolio_designs`는 사용자 FK·이름·선택 ID·저장 시각·MEDIUMTEXT payload를 저장한다. 기존 IdempotencyService로 같은 키/입력의 중복 기록을 막고 변경 입력은 409로 거절한다. 외부 계산은 DB 쓰기 트랜잭션 전에 수행한다.
+- 저장 결과는 불변이며 새 계산·재저장은 원본을 갱신하지 않는다. 화면은 저장 시각과 당시 참고 가격임을 표시한다. 불러온 조건으로 최신 저장 일봉을 다시 계산하려면 사용자가 비교 버튼을 누른다. 날짜를 자동으로 현재까지 늘리지 않는다.
+- 조건 수정 중 저장은 비활성화한다. 실패한 요청은 같은 입력의 재시도 키를 유지한다. 최근 50개 밖 기록도 소유자 ID 조회는 가능하며 삭제·이름 변경은 이번 범위에 포함하지 않는다.
+
 ## 2026-10-18 기간 분리 검증
 
 - `validationStartDate`·`validationEndDate`는 선택 입력이며 둘 다 있어야 한다. 산출 `endDate < validationStartDate < validationEndDate < 뉴욕 오늘`, 검증 기간 최대 3660일을 Spring과 collector에서 동일 검증한다. 생략 시 기존 동작을 유지한다.

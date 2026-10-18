@@ -6,6 +6,10 @@ import { portfolioPeriod, portfolioValidationPeriods } from '@/lib/portfolio-per
 import styles from './portfolio-designer.module.css';
 import { PortfolioPerformance, type Performance, type PerformanceComparison } from './PortfolioPerformance';
 import { PortfolioValidation, type ValidationResult } from './PortfolioValidation';
+import { SavedPortfolioDesigns, type SavedDesign } from './SavedPortfolioDesigns';
+
+export type DesignConfiguration = { tickers: string[]; startDate: string; endDate: string; capital: number; cash: number;
+  maxWeightPct: number; riskLimitPct: number; validationStartDate?: string | null; validationEndDate?: string | null };
 
 type Asset = { ticker: string; observations: number; returnObservations: number; startDate: string | null; endDate: string | null;
   totalReturnPct: number | null; volatilityPct: number | null; maxDrawdownPct: number | null; issue: string | null;
@@ -14,11 +18,13 @@ type Allocation = { ticker: string; weightPct: number; amount: number; price: nu
 type Candidate = { id: string; label: string; periodReturnPct: number; volatilityPct: number;
   performance?: Performance;
   allocations: Allocation[]; cashAmount: number; integerShareCash: number | null };
-type Result = { status: string; message: string; assets: Asset[]; candidates: Candidate[]; frontier: Candidate[];
+export type DesignResult = { status: string; message: string; assets: Asset[]; candidates: Candidate[]; frontier: Candidate[];
+  configuration?: DesignConfiguration;
   performance?: PerformanceComparison | null;
   validation?: ValidationResult | null;
   commonObservations: number; excludedIntervals: number; commonStart: string | null; commonEnd: string | null;
   correlation: (number | null)[][] | null; warnings: string[] };
+type Result = DesignResult;
 const defaults = ['SPY', 'QQQ', 'EFA', 'EEM', 'IEF', 'GLD'];
 const number = (v: number | null) => v == null ? '—' : v.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
 const pct = (v: number | null) => v == null ? '—' : `${number(v)}%`;
@@ -82,6 +88,16 @@ export function PortfolioDesigner() {
   const [validatePeriod, setValidatePeriod] = useState(false);
   const [validationDates, setValidationDates] = useState({ startDate: '', endDate: '' });
   const [validationRequested, setValidationRequested] = useState(false);
+  const [amounts,setAmounts] = useState({capital:'10000',cash:'1000',maxWeightPct:'40',riskLimitPct:'15'});
+  const [savedSource,setSavedSource] = useState<{name:string;createdAt:string} | null>(null);
+  function restore(saved: SavedDesign) {
+    const c=saved.payload.configuration;
+    setTickers(c.tickers);setTicker('');setDates({startDate:c.startDate,endDate:c.endDate});setPeriod('');
+    setAmounts({capital:String(c.capital),cash:String(c.cash),maxWeightPct:String(c.maxWeightPct),riskLimitPct:String(c.riskLimitPct)});
+    setValidatePeriod(Boolean(c.validationStartDate));setValidationRequested(Boolean(c.validationStartDate));
+    setValidationDates({startDate:c.validationStartDate??'',endDate:c.validationEndDate??''});
+    setResult({...saved.payload.result,configuration:c});setSelected(saved.selectedId);setDirty(false);setError(null);setSavedSource(saved);
+  }
   function add() {
     const value = ticker.trim().toUpperCase();
     if (!/^[A-Z][A-Z0-9.\-]{0,14}$/.test(value)) {setError('올바른 티커를 입력하세요. 예: AAPL, BRK-B'); return;}
@@ -105,7 +121,7 @@ export function PortfolioDesigner() {
         validationStartDate:validatePeriod ? validationDates.startDate : null,
         validationEndDate:validatePeriod ? validationDates.endDate : null,
       }});
-      setResult(data);setValidationRequested(validatePeriod);setSelected(data.candidates.find(c=>c.id==='risk-limit')?.id ?? data.candidates[0]?.id ?? '');setDirty(false);
+      setResult(data);setSavedSource(null);setValidationRequested(validatePeriod);setSelected(data.candidates.find(c=>c.id==='risk-limit')?.id ?? data.candidates[0]?.id ?? '');setDirty(false);
     } catch(e) {setError(e instanceof Error?e.message:'계산에 실패했습니다.');setDirty(true);}
     finally {setBusy(false);}
   }
@@ -113,12 +129,14 @@ export function PortfolioDesigner() {
   const chosen = candidates.find(c=>c.id===selected);
   return <section className={styles.designer} aria-label="포트폴리오 설계">
     <p className={styles.lead}>투자금과 후보 자산을 정하고, 위험 대비 수익과 배분 금액을 비교하세요. USD 표시 주식·ETF 기준이며 환전·공매도·차입은 반영하지 않습니다.</p>
+    <SavedPortfolioDesigns result={result} selected={selected} dirty={dirty} busy={busy} onBusy={setBusy} onRestore={restore}/>
+    {savedSource && <p role="status" className={styles.notice}>저장 기록: {savedSource.name} · {new Date(savedSource.createdAt).toLocaleString('ko-KR')}. 아래 결과와 참고 종가는 저장 당시 기준입니다. 최신 저장 일봉으로 확인하려면 배분안 비교하기를 누르세요. 원본 기록은 유지됩니다.</p>}
     <form onSubmit={submit} onChange={()=>setDirty(true)}><fieldset disabled={busy}>
       <legend>1. 투자 조건</legend>
       <p>분석 기간의 데이터로 비중을 산출합니다. 이후 기간 검증을 켜면 산출 종료일 뒤의 가격으로 성과를 따로 비교합니다.</p>
       <div className={styles.grid}>
-        <label>투자 가능 금액 (USD)<input name="capital" type="number" min="1" max="1000000000" step="0.01" defaultValue="10000" required/></label>
-        <label>남길 현금 (USD)<input name="cash" type="number" min="0" max="1000000000" step="0.01" defaultValue="1000" required/></label>
+        <label>투자 가능 금액 (USD)<input name="capital" type="number" min="1" max="1000000000" step="0.01" value={amounts.capital} onChange={e=>setAmounts({...amounts,capital:e.target.value})} required/></label>
+        <label>남길 현금 (USD)<input name="cash" type="number" min="0" max="1000000000" step="0.01" value={amounts.cash} onChange={e=>setAmounts({...amounts,cash:e.target.value})} required/></label>
         <label>기간 빠른 선택<select value={period} onChange={e => {
           const value = e.target.value;
           setPeriod(value);
@@ -127,8 +145,8 @@ export function PortfolioDesigner() {
         }}><option value="">직접 입력</option>{[[3,'3개월'],[6,'6개월'],[12,'1년'],[36,'3년'],[60,'5년']].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select><small>뉴욕 기준 어제까지 자동 설정 · 실제 일봉 기준일은 결과에 표시</small></label>
         <label>분석 시작일<input name="startDate" type="date" value={dates.startDate} onChange={e => {setDates({...dates,startDate:e.target.value});setPeriod('');}} required/></label>
         <label>분석 종료일<input name="endDate" type="date" value={dates.endDate} onChange={e => {setDates({...dates,endDate:e.target.value});setPeriod('');}} required/><small>뉴욕 오늘 이전, 60일~10년</small></label>
-        <label>자산별 최대 비중 (%)<input name="maxWeightPct" type="number" min="0.1" max="100" step="0.1" defaultValue="40" required/><small>현금을 포함한 전체 자금 기준</small></label>
-        <label>연환산 변동성 한도 (%)<input name="riskLimitPct" type="number" min="0.1" max="200" step="0.1" defaultValue="15" required/></label>
+        <label>자산별 최대 비중 (%)<input name="maxWeightPct" type="number" min="0.1" max="100" step="0.1" value={amounts.maxWeightPct} onChange={e=>setAmounts({...amounts,maxWeightPct:e.target.value})} required/><small>현금을 포함한 전체 자금 기준</small></label>
+        <label>연환산 변동성 한도 (%)<input name="riskLimitPct" type="number" min="0.1" max="200" step="0.1" value={amounts.riskLimitPct} onChange={e=>setAmounts({...amounts,riskLimitPct:e.target.value})} required/></label>
       </div>
       <div className={styles.notice}>
         <label>이후 기간 검증<select value={validatePeriod?'on':'off'} onChange={e=>{setValidatePeriod(e.target.value==='on');setDirty(true);}}><option value="off">사용 안 함</option><option value="on">비중 산출 이후 기간으로 검증</option></select></label>

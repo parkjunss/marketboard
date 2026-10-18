@@ -16,10 +16,11 @@ export type PerformanceComparison = {
 const money = (v: number) => v.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 const percent = (v: number) => `${v.toFixed(2)}%`;
 
-export function PortfolioPerformance({ comparison, chosen, equal }: {
+export function PortfolioPerformance({ comparison, chosen, equal, holdout = false }: {
   comparison: PerformanceComparison;
   chosen: { id: string; label: string; performance?: Performance };
   equal?: Performance;
+  holdout?: boolean;
 }) {
   const [dateIndex, setDateIndex] = useState<number | null>(null);
   if (!chosen.performance || !comparison.dates.length) return <p role="status">이 배분안의 자산 추이 데이터가 없습니다. 다시 계산해 주세요.</p>;
@@ -29,8 +30,8 @@ export function PortfolioPerformance({ comparison, chosen, equal }: {
     ...(equal && chosen.id !== 'equal' ? [{ label: '동일 비중', color: 'var(--mb-accent)', data: equal }] : []),
     ...(comparison.benchmark ? [{ label: 'SPY + 동일 현금', color: '#8dafff', data: comparison.benchmark }] : []),
   ];
-  return <section aria-label="과거 자산 추이 비교">
-    <h2>5. 과거 자산 추이 비교</h2>
+  return <section aria-label={holdout ? '산출 이후 기간 성과 비교' : '과거 자산 추이 비교'}>
+    <h2>{holdout ? '산출 이후 기간 성과 비교' : '5. 과거 자산 추이 비교'}</h2>
     <p>초기 자금 {money(comparison.capital)} · 남긴 현금 {money(comparison.cash)} · {comparison.dates[0]} ~ {comparison.dates.at(-1)}</p>
     <div className={styles.chartPanel}>
       <div className={styles.chartScroll} style={{ minWidth: 0 }}>
@@ -51,6 +52,6 @@ export function PortfolioPerformance({ comparison, chosen, equal }: {
         <td>{data.maxDrawdownPct === 0 ? '—' : `${data.peakDate} → ${data.troughDate} → ${data.recoveryDate ?? '기간 내 미회복'}`}</td></tr>)}</tbody>
     </table></div>
     <p className={styles.chartHint}>회복 기간은 최대 낙폭 직전 고점부터 그 금액을 처음 회복한 관측일까지의 달력 일수입니다. SPY는 자산별 비중 상한을 적용하지 않는 비교 기준입니다.</p>
-    <p className={styles.chartHint}>공통 관측일 기준 소수점 주식 매수 후 보유 모형이며, 현금 이자·수수료·세금·리밸런싱은 제외합니다. 관측일 사이의 누락 가격은 보간하지 않으며 그 사이의 낙폭은 알 수 없습니다. 같은 기간으로 비중을 선택한 사후 비교입니다.</p>
+    <p className={styles.chartHint}>공통 관측일 기준 소수점 주식 매수 후 보유 모형이며, 현금 이자·수수료·세금·리밸런싱은 제외합니다. 관측일 사이의 누락 가격은 보간하지 않으며 그 사이의 낙폭은 알 수 없습니다. {holdout ? '앞 기간에서 산출한 비중으로 검증 첫 관측일 종가에 매수합니다. 검증 결과를 본 뒤 조합이나 기간을 반복 선택하면 독립적인 성과 검증으로 볼 수 없습니다.' : '같은 기간으로 비중을 선택한 사후 비교입니다.'}</p>
   </section>;
 }

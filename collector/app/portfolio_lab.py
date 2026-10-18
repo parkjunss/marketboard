@@ -14,6 +14,8 @@ class PortfolioLabRequest(BaseModel):
     tickers: list[str] = Field(min_length=2, max_length=10)
     startDate: date
     endDate: date
+    validationStartDate: date | None = None
+    validationEndDate: date | None = None
     capital: float = Field(ge=1, le=1_000_000_000, allow_inf_nan=False)
     cash: float = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
     maxWeightPct: float = Field(gt=0, le=100, allow_inf_nan=False)
@@ -35,6 +37,13 @@ class PortfolioLabRequest(BaseModel):
             raise ValueError('종료일은 뉴욕 기준 오늘 이전이어야 합니다.')
         if self.cash > self.capital:
             raise ValueError('남길 현금이 투자금보다 큽니다.')
+        if (self.validationStartDate is None) != (self.validationEndDate is None):
+            raise ValueError('검증 시작일과 종료일을 함께 입력하세요.')
+        if self.validationStartDate is not None:
+            if not self.endDate < self.validationStartDate < self.validationEndDate:
+                raise ValueError('검증 기간은 비중 산출 종료일 이후이며 시작일보다 종료일이 늦어야 합니다.')
+            if self.validationEndDate >= datetime.now(NEW_YORK).date() or (self.validationEndDate-self.validationStartDate).days > 3660:
+                raise ValueError('검증 종료일은 뉴욕 오늘 이전이며 검증 기간은 10년 이하여야 합니다.')
         return self
 
 
@@ -101,6 +110,54 @@ def performance_summary(days, values):
                 underwaterDays=(days[-1]-days[peak]).days if recovery is None else 0)
 
 
+def benchmark_performance(histories, days, capital, cash):
+    try:
+        spy = observed_prices(histories.get('SPY', []), days[0], days[-1])
+        if any(day not in spy for day in days):
+            return None, 'SPY의 동일 날짜 일봉이 부족해 비교하지 못했습니다. 종목 등록·수집 상태를 확인하세요.'
+        values = np.array([cash+(capital-cash)*spy[day]/spy[days[0]] for day in days])
+        if not np.isfinite(values).all():
+            raise ValueError('숫자 범위 초과')
+        return performance_summary(days, values), None
+    except (ValueError, TypeError, OverflowError):
+        return None, 'SPY 일봉에 중복 날짜 또는 유효하지 않은 가격이 있어 비교하지 못했습니다.'
+
+
+def validate_holdout(request, histories, candidates):
+    p = request
+    result = dict(status='INSUFFICIENT_DATA', message=None, requestedStart=p.validationStartDate.isoformat(),
+                  requestedEnd=p.validationEndDate.isoformat(), observations=0, excludedDates=0,
+                  assets=[], comparison=None, candidates=[])
+    prices = {}
+    for ticker in p.tickers:
+        try:
+            prices[ticker] = observed_prices(histories.get(ticker, []), p.validationStartDate, p.validationEndDate)
+            values = prices[ticker]
+            result['assets'].append(dict(ticker=ticker, observations=len(values),
+                startDate=min(values).isoformat() if values else None, endDate=max(values).isoformat() if values else None,
+                issue=None if len(values) >= 2 else '검증 기간 종가가 2개 미만입니다.'))
+        except (ValueError, TypeError, OverflowError) as exc:
+            prices[ticker] = {}
+            result['assets'].append(dict(ticker=ticker, observations=0, startDate=None, endDate=None, issue=str(exc)))
+    days = sorted(set.intersection(*(set(prices[t]) for t in p.tickers)))
+    result.update(observations=len(days), excludedDates=len(set.union(*(set(prices[t]) for t in p.tickers)))-len(days))
+    if len(days) < 2:
+        result['message'] = '검증 가능한 공통 종가가 2개 미만입니다. 종목별 관측 기간과 수집 상태를 확인하세요. 비중 산출 결과는 유지됩니다.'
+        return result
+    relatives = np.array([[prices[t][day]/prices[t][days[0]] for t in p.tickers] for day in days])
+    for candidate in candidates:
+        weights = np.array([a['weightPct']/100 for a in candidate['allocations']])
+        values = p.capital*(1-float(weights.sum())+relatives@weights)
+        if not np.isfinite(values).all() or (values <= 0).any():
+            result.update(status='DEGENERATE_DATA', message='검증 자산 금액의 숫자 범위를 초과했습니다.', candidates=[])
+            return result
+        result['candidates'].append(dict(id=candidate['id'], label=candidate['label'], performance=performance_summary(days, values)))
+    benchmark, issue = benchmark_performance(histories, days, p.capital, p.cash)
+    result.update(status='READY', message='산출 기간에서 정한 비중으로 검증 첫 공통 관측일 종가에 매수한 뒤 보유한 결과입니다. 검증 가격으로 비중을 다시 최적화하지 않습니다.',
+                  comparison=dict(dates=[d.isoformat() for d in days], capital=p.capital, cash=p.cash, benchmark=benchmark, benchmarkIssue=issue))
+    return result
+
+
 def calculate(request, histories, latest):
     p = request
     assets, returns, prices = [], {}, {}
@@ -142,8 +199,14 @@ def calculate(request, histories, latest):
             row['issue'] = '최적화에 필요한 유효 일간 수익률 60개 미만'
     result = dict(status='INSUFFICIENT_DATA', message=None, configuration=p.model_dump(mode='json'),
                   assets=assets, commonObservations=0, excludedIntervals=0, commonStart=None, commonEnd=None,
-                  correlation=None, candidates=[], frontier=[], performance=None, warnings=warnings, calculationVersion='portfolio-lab-v3-performance')
+                  correlation=None, candidates=[], frontier=[], performance=None, validation=None, warnings=warnings, calculationVersion='portfolio-lab-v4-holdout')
+    if p.validationStartDate is not None:
+        result['validation'] = dict(status='UNAVAILABLE', message='비중 산출이 완료된 뒤 검증할 수 있습니다.',
+            requestedStart=p.validationStartDate.isoformat(), requestedEnd=p.validationEndDate.isoformat(),
+            observations=0, excludedDates=0, assets=[], comparison=None, candidates=[])
     if p.cash == p.capital:
+        if result['validation'] is not None:
+            result['validation']['message'] = '전액 현금 조건이므로 위험자산 검증을 생략합니다. 현금 수익률은 0%입니다.'
         result.update(status='READY', message='전액 현금 조건입니다. 위험자산 최적화는 수행하지 않았습니다.', candidates=[dict(
             id='cash', label='전액 현금', periodReturnPct=0, volatilityPct=0, allocations=[],
             cashAmount=float(Decimal(str(p.capital)).quantize(Decimal('.01'), rounding=ROUND_FLOOR)),
@@ -217,27 +280,19 @@ def calculate(request, histories, latest):
     except ValueError as exc:
         result.update(status='SOLVER_FAILED', message=str(exc), frontier=[])
         return result
-    benchmark = None
-    benchmark_issue = None
-    try:
-        spy = observed_prices(histories.get('SPY', []), first, last)
-        if any(day not in spy for day in history_days):
-            benchmark_issue = 'SPY의 동일 날짜 일봉이 부족해 비교하지 못했습니다. 종목 등록·수집 상태를 확인하세요.'
-        else:
-            benchmark = performance_summary(history_days, np.array([
-                p.cash+(p.capital-p.cash)*spy[day]/spy[first] for day in history_days]))
-    except (ValueError, TypeError, OverflowError):
-        benchmark_issue = 'SPY 일봉에 중복 날짜 또는 유효하지 않은 가격이 있어 비교하지 못했습니다.'
+    benchmark, benchmark_issue = benchmark_performance(histories, history_days, p.capital, p.cash)
     result['performance'] = dict(dates=[day.isoformat() for day in history_days], capital=p.capital,
                                  cash=p.cash, benchmark=benchmark, benchmarkIssue=benchmark_issue)
     warnings.append('자산 추이는 공통 관측일의 종가로 계산한 소수점 주식 매수 후 보유 모형입니다. 현금 이자·수수료·세금·리밸런싱은 제외하며 센트 단위 배분액 반올림은 적용하지 않습니다. 누락된 날짜의 낙폭은 관측할 수 없습니다.')
     result.update(status='READY', message='동일한 과거 기간을 기준으로 계산한 배분안입니다. 후보를 선택해 금액과 비중을 비교하세요.')
+    if p.validationStartDate is not None:
+        result['validation'] = validate_holdout(p, histories, result['candidates']+result['frontier'])
     return result
 
 
 def run_portfolio_lab(payload):
     request = PortfolioLabRequest.model_validate(payload)
     today = datetime.now(NEW_YORK).date()
-    histories = load_daily_bars(request.startDate, request.endDate, list(dict.fromkeys([*request.tickers, 'SPY'])))
+    histories = load_daily_bars(request.startDate, request.validationEndDate or request.endDate, list(dict.fromkeys([*request.tickers, 'SPY'])))
     latest = load_daily_bars(today-timedelta(days=14), today-timedelta(days=1), request.tickers)
     return calculate(request, histories, latest)

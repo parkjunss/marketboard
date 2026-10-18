@@ -8,6 +8,7 @@ const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.Modu
 const context = { exports: {}, Intl, Date };
 vm.runInNewContext(compiled.outputText, context);
 const { portfolioPeriod } = context.exports;
+const { portfolioValidationPeriods } = context.exports;
 const range = (months, now) => JSON.parse(JSON.stringify(portfolioPeriod(months, new Date(now))));
 
 test('uses yesterday in New York, not the host calendar date', () => {
@@ -24,5 +25,18 @@ test('supports every quick period', () => {
     const dates = range(months, '2026-10-18T16:00:00Z');
     assert.equal(dates.endDate, '2026-10-17');
     assert.ok(dates.startDate < dates.endDate);
+  }
+});
+
+test('validation preset keeps one year training strictly before three month holdout', () => {
+  const p = JSON.parse(JSON.stringify(portfolioValidationPeriods(new Date('2026-10-18T16:00:00Z'))));
+  assert.deepEqual(p, {training:{startDate:'2025-07-16',endDate:'2026-07-16'}, validation:{startDate:'2026-07-17',endDate:'2026-10-17'}});
+});
+test('validation preset handles leap days and New York date boundaries', () => {
+  for (const now of ['2024-06-01T16:00:00Z','2025-06-01T16:00:00Z','2026-10-18T01:00:00Z']) {
+    const p = portfolioValidationPeriods(new Date(now));
+    assert.equal(Date.parse(p.validation.startDate)-Date.parse(p.training.endDate), 86400000);
+    assert.equal(p.validation.endDate, portfolioPeriod(3,new Date(now)).endDate);
+    assert.ok(p.training.startDate < p.training.endDate);
   }
 });

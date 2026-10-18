@@ -194,3 +194,106 @@ def test_reference_quantity_never_overspends_and_stale_quotes_are_not_used(histo
     {'tickers':['SPY','bad/ticker']}, {'endDate':'2100-01-01'}])
 def test_invalid_requests(kwargs):
     with pytest.raises(ValueError): request(**kwargs)
+
+
+@pytest.fixture
+def holdout_histories(histories):
+    days = [date(2025, 1, 2), date(2025, 1, 3), date(2025, 1, 6), date(2025, 3, 31)]
+    for ticker, values in [('SPY', [100, 90, 110, 120]), ('QQQ', [200, 220, 210, 180])]:
+        histories[ticker] += [(datetime.combine(d, datetime.min.time(), timezone.utc)+timedelta(hours=16), v, v)
+                              for d, v in zip(days, values)]
+    return histories
+
+
+def holdout_request(**kwargs):
+    return request(validationStartDate='2025-01-01', validationEndDate='2025-03-31', **kwargs)
+
+
+def test_holdout_does_not_change_training_weights_or_performance(holdout_histories):
+    baseline = calculate(request(), holdout_histories, {})
+    result = calculate(holdout_request(), holdout_histories, {})
+    assert result['candidates'] == baseline['candidates']
+    assert result['frontier'] == baseline['frontier']
+    original = result['validation']['candidates'][0]['performance']['endValue']
+    ts, op, close = holdout_histories['QQQ'][-1]
+    holdout_histories['QQQ'][-1] = (ts, op, close*4)
+    changed = calculate(holdout_request(), holdout_histories, {})
+    assert changed['candidates'] == result['candidates']
+    assert changed['frontier'] == result['frontier']
+    assert changed['validation']['candidates'][0]['performance']['endValue'] != original
+
+
+def test_holdout_fixed_weights_cash_and_observed_dates(holdout_histories):
+    result = calculate(holdout_request(), holdout_histories, {})
+    validation = result['validation']
+    assert validation['status'] == 'READY'
+    assert validation['comparison']['dates'] == ['2025-01-02', '2025-01-03', '2025-01-06', '2025-03-31']
+    assert validation['excludedDates'] == 0  # weekends are not missing data
+    for c, v in zip(result['candidates']+result['frontier'], validation['candidates']):
+        assert c['id'] == v['id']
+        w = [a['weightPct']/100 for a in c['allocations']]
+        assert v['performance']['values'][0] == pytest.approx(10000)
+        assert v['performance']['endValue'] == pytest.approx(1000+10000*(w[0]*1.2+w[1]*.9))
+    assert validation['comparison']['benchmark']['endValue'] == pytest.approx(11800)
+    json.dumps(result, allow_nan=False)
+
+
+def test_holdout_gap_is_omitted_and_missing_asset_preserves_training(holdout_histories):
+    del holdout_histories['QQQ'][-3]
+    result = calculate(holdout_request(), holdout_histories, {})
+    assert result['validation']['observations'] == 3
+    assert result['validation']['excludedDates'] == 1
+    assert '2025-01-03' not in result['validation']['comparison']['dates']
+    holdout_histories['QQQ'] = [r for r in holdout_histories['QQQ'] if r[0].year == 2024]
+    result = calculate(holdout_request(), holdout_histories, {})
+    assert result['status'] == 'READY' and result['candidates']
+    assert result['validation']['status'] == 'INSUFFICIENT_DATA'
+    assert result['validation']['assets'][1]['issue']
+    assert result['validation']['comparison'] is None
+
+
+def test_invalid_holdout_price_does_not_erase_training(holdout_histories):
+    holdout_histories['QQQ'].append(holdout_histories['QQQ'][-1])
+    result = calculate(holdout_request(), holdout_histories, {})
+    assert result['status'] == 'READY'
+    assert result['validation']['status'] == 'INSUFFICIENT_DATA'
+    assert result['validation']['assets'][1]['issue']
+
+
+def test_holdout_spy_missing_is_independent(holdout_histories):
+    holdout_histories['EFA'] = holdout_histories.pop('SPY')
+    result = calculate(holdout_request(tickers=['EFA', 'QQQ']), holdout_histories, {})
+    assert result['validation']['status'] == 'READY'
+    assert result['validation']['comparison']['benchmark'] is None
+    assert result['validation']['comparison']['benchmarkIssue']
+
+
+@pytest.mark.parametrize('dates', [
+    {'validationStartDate':'2025-01-01'},
+    {'validationEndDate':'2025-03-31'},
+    {'validationStartDate':'2024-12-31', 'validationEndDate':'2025-03-31'},
+    {'validationStartDate':'2025-03-31', 'validationEndDate':'2025-03-31'},
+    {'validationStartDate':'2025-03-31', 'validationEndDate':'2025-01-01'},
+    {'validationStartDate':'2025-01-01', 'validationEndDate':'2100-01-01'},
+])
+def test_invalid_holdout_periods(dates):
+    with pytest.raises(ValueError): request(**dates)
+
+
+def test_runner_loads_through_holdout_end(monkeypatch, holdout_histories):
+    from app import portfolio_lab
+    calls = []
+    def load(start, end, tickers):
+        calls.append((start, end))
+        return holdout_histories
+    monkeypatch.setattr(portfolio_lab, 'load_daily_bars', load)
+    result = portfolio_lab.run_portfolio_lab(holdout_request().model_dump(mode='json'))
+    assert calls[0] == (date(2024, 1, 1), date(2025, 3, 31))
+    assert result['validation']['status'] == 'READY'
+
+
+def test_holdout_unavailable_for_cash_or_failed_training(histories):
+    cash = calculate(holdout_request(cash=10000), {}, {})
+    assert cash['validation']['status'] == 'UNAVAILABLE'
+    failed = calculate(holdout_request(), {}, {})
+    assert failed['validation']['status'] == 'UNAVAILABLE'

@@ -2,9 +2,10 @@
 
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { portfolioPeriod } from '@/lib/portfolio-period';
+import { portfolioPeriod, portfolioValidationPeriods } from '@/lib/portfolio-period';
 import styles from './portfolio-designer.module.css';
 import { PortfolioPerformance, type Performance, type PerformanceComparison } from './PortfolioPerformance';
+import { PortfolioValidation, type ValidationResult } from './PortfolioValidation';
 
 type Asset = { ticker: string; observations: number; returnObservations: number; startDate: string | null; endDate: string | null;
   totalReturnPct: number | null; volatilityPct: number | null; maxDrawdownPct: number | null; issue: string | null;
@@ -15,6 +16,7 @@ type Candidate = { id: string; label: string; periodReturnPct: number; volatilit
   allocations: Allocation[]; cashAmount: number; integerShareCash: number | null };
 type Result = { status: string; message: string; assets: Asset[]; candidates: Candidate[]; frontier: Candidate[];
   performance?: PerformanceComparison | null;
+  validation?: ValidationResult | null;
   commonObservations: number; excludedIntervals: number; commonStart: string | null; commonEnd: string | null;
   correlation: (number | null)[][] | null; warnings: string[] };
 const defaults = ['SPY', 'QQQ', 'EFA', 'EEM', 'IEF', 'GLD'];
@@ -77,6 +79,9 @@ export function PortfolioDesigner() {
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState('');
   const [dates, setDates] = useState({ startDate: '', endDate: '' });
+  const [validatePeriod, setValidatePeriod] = useState(false);
+  const [validationDates, setValidationDates] = useState({ startDate: '', endDate: '' });
+  const [validationRequested, setValidationRequested] = useState(false);
   function add() {
     const value = ticker.trim().toUpperCase();
     if (!/^[A-Z][A-Z0-9.\-]{0,14}$/.test(value)) {setError('올바른 티커를 입력하세요. 예: AAPL, BRK-B'); return;}
@@ -88,14 +93,19 @@ export function PortfolioDesigner() {
     e.preventDefault();
     if (tickers.length<2) {setError('후보 자산을 2개 이상 선택하세요.');return;}
     const form = new FormData(e.currentTarget);
+    if (validatePeriod && (validationDates.startDate <= dates.endDate || validationDates.endDate <= validationDates.startDate)) {
+      setError('검증 시작일은 비중 산출 종료일 이후, 검증 종료일은 검증 시작일 이후여야 합니다.'); setDirty(true); return;
+    }
     setBusy(true);setError(null);
     try {
       const data = await authFetch<Result>('/api/portfolio/design', {method:'POST', signal:AbortSignal.timeout(90_000), body:{
         tickers, startDate:form.get('startDate'), endDate:form.get('endDate'),
         capital:Number(form.get('capital')),cash:Number(form.get('cash')),maxWeightPct:Number(form.get('maxWeightPct')),
         riskLimitPct:Number(form.get('riskLimitPct')),
+        validationStartDate:validatePeriod ? validationDates.startDate : null,
+        validationEndDate:validatePeriod ? validationDates.endDate : null,
       }});
-      setResult(data);setSelected(data.candidates.find(c=>c.id==='risk-limit')?.id ?? data.candidates[0]?.id ?? '');setDirty(false);
+      setResult(data);setValidationRequested(validatePeriod);setSelected(data.candidates.find(c=>c.id==='risk-limit')?.id ?? data.candidates[0]?.id ?? '');setDirty(false);
     } catch(e) {setError(e instanceof Error?e.message:'계산에 실패했습니다.');setDirty(true);}
     finally {setBusy(false);}
   }
@@ -105,6 +115,7 @@ export function PortfolioDesigner() {
     <p className={styles.lead}>투자금과 후보 자산을 정하고, 위험 대비 수익과 배분 금액을 비교하세요. USD 표시 주식·ETF 기준이며 환전·공매도·차입은 반영하지 않습니다.</p>
     <form onSubmit={submit} onChange={()=>setDirty(true)}><fieldset disabled={busy}>
       <legend>1. 투자 조건</legend>
+      <p>분석 기간의 데이터로 비중을 산출합니다. 이후 기간 검증을 켜면 산출 종료일 뒤의 가격으로 성과를 따로 비교합니다.</p>
       <div className={styles.grid}>
         <label>투자 가능 금액 (USD)<input name="capital" type="number" min="1" max="1000000000" step="0.01" defaultValue="10000" required/></label>
         <label>남길 현금 (USD)<input name="cash" type="number" min="0" max="1000000000" step="0.01" defaultValue="1000" required/></label>
@@ -118,6 +129,15 @@ export function PortfolioDesigner() {
         <label>분석 종료일<input name="endDate" type="date" value={dates.endDate} onChange={e => {setDates({...dates,endDate:e.target.value});setPeriod('');}} required/><small>뉴욕 오늘 이전, 60일~10년</small></label>
         <label>자산별 최대 비중 (%)<input name="maxWeightPct" type="number" min="0.1" max="100" step="0.1" defaultValue="40" required/><small>현금을 포함한 전체 자금 기준</small></label>
         <label>연환산 변동성 한도 (%)<input name="riskLimitPct" type="number" min="0.1" max="200" step="0.1" defaultValue="15" required/></label>
+      </div>
+      <div className={styles.notice}>
+        <label>이후 기간 검증<select value={validatePeriod?'on':'off'} onChange={e=>{setValidatePeriod(e.target.value==='on');setDirty(true);}}><option value="off">사용 안 함</option><option value="on">비중 산출 이후 기간으로 검증</option></select></label>
+        <button type="button" onClick={()=>{const p=portfolioValidationPeriods();setDates(p.training);setValidationDates(p.validation);setValidatePeriod(true);setPeriod('');setDirty(true);}}>1년 산출 + 이후 3개월 자동 설정</button>
+        {validatePeriod && <div className={styles.grid}>
+          <label>검증 시작일<input type="date" required value={validationDates.startDate} onChange={e=>setValidationDates({...validationDates,startDate:e.target.value})}/></label>
+          <label>검증 종료일<input type="date" required value={validationDates.endDate} onChange={e=>setValidationDates({...validationDates,endDate:e.target.value})}/></label>
+        </div>}
+        <small>검증 기간은 분석 종료일 이후, 뉴욕 오늘 이전이어야 합니다. 검증 첫 공통 관측일 종가로 매수 후 보유하며 비중을 다시 최적화하지 않습니다.</small>
       </div>
       <label>후보 주식·ETF (2~10개)<div className={styles.add}><input aria-label="추가할 주식·ETF 티커" placeholder="예: AAPL, MSFT, TLT" value={ticker} onChange={e=>setTicker(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();add();}}}/><button type="button" onClick={add}>추가</button></div></label>
       <div className={styles.chips}>{tickers.map(t=><button type="button" key={t} aria-label={`${t} 제외`} onClick={()=>{setTickers(tickers.filter(x=>x!==t));setDirty(true);}}>{t} ×</button>)}<button type="button" onClick={()=>{setTickers(defaults);setDirty(true);}}>ETF 6종으로 초기화</button></div>
@@ -143,6 +163,8 @@ export function PortfolioDesigner() {
         </>}
       </>}
       {chosen && (result.performance ? <PortfolioPerformance key={`${result.commonStart}-${result.commonEnd}-${result.performance.capital}`} comparison={result.performance} chosen={chosen} equal={result.candidates.find(c=>c.id==='equal')?.performance}/> : <p role="status">{chosen.id==='cash' ? '전액 현금 조건으로 자산 추이 비교를 생략합니다.' : '자산 추이 데이터가 없습니다. 서버 업데이트 후 다시 계산해 주세요.'}</p>)}
+      {result.validation && <PortfolioValidation result={result.validation} selected={selected}/>}
+      {validationRequested && !result.validation && <p role="status" className={styles.notice}>서버에서 기간 분리 검증 결과를 받지 못했습니다. 서버 업데이트 상태를 확인하고 다시 계산해 주세요.</p>}
       <details open><summary>계산 가정과 데이터 경고</summary><ul>{result.warnings.map(w=><li key={w}>{w}</li>)}</ul></details>
     </>}
   </section>;

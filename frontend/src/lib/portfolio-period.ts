@@ -12,3 +12,9 @@ export function portfolioPeriod(months: number, now = new Date()) {
   start.setUTCDate(Math.min(end.getUTCDate(), lastDay));
   return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
 }
+
+export function portfolioValidationPeriods(now = new Date()) {
+  const validation = portfolioPeriod(3, now);
+  const training = portfolioPeriod(12, new Date(`${validation.startDate}T12:00:00Z`));
+  return { training, validation };
+}

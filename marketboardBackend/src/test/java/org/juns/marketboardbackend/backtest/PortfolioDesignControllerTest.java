@@ -62,4 +62,28 @@ class PortfolioDesignControllerTest {
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(collector);
     }
+
+    @ParameterizedTest @ValueSource(strings={
+        "\"validationStartDate\":\"2025-01-01\"",
+        "\"validationEndDate\":\"2025-03-31\"",
+        "\"validationStartDate\":\"2024-12-31\",\"validationEndDate\":\"2025-03-31\"",
+        "\"validationStartDate\":\"2025-03-31\",\"validationEndDate\":\"2025-01-01\"",
+        "\"validationStartDate\":\"2025-01-01\",\"validationEndDate\":\"2100-01-01\""
+    })
+    void invalidValidationPeriodCannotReachCollector(String dates) throws Exception {
+        mvc.perform(post(PATH).with(user("investor")).contentType(MediaType.APPLICATION_JSON)
+                .content(REQUEST.replace("}", ","+dates+"}"))).andExpect(status().isBadRequest());
+        verifyNoInteractions(collector);
+    }
+
+    @Test void validationDatesAndPartialResultsReachClient() throws Exception {
+        when(collector.designPortfolio(any())).thenReturn(Optional.of(mapper.readTree("""
+            {"status":"READY","validation":{"status":"INSUFFICIENT_DATA","message":"검증 일봉 부족"}}
+            """)));
+        mvc.perform(post(PATH).with(user("investor")).contentType(MediaType.APPLICATION_JSON)
+                .content(REQUEST.replace("}", ",\"validationStartDate\":\"2025-01-01\",\"validationEndDate\":\"2025-03-31\"}")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.validation.status").value("INSUFFICIENT_DATA"));
+        verify(collector).designPortfolio(argThat(r -> r.validationStartDate().toString().equals("2025-01-01")
+                && r.validationEndDate().toString().equals("2025-03-31")));
+    }
 }

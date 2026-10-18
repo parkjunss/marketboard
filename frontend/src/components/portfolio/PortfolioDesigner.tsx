@@ -19,33 +19,48 @@ const number = (v: number | null) => v == null ? '—' : v.toLocaleString('ko-KR
 const pct = (v: number | null) => v == null ? '—' : `${number(v)}%`;
 
 function Frontier({ result, selected, onSelect }: { result: Result; selected: string; onSelect: (id: string) => void }) {
-  const points = [...result.candidates, ...result.frontier];
+  // Named comparisons remain above frontier endpoints when coordinates coincide.
+  const points = [...result.frontier, ...result.candidates];
+  const chosen = points.find(p => p.id === selected);
   const assets = result.assets.filter(a => a.commonPeriodReturnPct != null && a.commonVolatilityPct != null)
     .map(a => ({ticker:a.ticker, periodReturnPct:a.commonPeriodReturnPct, volatilityPct:a.commonVolatilityPct}));
   const values = [...points, ...assets];
-  const maxX = Math.max(1, ...values.map(p => p.volatilityPct ?? 0))*1.1;
-  const lowY = Math.min(0, ...values.map(p => p.periodReturnPct ?? 0));
-  const highY = Math.max(1, ...values.map(p => p.periodReturnPct ?? 0));
-  const spanY = Math.max(1, highY-lowY)*1.15;
+  const maxX = Math.ceil(Math.max(1, ...values.map(p => p.volatilityPct ?? 0))*1.1/5)*5;
+  const low = Math.min(0, ...values.map(p => p.periodReturnPct ?? 0));
+  const high = Math.max(1, ...values.map(p => p.periodReturnPct ?? 0));
+  const step = Math.pow(10, Math.floor(Math.log10((high-low)/4)));
+  const tick = Math.ceil((high-low)/4/step)*step;
+  const lowY = Math.floor(low/tick)*tick;
+  const highY = Math.ceil(high/tick)*tick+tick;
+  const spanY = highY-lowY;
   const x = (v: number) => 65+v/maxX*690;
   const y = (v: number) => 325-(v-lowY)/spanY*270;
-  return <svg className={styles.chart} viewBox="0 0 800 385" role="group" aria-label="과거 기간 수익률–변동성 경계: 가로축 연환산 변동성, 세로축 과거 기간 수익률">
-    {[0,1,2,3,4].map(i => <g key={i}>
-      <line x1="65" x2="755" y1={y(lowY+spanY*i/4)} y2={y(lowY+spanY*i/4)} stroke="var(--mb-border)" />
-      <text x="57" y={y(lowY+spanY*i/4)+4} textAnchor="end">{number(lowY+spanY*i/4)}%</text>
-      <text x={x(maxX*i/4)} y="345" textAnchor="middle">{number(maxX*i/4)}%</text>
+  return <div className={styles.chartPanel}>
+    <div className={styles.chartHeading}><strong>과거 성과로 비교하는 배분 조합</strong><span>{result.commonStart} ~ {result.commonEnd}</span></div>
+    <div className={styles.legend}><span><i className={styles.frontierKey}/>투자선</span><span><i className={styles.assetKey}/>개별 자산</span><span><i className={styles.selectedKey}/>선택한 조합</span></div>
+    <div className={styles.comparisons}>{result.candidates.map(p => <button type="button" key={p.id} aria-pressed={p.id===selected} onClick={()=>onSelect(p.id)}><strong>{p.label}</strong><span>수익률 {pct(p.periodReturnPct)}</span><small>변동성 {pct(p.volatilityPct)}</small></button>)}</div>
+    <div className={styles.chartScroll}><svg className={styles.chart} viewBox="0 0 800 385" role="group" aria-label="과거 기간 수익률–변동성 경계: 가로축 연환산 변동성, 세로축 과거 기간 수익률">
+    {Array.from({length:Math.round(spanY/tick)+1},(_,i)=>lowY+tick*i).map(v => <g key={v}>
+      <line x1="65" x2="755" y1={y(v)} y2={y(v)} stroke="var(--mb-border)" strokeDasharray={v===0?undefined:'3 6'} strokeWidth={v===0?2:1}/>
+      <text x="53" y={y(v)+5} textAnchor="end">{number(v)}%</text>
     </g>)}
+    {[0,1,2,3,4,5].map(i=><text key={i} x={x(maxX*i/5)} y="349" textAnchor="middle">{number(maxX*i/5)}%</text>)}
     <text x="400" y="375" textAnchor="middle">연환산 변동성 (%) →</text>
     <text x="65" y="20">과거 기간 수익률 (%) ↑</text>
     <polyline points={result.frontier.map(p => `${x(p.volatilityPct)},${y(p.periodReturnPct)}`).join(' ')} fill="none" stroke="var(--mb-accent)" strokeWidth="3" />
     {assets.map(a => <g key={a.ticker}><circle cx={x(a.volatilityPct!)} cy={y(a.periodReturnPct!)} r="4" fill="var(--mb-text-muted)"/><text x={x(a.volatilityPct!)+7} y={y(a.periodReturnPct!)-7}>{a.ticker}</text></g>)}
-    {points.map(p => <circle key={p.id} cx={x(p.volatilityPct)} cy={y(p.periodReturnPct)} r={p.id===selected?8:5}
+    {chosen && <g className={styles.selectionGuide} pointerEvents="none"><path d={`M65 ${y(chosen.periodReturnPct)} H${x(chosen.volatilityPct)} V325`} fill="none" stroke="#f4b85e" strokeDasharray="4 5"/><circle cx={x(chosen.volatilityPct)} cy={y(chosen.periodReturnPct)} r="15" fill="#f4b85e" fillOpacity=".16"/></g>}
+    {points.map(p => <circle key={p.id} cx={x(p.volatilityPct)} cy={y(p.periodReturnPct)} r={p.id===selected?8:result.candidates.includes(p)?7:4}
       fill={p.id===selected?'#f4b85e':'var(--mb-accent)'} stroke="var(--mb-surface)" strokeWidth="2"
-      role="button" tabIndex={0} aria-label={`${p.label}, 변동성 ${pct(p.volatilityPct)}, 기간 수익률 ${pct(p.periodReturnPct)}`}
+      role="button" tabIndex={0} aria-pressed={p.id===selected} aria-label={`${p.label}, 변동성 ${pct(p.volatilityPct)}, 기간 수익률 ${pct(p.periodReturnPct)}`}
       onClick={() => onSelect(p.id)} onKeyDown={e => { if(e.key==='Enter'||e.key===' ') {e.preventDefault();onSelect(p.id);} }}>
       <title>{p.label}: 변동성 {pct(p.volatilityPct)} / 기간 수익률 {pct(p.periodReturnPct)}</title>
     </circle>)}
-  </svg>;
+    {chosen && <circle pointerEvents="none" cx={x(chosen.volatilityPct)} cy={y(chosen.periodReturnPct)} r="8" fill="#f4b85e" stroke="var(--mb-surface)" strokeWidth="2"/>}
+  </svg></div>
+    {chosen && <div className={styles.selectionSummary} role="status"><strong>{chosen.label}</strong><span>기간 수익률 <b>{pct(chosen.periodReturnPct)}</b></span><span>연환산 변동성 <b>{pct(chosen.volatilityPct)}</b></span></div>}
+    <p className={styles.chartHint}>점을 선택하거나 아래 목록에서 배분안을 비교하세요. 왼쪽일수록 변동성이 낮고, 위쪽일수록 기간 수익률이 높습니다.</p>
+  </div>;
 }
 
 export function PortfolioDesigner() {
@@ -115,7 +130,7 @@ export function PortfolioDesigner() {
       <p>공통 수익률 {result.commonObservations}개 · {result.commonStart??'—'} ~ {result.commonEnd??'—'} · 종목 간 불일치 제외 {result.excludedIntervals}구간</p>
       <div className={styles.scroll}><table><caption>개별 자산: 각 행의 관측 기간 기준 (최적화는 공통 구간 사용)</caption><thead><tr>{['자산','관측 기간','일봉 / 유효 수익률','기간 수익률','연환산 변동성','최대 낙폭','데이터 상태'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{result.assets.map(a=><tr key={a.ticker}><th>{a.ticker}</th><td>{a.startDate??'—'} ~ {a.endDate??'—'}</td><td>{a.observations} / {a.returnObservations}</td><td>{pct(a.totalReturnPct)}</td><td>{pct(a.volatilityPct)}</td><td>{pct(a.maxDrawdownPct)}</td><td>{a.issue??'개별 지표 계산 가능'}</td></tr>)}</tbody></table></div>
       {result.correlation && <details><summary>자산 간 상관관계</summary><div className={styles.scroll}><table><thead><tr><th>자산</th>{result.assets.map(a=><th key={a.ticker}>{a.ticker}</th>)}</tr></thead><tbody>{result.correlation.map((row,i)=><tr key={result.assets[i].ticker}><th>{result.assets[i].ticker}</th>{row.map((value,j)=><td key={j}>{number(value)}</td>)}</tr>)}</tbody></table></div></details>}
-      {candidates.length>0 && <><h2>3. 위험–수익 조합 선택</h2><p>선: 제약 과거 기간 수익률–변동성 경계 · 회색 점: 개별 자산(최적화와 동일한 공통 구간) · 노란 점: 선택 조합. 수익률은 표시된 공통 기간의 시작·종료 가격 변화율입니다. 기간 초 비중으로 매수 후 보유한 사후 비교입니다.</p>
+      {candidates.length>0 && <><h2>3. 위험–수익 조합 선택</h2><p>수익률은 공통 기간의 실제 가격 변화율입니다. 기간 초 비중으로 매수 후 보유한 사후 비교이며, 미래 수익률 예측이 아닙니다.</p>
         <Frontier result={result} selected={selected} onSelect={setSelected}/>
         <label>비교할 배분안<select value={selected} onChange={e=>setSelected(e.target.value)}>{candidates.map(c=><option key={c.id} value={c.id}>{c.label} · 위험 {pct(c.volatilityPct)} · 기간 수익률 {pct(c.periodReturnPct)}</option>)}</select></label>
         {chosen && <><h2>4. {chosen.label} 배분</h2><div className={styles.stats}><p>과거 기간 수익률<strong>{pct(chosen.periodReturnPct)}</strong></p><p>연환산 변동성<strong>{pct(chosen.volatilityPct)}</strong></p><p>배분 후 현금<strong>${number(chosen.cashAmount)}</strong></p></div>

@@ -21,12 +21,16 @@ export function MultiLineChart({
   series,
   width = 520,
   height = 220,
+  includeZero = true,
+  categoryLabelCount = 10,
   valueFormatter = (v: number) => v.toFixed(1),
 }: {
   categories: (string | number)[];
   series: LineSeries[];
   width?: number;
   height?: number;
+  includeZero?: boolean;
+  categoryLabelCount?: number;
   valueFormatter?: (value: number) => string;
 }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -42,12 +46,13 @@ export function MultiLineChart({
     );
   }
 
-  const max = Math.max(...allValues, 0);
-  const min = Math.min(...allValues, 0);
+  const max = Math.max(...allValues, ...(includeZero ? [0] : []));
+  const min = Math.min(...allValues, ...(includeZero ? [0] : []));
   const range = max - min || 1;
   const plotWidth = width - PADDING_LEFT - PADDING_RIGHT;
   const plotHeight = height - PADDING_BOTTOM - PADDING_TOP;
   const stepX = categories.length > 1 ? plotWidth / (categories.length - 1) : 0;
+  const labelStep = Math.max(1, Math.ceil(categories.length / categoryLabelCount));
 
   function yFor(value: number): number {
     return PADDING_TOP + plotHeight - ((value - min) / range) * plotHeight;
@@ -92,7 +97,7 @@ export function MultiLineChart({
             strokeLinecap="round"
           />
         ))}
-        {categories.map((category, i) => (i % Math.max(1, Math.ceil(categories.length / 10)) === 0 || i === categories.length - 1) && (
+        {categories.map((category, i) => (i === 0 || i === categories.length - 1 || (i % labelStep === 0 && categories.length-1-i >= labelStep/2)) && (
           <text
             key={String(category)}
             x={PADDING_LEFT + i * stepX}

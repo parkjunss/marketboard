@@ -5,7 +5,7 @@ import json
 import numpy as np
 import pytest
 
-from app.portfolio_lab import PortfolioLabRequest, calculate, daily_returns, solve_weights
+from app.portfolio_lab import PortfolioLabRequest, calculate, daily_returns, solve_weights, performance_summary
 
 
 def request(**kwargs):
@@ -100,6 +100,80 @@ def test_cash_only_needs_no_price_history():
     assert result['status'] == 'READY'
     assert result['candidates'][0]['cashAmount'] == 10000
     assert result['candidates'][0]['volatilityPct'] == 0
+    assert result['performance'] is None
+
+
+def test_performance_matches_buy_and_hold_and_cash(histories):
+    result = calculate(request(), histories, {})
+    comparison = result['performance']
+    days = comparison['dates']
+    prices = {ticker: {ts.date().isoformat(): close for ts, _, close in bars} for ticker, bars in histories.items()}
+    for candidate in result['candidates']+result['frontier']:
+        history = candidate['performance']
+        assert len(history['values']) == len(days)
+        assert history['values'][0] == pytest.approx(10000)
+        for i in [1, len(days)//2, len(days)-1]:
+            expected = 1000 + sum(10000 * a['weightPct']/100 * prices[a['ticker']][days[i]]/prices[a['ticker']][days[0]]
+                                  for a in candidate['allocations'])
+            assert history['values'][i] == pytest.approx(expected)
+        assert history['periodReturnPct'] == pytest.approx(candidate['periodReturnPct'])
+    spy = comparison['benchmark']
+    assert spy['values'][0] == 10000
+    assert spy['endValue'] == pytest.approx(1000+9000*prices['SPY'][days[-1]]/prices['SPY'][days[0]])
+
+
+def test_history_gap_is_omitted_without_losing_endpoint_change(histories):
+    missing_day = histories['QQQ'][80][0].date().isoformat()
+    del histories['QQQ'][80]
+    result = calculate(request(), histories, {})
+    assert missing_day not in result['performance']['dates']
+    test_performance_matches_buy_and_hold_and_cash(histories)
+
+
+def test_benchmark_missing_does_not_block_portfolio(histories):
+    histories['EFA'] = histories.pop('SPY')
+    result = calculate(request(tickers=['EFA', 'QQQ']), histories, {})
+    assert result['status'] == 'READY'
+    assert result['performance']['benchmark'] is None
+    assert result['performance']['benchmarkIssue']
+
+
+def test_runner_loads_spy_without_adding_it_to_candidate_universe(monkeypatch, histories):
+    from app import portfolio_lab
+    histories['EFA'] = histories['SPY']
+    calls = []
+    def load(start, end, tickers):
+        calls.append(tickers)
+        return histories
+    monkeypatch.setattr(portfolio_lab, 'load_daily_bars', load)
+    result = portfolio_lab.run_portfolio_lab(request(tickers=['EFA', 'QQQ']).model_dump(mode='json'))
+    assert calls[0] == ['EFA', 'QQQ', 'SPY']
+    assert calls[1] == ['EFA', 'QQQ']
+    assert [a['ticker'] for a in result['assets']] == ['EFA', 'QQQ']
+    assert result['performance']['benchmark'] is not None
+
+
+def test_benchmark_missing_endpoint_is_explicit(histories):
+    histories['EFA'] = histories['SPY']
+    histories['SPY'] = histories['EFA'][1:]
+    result = calculate(request(tickers=['EFA', 'QQQ']), histories, {})
+    assert result['performance']['benchmark'] is None
+    assert result['performance']['benchmarkIssue']
+
+
+@pytest.mark.parametrize('values, drawdown, recovery_days, underwater', [
+    ([100, 120, 90, 110, 120], -25, 3, 0),
+    ([100, 120, 90, 100, 119], -25, None, 3),
+    ([100, 100, 100, 100, 100], 0, 0, 0),
+    ([100, 110, 120, 130, 140], 0, 0, 0),
+    ([100, 90, 100, 80, 101], -20, 2, 0),
+])
+def test_drawdown_and_calendar_recovery(values, drawdown, recovery_days, underwater):
+    days = [date(2024, 1, 1)+timedelta(days=i) for i in range(len(values))]
+    result = performance_summary(days, values)
+    assert result['maxDrawdownPct'] == pytest.approx(drawdown)
+    assert result['recoveryDays'] == recovery_days
+    assert result['underwaterDays'] == underwater
 
 
 def test_reference_quantity_never_overspends_and_stale_quotes_are_not_used(histories):

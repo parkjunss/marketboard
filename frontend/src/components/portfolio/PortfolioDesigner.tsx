@@ -4,14 +4,17 @@ import { useState, type FormEvent } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { portfolioPeriod } from '@/lib/portfolio-period';
 import styles from './portfolio-designer.module.css';
+import { PortfolioPerformance, type Performance, type PerformanceComparison } from './PortfolioPerformance';
 
 type Asset = { ticker: string; observations: number; returnObservations: number; startDate: string | null; endDate: string | null;
   totalReturnPct: number | null; volatilityPct: number | null; maxDrawdownPct: number | null; issue: string | null;
   commonPeriodReturnPct: number | null; commonVolatilityPct: number | null };
 type Allocation = { ticker: string; weightPct: number; amount: number; price: number | null; priceDate: string | null; quantity: number | null; purchaseAmount: number | null };
 type Candidate = { id: string; label: string; periodReturnPct: number; volatilityPct: number;
+  performance?: Performance;
   allocations: Allocation[]; cashAmount: number; integerShareCash: number | null };
 type Result = { status: string; message: string; assets: Asset[]; candidates: Candidate[]; frontier: Candidate[];
+  performance?: PerformanceComparison | null;
   commonObservations: number; excludedIntervals: number; commonStart: string | null; commonEnd: string | null;
   correlation: (number | null)[][] | null; warnings: string[] };
 const defaults = ['SPY', 'QQQ', 'EFA', 'EEM', 'IEF', 'GLD'];
@@ -139,6 +142,7 @@ export function PortfolioDesigner() {
           <p>수량은 표에 표시한 최근 저장 일봉 종가 기준입니다. 현재 체결가가 아니며, 가격이 없거나 뉴욕 오늘 기준 4일보다 오래되면 수량을 계산하지 않습니다.</p>
         </>}
       </>}
+      {chosen && (result.performance ? <PortfolioPerformance key={`${result.commonStart}-${result.commonEnd}-${result.performance.capital}`} comparison={result.performance} chosen={chosen} equal={result.candidates.find(c=>c.id==='equal')?.performance}/> : <p role="status">{chosen.id==='cash' ? '전액 현금 조건으로 자산 추이 비교를 생략합니다.' : '자산 추이 데이터가 없습니다. 서버 업데이트 후 다시 계산해 주세요.'}</p>)}
       <details open><summary>계산 가정과 데이터 경고</summary><ul>{result.warnings.map(w=><li key={w}>{w}</li>)}</ul></details>
     </>}
   </section>;

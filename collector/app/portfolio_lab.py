@@ -81,6 +81,26 @@ def solve_weights(mu, covariance, cap, target=None, risk_limit=None):
     return w
 
 
+def performance_summary(days, values):
+    """Maximum drawdown episode, with calendar days from peak to recovery."""
+    peak = trough = peak_index = 0
+    worst = 0.0
+    for i, value in enumerate(values):
+        if value >= values[peak_index]:
+            peak_index = i
+        drawdown = value / values[peak_index] - 1
+        if drawdown < worst:
+            worst, peak, trough = drawdown, peak_index, i
+    recovery = next((i for i in range(trough + 1, len(values))
+                     if values[i] >= values[peak]), None) if worst < 0 else peak
+    return dict(values=[float(v) for v in values], endValue=float(values[-1]),
+                periodReturnPct=float((values[-1]/values[0]-1)*100), maxDrawdownPct=float(worst*100),
+                peakDate=days[peak].isoformat(), troughDate=days[trough].isoformat(),
+                recoveryDate=days[recovery].isoformat() if recovery is not None else None,
+                recoveryDays=(days[recovery]-days[peak]).days if recovery is not None else None,
+                underwaterDays=(days[-1]-days[peak]).days if recovery is None else 0)
+
+
 def calculate(request, histories, latest):
     p = request
     assets, returns, prices = [], {}, {}
@@ -122,7 +142,7 @@ def calculate(request, histories, latest):
             row['issue'] = '최적화에 필요한 유효 일간 수익률 60개 미만'
     result = dict(status='INSUFFICIENT_DATA', message=None, configuration=p.model_dump(mode='json'),
                   assets=assets, commonObservations=0, excludedIntervals=0, commonStart=None, commonEnd=None,
-                  correlation=None, candidates=[], frontier=[], warnings=warnings, calculationVersion='portfolio-lab-v2-period-return')
+                  correlation=None, candidates=[], frontier=[], performance=None, warnings=warnings, calculationVersion='portfolio-lab-v3-performance')
     if p.cash == p.capital:
         result.update(status='READY', message='전액 현금 조건입니다. 위험자산 최적화는 수행하지 않았습니다.', candidates=[dict(
             id='cash', label='전액 현금', periodReturnPct=0, volatilityPct=0, allocations=[],
@@ -140,6 +160,9 @@ def calculate(request, histories, latest):
     result.update(commonStart=common[0][0].isoformat(), commonEnd=common[-1][1].isoformat())
     matrix = np.array([[returns[t][interval] for t in p.tickers] for interval in common])
     first, last = common[0][0], common[-1][1]
+    history_days = sorted(day for day in set.intersection(*(set(prices[t]) for t in p.tickers))
+                          if first <= day <= last)
+    relatives = np.array([[prices[t][day]/prices[t][first] for t in p.tickers] for day in history_days])
     mu = np.array([prices[t][last]/prices[t][first]-1 for t in p.tickers])
     covariance = np.cov(matrix, rowvar=False)*252
     if not np.isfinite(mu).all() or not np.isfinite(covariance).all():
@@ -169,7 +192,9 @@ def calculate(request, histories, latest):
                              purchaseAmount=float(Decimal(str(quote))*quantity) if quantity is not None else None))
         cash = total-sum(Decimal(str(row['amount'])) for row in rows)
         remainder = total-sum(Decimal(str(row['purchaseAmount'])) for row in rows) if all(r['quantity'] is not None for r in rows) else None
+        path = p.capital * (1-float(weights.sum()) + relatives@weights)
         return dict(id=key, label=label, periodReturnPct=ret*100, volatilityPct=vol*100,
+                    performance=performance_summary(history_days, path),
                     allocations=rows,
                     cashAmount=float(cash), integerShareCash=float(remainder) if remainder is not None else None)
     cap = min(1, p.maxWeightPct/100/fraction)
@@ -192,6 +217,20 @@ def calculate(request, histories, latest):
     except ValueError as exc:
         result.update(status='SOLVER_FAILED', message=str(exc), frontier=[])
         return result
+    benchmark = None
+    benchmark_issue = None
+    try:
+        spy = observed_prices(histories.get('SPY', []), first, last)
+        if any(day not in spy for day in history_days):
+            benchmark_issue = 'SPY의 동일 날짜 일봉이 부족해 비교하지 못했습니다. 종목 등록·수집 상태를 확인하세요.'
+        else:
+            benchmark = performance_summary(history_days, np.array([
+                p.cash+(p.capital-p.cash)*spy[day]/spy[first] for day in history_days]))
+    except (ValueError, TypeError, OverflowError):
+        benchmark_issue = 'SPY 일봉에 중복 날짜 또는 유효하지 않은 가격이 있어 비교하지 못했습니다.'
+    result['performance'] = dict(dates=[day.isoformat() for day in history_days], capital=p.capital,
+                                 cash=p.cash, benchmark=benchmark, benchmarkIssue=benchmark_issue)
+    warnings.append('자산 추이는 공통 관측일의 종가로 계산한 소수점 주식 매수 후 보유 모형입니다. 현금 이자·수수료·세금·리밸런싱은 제외하며 센트 단위 배분액 반올림은 적용하지 않습니다. 누락된 날짜의 낙폭은 관측할 수 없습니다.')
     result.update(status='READY', message='동일한 과거 기간을 기준으로 계산한 배분안입니다. 후보를 선택해 금액과 비중을 비교하세요.')
     return result
 
@@ -199,6 +238,6 @@ def calculate(request, histories, latest):
 def run_portfolio_lab(payload):
     request = PortfolioLabRequest.model_validate(payload)
     today = datetime.now(NEW_YORK).date()
-    histories = load_daily_bars(request.startDate, request.endDate, request.tickers)
+    histories = load_daily_bars(request.startDate, request.endDate, list(dict.fromkeys([*request.tickers, 'SPY'])))
     latest = load_daily_bars(today-timedelta(days=14), today-timedelta(days=1), request.tickers)
     return calculate(request, histories, latest)

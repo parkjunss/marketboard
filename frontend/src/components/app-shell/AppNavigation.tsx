@@ -17,6 +17,7 @@ const marketNavigation = [
   { label: '투자 점검', href: '/review', icon: ShieldCheckIcon },
   { label: '종목 검색', href: '/stock-list', icon: MagnifyingGlassIcon },
   { label: '스크리너', href: '/screener', icon: BeakerIcon },
+  { label: '포트폴리오 설계', href: '/etf', icon: ChartBarIcon },
   { label: '시장 동향', href: '/market', icon: GlobeAltIcon },
   { label: '뉴스', href: '/news', icon: NewspaperIcon },
   { label: '재무 비교', href: '/financials', icon: BanknotesIcon },

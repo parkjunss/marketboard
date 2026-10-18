@@ -92,6 +92,10 @@ public class CollectorClient {
         return etfPost("/backtest/etf-comparison", request, EtfComparisonResult.class);
     }
 
+    public Optional<JsonNode> designPortfolio(org.juns.marketboardbackend.backtest.dto.PortfolioDesignRequest request) {
+        return etfPost("/portfolio/design", request, JsonNode.class);
+    }
+
     private <T> Optional<T> etfPost(String path, Object request, Class<T> type) {
         try {
             HttpRequest httpRequest = HttpRequest.newBuilder()

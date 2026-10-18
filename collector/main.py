@@ -273,6 +273,20 @@ async def backtest_run(payload: BacktestRunPayload):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+from app.portfolio_lab import PortfolioLabRequest, run_portfolio_lab
+
+
+@app.post('/portfolio/design')
+async def portfolio_design(payload: PortfolioLabRequest):
+    try:
+        return await asyncio.to_thread(run_portfolio_lab, payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception('Portfolio design failed')
+        raise HTTPException(status_code=502, detail='포트폴리오 계산 서버 오류') from exc
+
+
 class EtfComparisonPayload(BaseModel):
     startDate: date
     endDate: date

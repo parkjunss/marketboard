@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { EtfMomentumPanel } from '@/components/screener/EtfMomentumPanel';
+import { PortfolioDesigner } from '@/components/portfolio/PortfolioDesigner';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { createReviewDecision, getReviewDecisions, getPortfolios, retryablePost } from '@/lib/api';
@@ -86,8 +88,12 @@ export default function EtfWorkflowPage() {
     } })));
   }
   return <main className={pageStyles.page} aria-busy={busy}>
+    <h1>포트폴리오 설계</h1>
+    <PortfolioDesigner />
+    <details><summary>월말 ETF 모멘텀 · 검토 기록 · 모의 운용</summary>
+    <EtfMomentumPanel />
     <section className={styles.panel}>
-      <div className={styles.panelHeader}><h1>ETF 전략 검토 · 모의 운용</h1><Link href="/backtest#etf-comparison">전략 비교로 돌아가기</Link></div>
+      <div className={styles.panelHeader}><h2>전략 검토 · 모의 운용</h2><Link href="/backtest#etf-comparison">전략 백테스트 비교</Link></div>
       <div className={styles.etfExplanation}>
         <p>비교 근거를 저장하고 판단을 남긴 뒤 모의 운용을 시작합니다. 실제 주문과 보유 수량은 변경하지 않습니다.</p>
         <p>고정 ETF 6종 · 월말 상대 모멘텀 · 상위 3종 · 200일 추세 필터. 수정주가 여부를 확정하지 못한 연구용 결과이며 세금·배당 현금·환전은 반영하지 않습니다.</p>
@@ -152,5 +158,6 @@ export default function EtfWorkflowPage() {
       </article>)}
       {snapshots && <section><h3>계좌 #{snapshots.accountId}의 변경 불가 기록</h3>{snapshots.rows.length === 0 && <p>아직 기록이 없습니다.</p>}{snapshots.rows.map(s => <details key={s.id}><summary>{s.date} · {s.kind} · 저장 {s.capturedAt}</summary><pre style={{ overflow: 'auto', maxHeight: 300 }}>{JSON.stringify(s.payload, null, 2)}</pre></details>)}</section>}
     </section>
+    </details>
   </main>;
 }

@@ -136,6 +136,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="MarketBoard Collector", lifespan=lifespan)
+from app.execution_api import router as execution_router
+app.include_router(execution_router)
 
 
 @app.post("/screening-snapshot/run")

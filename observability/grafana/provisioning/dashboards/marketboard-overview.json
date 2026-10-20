@@ -88,6 +88,8 @@
         { "expr": "rate(marketboard_watchlist_items_total[10m])", "legendFormat": "watchlist items" },
         { "expr": "rate(marketboard_alerts_total[10m])", "legendFormat": "alerts" }
       ]
-    }
+    },
+
+    {"id": 9, "title": "Simulation Active Incidents by Kind", "description": "Persistent simulation incidents. Recovery and run details are available in /execution. No broker orders.", "type": "timeseries", "gridPos": {"h": 8, "w": 24, "x": 0, "y": 22}, "targets": [{"expr": "sum by (kind) (marketboard_execution_incidents)", "legendFormat": "{{kind}}"}], "fieldConfig": {"defaults": {"min": 0, "decimals": 0}, "overrides": []}}
   ]
 }

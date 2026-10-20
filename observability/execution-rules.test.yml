@@ -1,0 +1,24 @@
+rule_files:
+  - /etc/prometheus/execution-rules.yml
+evaluation_interval: 15s
+tests:
+  - interval: 15s
+    input_series:
+      - series: 'marketboard_execution_incidents{kind="UNKNOWN",instance="backend:8080"}'
+        values: '1+0x11 0+0x4'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: ExecutionIncidentPersistent
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: ExecutionIncidentPersistent
+        exp_alerts:
+          - exp_labels:
+              kind: UNKNOWN
+              severity: warning
+            exp_annotations:
+              summary: "Simulation incident persists: UNKNOWN"
+              description: "Open /execution, select the affected run and follow its recovery instructions. No real broker orders are involved."
+      - eval_time: 3m
+        alertname: ExecutionIncidentPersistent
+        exp_alerts: []

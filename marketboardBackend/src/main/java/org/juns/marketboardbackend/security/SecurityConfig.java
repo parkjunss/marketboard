@@ -62,6 +62,7 @@ public class SecurityConfig {
                         // recompute trigger is under /api/admin/**, gated separately below).
                         .requestMatchers("/api/market-indices/**", "/api/market-breadth", "/api/market-sentiment/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/quotes/**", "/api/news/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/execution/demo").permitAll()
                         // /actuator/prometheus is scraped by Prometheus itself (no JWT to send), so it's
                         // permitAll like health/info — order matters here, this must come before the
                         // ADMIN-gated /actuator/** rule below or it'd be shadowed by it.

@@ -84,6 +84,35 @@ public class CollectorClient {
         return etfPost("/strategies/etf-paper", payload, JsonNode.class);
     }
 
+    public JsonNode replayExecution(Object payload) {
+        return executionPost("/execution/replay", payload);
+    }
+
+    public JsonNode replayAutoTrading(Object payload) {
+        return executionPost("/execution/auto-replay", payload);
+    }
+
+    private JsonNode executionPost(String path, Object payload) {
+        try {
+            var request = HttpRequest.newBuilder().uri(URI.create(baseUrl + path))
+                    .header("Content-Type", "application/json").timeout(Duration.ofSeconds(10))
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload))).build();
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 422)
+                throw new IllegalArgumentException("실행 명령 또는 상태가 유효하지 않습니다.");
+            if (response.statusCode() != 200) throw new IllegalStateException("모의 실행 계산 서버 오류");
+            var result = objectMapper.readTree(response.body());
+            if (!result.path("valid").asBoolean() || !result.path("state").isObject())
+                throw new IllegalStateException("모의 실행 응답 형식 오류");
+            return result.get("state");
+        } catch (IOException ex) {
+            throw new IllegalStateException("모의 실행 서버에 연결할 수 없습니다. 저장된 기록은 유지됩니다.", ex);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("모의 실행 요청 중단", ex);
+        }
+    }
+
     public Optional<JsonNode> proposeEtfRebalance(Object payload) {
         return etfPost("/strategies/etf-rebalance", payload, JsonNode.class);
     }

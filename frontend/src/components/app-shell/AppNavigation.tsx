@@ -31,6 +31,8 @@ const accountNavigation = [
   { label: '관심종목', href: '/watchlist', icon: HeartIcon },
   { label: '포트폴리오', href: '/portfolio', icon: BriefcaseIcon },
   { label: '백테스팅', href: '/backtest', icon: ChartBarSquareIcon },
+  { label: '모의 주문 실행', href: '/execution', icon: BeakerIcon },
+  { label: '자동 모의 매매', href: '/auto-trading', icon: ChartBarIcon },
   { label: '프로필', href: '/profile', icon: Cog6ToothIcon },
 ];
 

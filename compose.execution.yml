@@ -1,0 +1,22 @@
+# Local simulation stack: use with -f compose.local.yml -f compose.execution.yml.
+# Keeps real application authentication, Redis, MySQL and the Python reducer.
+services:
+  collector:
+    command: ["uv", "run", "uvicorn", "app.execution_main:app", "--host", "0.0.0.0", "--port", "8000"]
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./observability/prometheus.deploy.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/execution-rules.yml:/etc/prometheus/execution-rules.yml:ro
+    ports: ["127.0.0.1:19091:9090"]
+    networks: [marketboard-local]
+  grafana:
+    image: grafana/grafana:10.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: simulation-admin
+      GF_SECURITY_ADMIN_PASSWORD: simulation-local-only
+    volumes:
+      - ./observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./observability/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+    ports: ["127.0.0.1:13301:3000"]
+    networks: [marketboard-local]

@@ -1,0 +1,12 @@
+groups:
+  - name: execution-simulation
+    interval: 15s
+    rules:
+      - alert: ExecutionIncidentPersistent
+        expr: sum by (kind) (marketboard_execution_incidents) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Simulation incident persists: {{ $labels.kind }}"
+          description: "Open /execution, select the affected run and follow its recovery instructions. No real broker orders are involved."

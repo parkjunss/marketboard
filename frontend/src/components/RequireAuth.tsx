@@ -6,7 +6,7 @@ import { Center } from '@astryxdesign/core/Center';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { useAuth } from '@/lib/auth-context';
 
-const PUBLIC_PATHS = new Set(['/', '/dashboard', '/stock-list', '/market', '/news']);
+const PUBLIC_PATHS = new Set(['/', '/dashboard', '/stock-list', '/market', '/news', '/execution-demo']);
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, isInitializing } = useAuth();

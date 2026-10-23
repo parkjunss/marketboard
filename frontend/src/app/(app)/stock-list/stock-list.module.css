@@ -1,0 +1,11 @@
+.filters { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.filters > :first-child { flex: 1; min-width: 160px; }
+.filters [role='radiogroup'] { flex-shrink: 0; }
+.filters [role='radio'] { white-space: nowrap; min-width: 64px; }
+.disclosure { margin: 0; font-size: 12px; line-height: 1.7; color: var(--mb-text-muted); word-break: keep-all; }
+.quoteTime { display: block; font-size: 11px; color: var(--mb-text-muted); line-height: 1.5; }
+@media (max-width: 700px) {
+  .filters { width: 100%; align-items: stretch; flex-direction: column; }
+  .filters > :first-child { width: 100%; }
+  .filters [role='radiogroup'] { align-self: flex-start; }
+}

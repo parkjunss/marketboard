@@ -7,6 +7,7 @@ import { VStack } from '@astryxdesign/core/Stack';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { Banner } from '@astryxdesign/core/Banner';
 import { useAuth } from '@/lib/auth-context';
+import { takeLoginReturn } from '@/lib/login-return';
 
 function OAuthCallback() {
   const params = useSearchParams();
@@ -23,7 +24,7 @@ function OAuthCallback() {
     started.current = true;
     if (!code) return;
     completeOAuthLogin(code)
-      .then(() => router.replace('/review'))
+      .then(() => router.replace(takeLoginReturn()))
       .catch(() => setError('Google 로그인에 실패했습니다. 다시 시도해 주세요.'));
   }, [code, completeOAuthLogin, router]);
 

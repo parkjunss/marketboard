@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { DataStamp } from '@/components/DataStamp';
+
+
+import { useCallback, useState } from 'react';
+import { useResource } from '@/lib/use-resource';
+import { ResourceState } from '@/components/ResourceState';
 import { CandleChart } from '@/components/CandleChart';
-import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
-import type { CandleResponse } from '@/lib/types';
 import styles from './dashboard.module.css';
 
 const INDICES = [
@@ -14,19 +17,10 @@ const INDICES = [
 ];
 
 export function MainIndexChart() {
-  const { authFetch } = useAuth();
   const [selected, setSelected] = useState(INDICES[0]);
-  const [result, setResult] = useState<{ key: string; candles: CandleResponse[] } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    api.getMarketIndexHistory(authFetch, selected.slug)
-      .then((data) => { if (!cancelled) setResult({ key: selected.slug, candles: data }); })
-      .catch(() => { if (!cancelled) setResult({ key: selected.slug, candles: [] }); });
-    return () => { cancelled = true; };
-  }, [authFetch, selected]);
-
-  const candles = result?.key === selected.slug ? result.candles : null;
+  const load = useCallback((fetcher: api.Fetcher) => api.getMarketIndexHistory(fetcher, selected.slug), [selected.slug]);
+  const resource = useResource(load);
+  const candles = resource.data;
   const latest = candles?.at(-1);
   const previous = candles && candles.length > 1 ? candles.at(-2) : null;
   const change = latest && previous ? latest.close - previous.close : null;
@@ -45,6 +39,7 @@ export function MainIndexChart() {
         {INDICES.map((index) => <button key={index.slug} className={selected.slug === index.slug ? styles.activeTab : undefined} onClick={() => setSelected(index)}>{index.label}</button>)}
       </div>
     </div>
-    <div className={styles.chartBody}>{candles ? <CandleChart key={selected.slug} candles={candles} height={310} /> : <div className={styles.chartLoading}>차트를 불러오는 중입니다</div>}</div>
+    {latest && <DataStamp source="Yahoo Finance (yfinance)" at={latest.ts} label="최근 일봉 기준" note="일봉 · 실시간 시세 아님" />}
+    <div className={styles.chartBody}>{resource.status !== 'success' ? <ResourceState status={resource.status} label={`${selected.label} 차트`} onRetry={resource.retry} /> : candles && candles.length > 0 ? <CandleChart key={selected.slug} candles={candles} height={310} /> : <ResourceState status="empty" label={`${selected.label} 차트`} />}</div>
   </section>;
 }

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Center } from '@astryxdesign/core/Center';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { useAuth } from '@/lib/auth-context';
+import { rememberLoginReturn } from '@/lib/login-return';
 
 const PUBLIC_PATHS = new Set(['/', '/dashboard', '/stock-list', '/market', '/news', '/execution-demo']);
 
@@ -15,8 +16,11 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   const isPublic = PUBLIC_PATHS.has(pathname);
 
   useEffect(() => {
-    if (!isInitializing && !user && !isPublic) router.replace('/login');
-  }, [isInitializing, isPublic, user, router]);
+    if (!isInitializing && !user && !isPublic) {
+      rememberLoginReturn(pathname);
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+    }
+  }, [isInitializing, isPublic, user, router, pathname]);
 
   if (isInitializing || (!user && !isPublic)) {
     return (

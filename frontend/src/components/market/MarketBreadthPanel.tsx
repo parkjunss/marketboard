@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { DataStamp } from '@/components/DataStamp';
+
+
+import { useResource } from '@/lib/use-resource';
+import { ResourceState } from '@/components/ResourceState';
+
 import { Card } from '@astryxdesign/core/Card';
 import { VStack, HStack } from '@astryxdesign/core/Stack';
 import { Grid } from '@astryxdesign/core/Grid';
 import { Heading, Text } from '@astryxdesign/core/Text';
-import { Center } from '@astryxdesign/core/Center';
-import { Spinner } from '@astryxdesign/core/Spinner';
-import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
-import type { MarketBreadthResponse } from '@/lib/types';
 
 function BreadthStat({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
@@ -42,39 +43,15 @@ function AdvanceDeclineBar({ advancing, declining, unchanged }: { advancing: num
   );
 }
 
-export function MarketBreadthPanel() {
-  const { authFetch } = useAuth();
-  const [breadth, setBreadth] = useState<MarketBreadthResponse | null | undefined>(undefined);
-
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .getMarketBreadth(authFetch)
-      .then((data) => {
-        if (!cancelled) setBreadth(data);
-      })
-      .catch(() => {
-        if (!cancelled) setBreadth(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [authFetch]);
-
-  if (breadth === undefined) {
-    return (
-      <Center height={140}>
-        <Spinner size="md" label="불러오는 중" />
-      </Center>
-    );
-  }
-
-  if (breadth === null) {
-    return null; // no snapshot computed yet -- fail quietly rather than block the rest of the page
-  }
+export function MarketBreadthPanel({ compact = false }: { compact?: boolean }) {
+  const resource = useResource(api.getMarketBreadth);
+  if (resource.status !== 'success') return <ResourceState status={resource.status} label="시장 현황" onRetry={resource.retry} />;
+  const breadth = resource.data;
+  if (!breadth) return <ResourceState status="empty" label="시장 현황" />;
 
   return (
-    <Grid columns={2} gap={4}>
+    <div>
+    <Grid columns={{ minWidth: 200, max: compact ? 1 : 2 }} gap={4}>
       <Card padding={4}>
         <VStack gap={3}>
           <Text type="supporting" size="sm">
@@ -92,7 +69,7 @@ export function MarketBreadthPanel() {
           />
         </VStack>
       </Card>
-      <Card padding={4}>
+      {!compact && <Card padding={4}>
         <VStack gap={3}>
           <Text type="supporting" size="sm">52주 신고가·신저가 갱신</Text>
           <HStack gap={6}>
@@ -100,7 +77,10 @@ export function MarketBreadthPanel() {
             <BreadthStat label="신저가" value={breadth.new52wLowCount} color="var(--color-text-blue)" />
           </HStack>
         </VStack>
-      </Card>
+      </Card>}
     </Grid>
+    <DataStamp source="MarketBoard 저장 일봉 집계" at={breadth.snapshotDate} label="스냅샷 날짜" />
+    <DataStamp source="MarketBoard" at={breadth.computedAt} label="서버 산출 시각" note="개별 종목의 가격 기준 시각과 다를 수 있습니다." />
+    </div>
   );
 }

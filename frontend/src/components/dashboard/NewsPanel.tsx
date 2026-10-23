@@ -1,57 +1,14 @@
 'use client';
-
-import { useEffect, useState } from 'react';
-import { Center } from '@astryxdesign/core/Center';
-import { Spinner } from '@astryxdesign/core/Spinner';
-import { Text } from '@astryxdesign/core/Text';
+import { useCallback } from 'react';
 import { NewsList } from '@/components/news/NewsList';
-import { useAuth } from '@/lib/auth-context';
+import { ResourceState } from '@/components/ResourceState';
+import { useResource } from '@/lib/use-resource';
 import * as api from '@/lib/api';
-import type { NewsItem } from '@/lib/types';
 
 export function NewsPanel({ ticker, limit, compact = false }: { ticker?: string; limit?: number; compact?: boolean }) {
-  const { authFetch } = useAuth();
-  // Keyed by ticker so isLoading derives from render-time comparison instead of an effect
-  // calling setState synchronously (see react-hooks/set-state-in-effect).
-  const requestKey = ticker ?? '__general__';
-  const [result, setResult] = useState<{ key: string; items: NewsItem[] } | null>(null);
-  const isLoading = result?.key !== requestKey;
-  const items = isLoading ? [] : result.items;
-
-  useEffect(() => {
-    let cancelled = false;
-    const fetchNews = ticker ? api.getCompanyNews(authFetch, ticker) : api.getGeneralNews(authFetch);
-    fetchNews
-      .then((data) => {
-        if (!cancelled) setResult({ key: requestKey, items: data });
-      })
-      .catch(() => {
-        // Best-effort external data -- degrade to "뉴스가 없습니다" rather than spin forever,
-        // e.g. right after a fresh deploy before the first scheduled refresh has landed.
-        if (!cancelled) setResult({ key: requestKey, items: [] });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [authFetch, ticker, requestKey]);
-
-  if (isLoading) {
-    return (
-      <Center height={280}>
-        <Spinner size="md" label="뉴스 불러오는 중" />
-      </Center>
-    );
-  }
-
-  if (items.length === 0) {
-    return (
-      <Center height={280}>
-        <Text type="body" color="secondary">
-          뉴스가 없습니다
-        </Text>
-      </Center>
-    );
-  }
-
-  return <NewsList items={limit ? items.slice(0, limit) : items} compact={compact} />;
+  const load = useCallback((fetcher: api.Fetcher) => ticker ? api.getCompanyNews(fetcher, ticker) : api.getGeneralNews(fetcher), [ticker]);
+  const resource = useResource(load);
+  if (resource.status !== 'success') return <ResourceState status={resource.status} label="뉴스" onRetry={resource.retry} />;
+  if (resource.data.length === 0) return <ResourceState status="empty" label="뉴스" />;
+  return <NewsList items={resource.data} limit={limit} compact={compact} />;
 }

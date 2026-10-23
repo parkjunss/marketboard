@@ -1,5 +1,8 @@
 'use client';
 
+import { DataStamp } from '@/components/DataStamp';
+
+
 import { use, useEffect, useMemo, useState } from 'react';
 import { VStack, HStack } from '@astryxdesign/core/Stack';
 import { Section } from '@astryxdesign/core/Section';
@@ -321,10 +324,8 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
             <InfoCard label="저가 (1년)">
               <Heading level={4}>{dailyStats?.key === ticker && dailyStats.low != null ? dailyStats.low.toFixed(2) : '—'}</Heading>
             </InfoCard>
-            <InfoCard label="갱신 시각">
-              <Heading level={4}>
-                {liveQuote?.ts ? new Date(liveQuote.ts).toLocaleTimeString('ko-KR') : '—'}
-              </Heading>
+            <InfoCard label="시세 기준">
+              <DataStamp source="시세 API (제공자 미제공)" at={liveQuote?.ts} note="연결 상태는 가격의 최신성을 보장하지 않습니다." />
             </InfoCard>
           </Grid>
 
@@ -347,6 +348,7 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
                 </SegmentedControl>
               </div>
 
+              <DataStamp source="MarketBoard 캔들 API (원 제공자 미제공)" at={candles.at(-1)?.ts} label="최근 봉 기준" note={timeframe === '1d' ? '일봉 · 시세와 기준 시각이 다를 수 있습니다.' : '분봉 · 진행 중인 봉은 변경될 수 있습니다.'} />
               {isChartLoading ? (
                 <Center height={420}>
                   <Spinner size="lg" label="차트 불러오는 중" />

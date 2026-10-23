@@ -1,0 +1,2 @@
+.stamp { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; font-size: 11px; line-height: 1.6; color: var(--mb-text-muted); overflow-wrap: anywhere; word-break: keep-all; }
+.stamp > span { max-width: 100%; }

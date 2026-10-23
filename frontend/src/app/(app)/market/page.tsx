@@ -1,34 +1,29 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useResource } from '@/lib/use-resource';
+import { ResourceState } from '@/components/ResourceState';
+
 import { Grid } from '@astryxdesign/core/Grid';
-import { Center } from '@astryxdesign/core/Center';
-import { Spinner } from '@astryxdesign/core/Spinner';
 import { PageLayout, PageSurface } from '@/components/layout/PageLayout';
 import { MarketIndexCard } from '@/components/market/MarketIndexCard';
 import { MarketBreadthPanel } from '@/components/market/MarketBreadthPanel';
 import { MarketSentimentPanel } from '@/components/market/MarketSentimentPanel';
 import { SectorRotationTable } from '@/components/market/SectorRotationTable';
-import { useAuth } from '@/lib/auth-context';
+import { MacroMarketGrid, MACRO_SLUGS } from '@/components/dashboard/MacroMarketGrid';
 import * as api from '@/lib/api';
-import type { MarketIndexInfo } from '@/lib/types';
 
 export default function MarketPage() {
-  const { authFetch } = useAuth();
-  const [indices, setIndices] = useState<MarketIndexInfo[] | null>(null);
+  const resource = useResource(api.getMarketIndices);
+  const indices = resource.data?.filter(index => !MACRO_SLUGS.has(index.slug)) ?? [];
 
-  useEffect(() => {
-    let cancelled = false;
-    api.getMarketIndices(authFetch).then((data) => { if (!cancelled) setIndices(data); });
-    return () => { cancelled = true; };
-  }, [authFetch]);
-
-  return <PageLayout title="시장 동향" description="주요 지수와 시장 폭, 투자 심리, 섹터 흐름을 한 화면에서 비교하세요.">
-    <PageSurface title="시장 심리"><MarketSentimentPanel /></PageSurface>
-    <PageSurface title="시장 현황"><MarketBreadthPanel /></PageSurface>
-    <PageSurface title="섹터 로테이션"><SectorRotationTable /></PageSurface>
+  return <PageLayout title="시장 동향" description="시장 폭과 투자 심리의 세부 수치, 섹터별 기간 수익률과 거시 지표를 비교하세요. 각 자료의 기준 시각은 다를 수 있습니다.">
+    <section id="sentiment" style={{ scrollMarginTop: 80 }}><PageSurface title="시장 심리 상세"><MarketSentimentPanel /></PageSurface></section>
+    <section id="breadth" style={{ scrollMarginTop: 80 }}><PageSurface title="시장 폭 상세"><MarketBreadthPanel /></PageSurface></section>
+    <PageSurface title="거시 지표"><MacroMarketGrid /></PageSurface>
+    <PageSurface title="섹터 로테이션"><SectorRotationTable showTitle={false} /></PageSurface>
     <PageSurface title="주요 지수">
-      {indices === null ? <Center height={280}><Spinner size="lg" label="불러오는 중" /></Center> :
+      {resource.status !== 'success' ? <ResourceState status={resource.status} label="주요 지수" onRetry={resource.retry} /> :
+        indices.length === 0 ? <ResourceState status="empty" label="주요 지수" /> :
         <Grid columns={{ minWidth: 280, max: 3 }} gap={4}>{indices.map((index) => <MarketIndexCard key={index.slug} slug={index.slug} name={index.name} />)}</Grid>}
     </PageSurface>
   </PageLayout>;

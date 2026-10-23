@@ -1,24 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useResource } from '@/lib/use-resource';
+import { ResourceState } from '@/components/ResourceState';
 import { MarketIndexCard } from '@/components/market/MarketIndexCard';
-import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
-import type { MarketIndexInfo } from '@/lib/types';
 import styles from './dashboard.module.css';
 
 export function MarketOverview() {
-  const { authFetch } = useAuth();
-  const [indices, setIndices] = useState<MarketIndexInfo[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    api.getMarketIndices(authFetch).then((data) => { if (!cancelled) setIndices(data.slice(0, 4)); }).catch(() => undefined);
-    return () => { cancelled = true; };
-  }, [authFetch]);
+  const resource = useResource(api.getMarketIndices);
+  const indices = resource.data?.slice(0, 4) ?? [];
 
   return <section aria-label="주요 시장 지수" className={styles.indexGrid}>
     {indices.map((index) => <MarketIndexCard key={index.slug} slug={index.slug} name={index.name} />)}
-    {indices.length === 0 && Array.from({ length: 4 }, (_, index) => <div className={styles.indexSkeleton} key={index} />)}
+    {resource.status !== 'success' ? <ResourceState status={resource.status} label="주요 시장 지수" onRetry={resource.retry} /> : indices.length === 0 && <ResourceState status="empty" label="주요 시장 지수" />}
   </section>;
 }

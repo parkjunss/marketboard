@@ -1,11 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { DataStamp } from '@/components/DataStamp';
+
+
+import { useResource } from '@/lib/use-resource';
+import { ResourceState } from '@/components/ResourceState';
+
 import { Card } from '@astryxdesign/core/Card';
 import { VStack, HStack } from '@astryxdesign/core/Stack';
 import { Grid } from '@astryxdesign/core/Grid';
 import { Heading, Text } from '@astryxdesign/core/Text';
-import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import type { FearGreedResponse, PutCallRatioResponse } from '@/lib/types';
 import { Sparkline } from '@/components/Sparkline';
@@ -28,7 +32,7 @@ const RATING_LABELS_KO: Record<string, string> = {
   'extreme greed': '극단적 탐욕',
 };
 
-function FearGreedGauge({ data }: { data: FearGreedResponse }) {
+function FearGreedGauge({ data, compact = false }: { data: FearGreedResponse; compact?: boolean }) {
   const color = ratingColor(data.rating);
   const label = RATING_LABELS_KO[data.rating.toLowerCase()] ?? data.rating;
   return (
@@ -48,9 +52,10 @@ function FearGreedGauge({ data }: { data: FearGreedResponse }) {
         <HStack style={{ width: `${data.score}%`, backgroundColor: color }} />
         <HStack style={{ width: `${100 - data.score}%`, backgroundColor: 'var(--color-background-gray)' }} />
       </HStack>
-      <Text type="supporting" size="sm">
+      {!compact && <Text type="supporting" size="sm">
         1주 전 {data.history['1w']?.toFixed(0) ?? '—'} · 1개월 전 {data.history['1m']?.toFixed(0) ?? '—'}
-      </Text>
+      </Text>}
+      <DataStamp source="CNN Fear & Greed" at={data.timestamp} note="제공자 기준 · 참고용" />
     </VStack>
   );
 }
@@ -70,54 +75,28 @@ function PutCallCard({ data }: { data: PutCallRatioResponse }) {
       <Text type="supporting" size="sm">
         1보다 높으면 풋(하락 베팅) 거래량이 콜보다 많다는 뜻 — 방향성 자체보다 평소 대비 급등락 여부를 참고하세요.
       </Text>
+      <DataStamp source="Yahoo Finance (yfinance)" note="옵션 거래량 스냅샷 · 실시간 시세 아님" />
     </VStack>
   );
 }
 
+export function FearGreedSummary() {
+  const resource = useResource(api.getFearGreed);
+  if (resource.status !== 'success') return <ResourceState status={resource.status} label="공포·탐욕 지수" onRetry={resource.retry} />;
+  return resource.data ? <FearGreedGauge data={resource.data} compact /> : <ResourceState status="empty" label="공포·탐욕 지수" />;
+}
+
 export function MarketSentimentPanel() {
-  const { authFetch } = useAuth();
-  const [fearGreed, setFearGreed] = useState<FearGreedResponse | null | undefined>(undefined);
-  const [putCall, setPutCall] = useState<PutCallRatioResponse | null | undefined>(undefined);
-
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .getFearGreed(authFetch)
-      .then((data) => {
-        if (!cancelled) setFearGreed(data);
-      })
-      .catch(() => {
-        if (!cancelled) setFearGreed(null);
-      });
-    api
-      .getPutCallRatio(authFetch)
-      .then((data) => {
-        if (!cancelled) setPutCall(data);
-      })
-      .catch(() => {
-        if (!cancelled) setPutCall(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [authFetch]);
-
-  // Both are best-effort external calls (CNN's unofficial endpoint, yfinance options data) --
-  // fail quietly (hide the card) rather than block the rest of the page on either one.
-  if (!fearGreed && !putCall) return null;
-
-  return (
-    <Grid columns={2} gap={4}>
-      {fearGreed && (
-        <Card padding={4}>
-          <FearGreedGauge data={fearGreed} />
-        </Card>
-      )}
-      {putCall && (
-        <Card padding={4}>
-          <PutCallCard data={putCall} />
-        </Card>
-      )}
-    </Grid>
-  );
+  const fearGreed = useResource(api.getFearGreed);
+  const putCall = useResource(api.getPutCallRatio);
+  return <Grid columns={{ minWidth: 200, max: 2 }} gap={4}>
+    <Card padding={4}>
+      {fearGreed.status !== 'success' ? <ResourceState status={fearGreed.status} label="공포·탐욕 지수" onRetry={fearGreed.retry} /> :
+        fearGreed.data ? <FearGreedGauge data={fearGreed.data} /> : <ResourceState status="empty" label="공포·탐욕 지수" />}
+    </Card>
+    <Card padding={4}>
+      {putCall.status !== 'success' ? <ResourceState status={putCall.status} label="Put/Call 비율" onRetry={putCall.retry} /> :
+        putCall.data ? <PutCallCard data={putCall.data} /> : <ResourceState status="empty" label="Put/Call 비율" />}
+    </Card>
+  </Grid>;
 }

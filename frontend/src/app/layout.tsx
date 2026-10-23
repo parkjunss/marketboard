@@ -3,8 +3,9 @@ import './globals.css';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://marketboard.duckdns.org'),
   title: 'MarketBoard',
-  description: '실시간 종목 리스트',
+  description: '시장 지표와 종목, 뉴스를 살펴보고 관심종목과 투자 기록을 관리하는 MarketBoard입니다.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -51,3 +51,9 @@ body {
   background: var(--mb-canvas);
   color: var(--mb-text);
 }
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--mb-accent);
+  outline-offset: 3px;
+}
+#page-content { scroll-margin-top: 80px; }

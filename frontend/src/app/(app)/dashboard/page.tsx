@@ -2,14 +2,12 @@
 
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { MainIndexChart } from '@/components/dashboard/MainIndexChart';
-import { MacroMarketGrid } from '@/components/dashboard/MacroMarketGrid';
 import { MarketMovers } from '@/components/dashboard/MarketMovers';
 import { MarketOverview } from '@/components/dashboard/MarketOverview';
 import { NewsPanel } from '@/components/dashboard/NewsPanel';
 import { WatchlistOverviewSection } from '@/components/dashboard/WatchlistOverviewSection';
 import { MarketBreadthPanel } from '@/components/market/MarketBreadthPanel';
-import { MarketSentimentPanel } from '@/components/market/MarketSentimentPanel';
-import { SectorRotationTable } from '@/components/market/SectorRotationTable';
+import { FearGreedSummary } from '@/components/market/MarketSentimentPanel';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import styles from '@/components/dashboard/dashboard.module.css';
@@ -29,19 +27,17 @@ export default function DashboardPage() {
       <div className={styles.heroGrid}>
         <MainIndexChart />
         <div className={styles.heroSide}>
-          <DashboardSection title="시장 현황"><MarketBreadthPanel /></DashboardSection>
-          <DashboardSection title="공포·탐욕 지수"><MarketSentimentPanel /></DashboardSection>
+          <DashboardSection title="시장 폭 요약" moreHref="/market#breadth"><MarketBreadthPanel compact /></DashboardSection>
+          <DashboardSection title="투자 심리 요약" moreHref="/market#sentiment"><FearGreedSummary /></DashboardSection>
         </div>
       </div>
-      <MacroMarketGrid />
+      <DashboardSection title="시장 상세 비교" moreHref="/market"><p>거시 지표, 섹터별 기간 수익률과 옵션 거래량은 시장 동향에서 비교하세요.</p></DashboardSection>
       <div className={styles.moversGrid}>
         <MarketMovers />
         <DashboardSection title="주요 뉴스" moreHref="/news"><NewsPanel limit={4} compact /></DashboardSection>
       </div>
-      <div className={styles.secondaryGrid}>
-        <DashboardSection title="섹터 로테이션"><SectorRotationTable /></DashboardSection>
-        {user && <DashboardSection title="관심종목"><WatchlistOverviewSection /></DashboardSection>}
-      </div>
+      {user ? <DashboardSection title="관심종목" moreHref="/watchlist"><WatchlistOverviewSection /></DashboardSection> :
+        <DashboardSection title="나만의 관심종목"><p>관심 있는 종목을 저장하고 가격과 거래량을 함께 확인하세요.</p><Link href="/watchlist">로그인하고 관심종목 관리하기 →</Link></DashboardSection>}
     </div>
   </main>;
 }

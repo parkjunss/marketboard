@@ -1,5 +1,10 @@
 'use client';
 
+import styles from './stock-list.module.css';
+import { formatDataTime } from '@/lib/data-time';
+import { useResource } from '@/lib/use-resource';
+import { ResourceState } from '@/components/ResourceState';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { HStack } from '@astryxdesign/core/Stack';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -39,6 +44,7 @@ interface StockStats {
 }
 
 interface StockRow extends StockStats, Record<string, unknown> {
+  quoteAt: string | null;
   price: number | null;
   latestVolume: number | null;
   changeValue: number | null;
@@ -95,12 +101,12 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
   const [rowWindow, setRowWindow] = useState({ key: '', count: ROW_BATCH_SIZE });
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const [watchlist, setWatchlist] = useState<WatchlistItemResponse[]>([]);
-  const [catalog, setCatalog] = useState<QuoteResponse[] | null>(null);
+  const catalogResource = useResource(api.getAllQuotes);
+  const catalog = catalogResource.data;
   const [isWatchlistLoading, setIsWatchlistLoading] = useState(true);
   const [pendingTicker, setPendingTicker] = useState<string | null>(null);
 
   useEffect(() => {
-    api.getAllQuotes(authFetch).then(setCatalog).catch(() => setCatalog([]));
     if (user) {
       api.getWatchlist(authFetch).then(setWatchlist).finally(() => setIsWatchlistLoading(false));
     }
@@ -148,6 +154,7 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
         volumeSeries: stats?.volumeSeries ?? [],
         volumeChangePct: stats?.volumeChangePct ?? null,
         price,
+        quoteAt: quote?.price != null ? quote.ts : null,
         latestVolume: stats?.volumeSeries.at(-1) ?? null,
         changeValue,
         changePct,
@@ -248,6 +255,7 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
       renderCell: (row) => {
         const flash = flashes[row.ticker];
         return (
+          <div>
           <HStack
             gap={1}
             align="center"
@@ -271,6 +279,8 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
               {row.price != null ? row.price.toFixed(2) : '—'}
             </Text>
           </HStack>
+          <small className={styles.quoteTime}>{formatDataTime(row.quoteAt) ?? '기준 시각 미제공'}</small>
+          </div>
         );
       },
     },
@@ -332,10 +342,10 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
     <PageLayout
       title={initialFilter === 'watchlist' ? '관심종목' : '종목 검색'}
       description={initialFilter === 'watchlist'
-        ? `${isConnected ? '실시간 연결됨' : '연결 중'} · 저장한 관심종목의 가격과 거래량 추이를 확인하세요.`
-        : `${isConnected ? '실시간 연결됨' : '연결 중'} · DB에 등록된 전체 종목을 검색하고 가격 자료를 비교하세요.`}
+        ? `${isConnected ? '시세 연결됨' : '시세 재연결 중'} · 저장한 관심종목의 가격과 거래량 추이를 확인하세요.`
+        : `${isConnected ? '시세 연결됨' : '시세 재연결 중'} · DB에 등록된 전체 종목을 검색하고 가격 자료를 비교하세요.`}
       actions={
-        <HStack gap={3} align="center">
+        <div className={styles.filters}>
             <TextInput
               label="티커/이름 검색"
               isLabelHidden
@@ -348,11 +358,13 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
               <SegmentedControlItem value="all" label="전체" />
               <SegmentedControlItem value="watchlist" label="관심종목" />
             </SegmentedControl>}
-        </HStack>
+        </div>
       }
     >
+      <p className={styles.disclosure}>출처: 시세 API (제공자 미제공) · 가격 기준 시각은 종목별 표시 · 연결 상태와 데이터 최신성은 별개입니다. 표는 좌우로 스크롤할 수 있습니다.</p>
+      {!user && <p className={styles.disclosure}>종목 상세와 관심종목 관리는 로그인이 필요합니다. 선택한 종목은 로그인 후 이어서 확인할 수 있습니다.</p>}
       <PageSurface>
-      {isLoading ? (
+      {catalogResource.status === 'error' ? <ResourceState status="error" label="종목 목록" onRetry={catalogResource.retry} /> : isLoading ? (
         <Center height={320}>
           <Spinner size="lg" label="불러오는 중" />
         </Center>

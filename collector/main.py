@@ -204,6 +204,12 @@ async def market_indices_list():
     return list_indices()
 
 
+@app.get("/market-calendar/completed-session")
+async def market_completed_session():
+    from app.market_calendar import completed_sessions
+    return await asyncio.to_thread(completed_sessions)
+
+
 @app.get("/market-indices/{slug}/history")
 async def market_indices_history(slug: str, period: str = "6mo"):
     try:

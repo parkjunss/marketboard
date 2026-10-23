@@ -66,6 +66,16 @@ public class CollectorClient {
         }
     }
 
+    public Optional<CompletedMarketSession> getCompletedMarketSession() {
+        try {
+            return Optional.ofNullable(restClient.get().uri("/market-calendar/completed-session")
+                    .retrieve().body(CompletedMarketSession.class));
+        } catch (RestClientException ex) {
+            log.warn("Completed market session unavailable: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
     public Optional<EtfMomentumResult> getEtfMomentum() {
         try {
             return Optional.ofNullable(restClient.get().uri("/strategies/etf-momentum")

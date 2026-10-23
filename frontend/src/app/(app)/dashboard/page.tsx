@@ -8,6 +8,7 @@ import { NewsPanel } from '@/components/dashboard/NewsPanel';
 import { WatchlistOverviewSection } from '@/components/dashboard/WatchlistOverviewSection';
 import { MarketBreadthPanel } from '@/components/market/MarketBreadthPanel';
 import { FearGreedSummary } from '@/components/market/MarketSentimentPanel';
+import { MarketReportLatest } from '@/components/reports/MarketReportLatest';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import styles from '@/components/dashboard/dashboard.module.css';
@@ -24,6 +25,7 @@ export default function DashboardPage() {
     <DashboardHeader name={name} showWatchlist={Boolean(user)} />
     <MarketOverview />
     <div className={styles.content}>
+      <DashboardSection title="오늘의 시황 보고서" moreHref="/market-reports"><MarketReportLatest /></DashboardSection>
       <div className={styles.heroGrid}>
         <MainIndexChart />
         <div className={styles.heroSide}>

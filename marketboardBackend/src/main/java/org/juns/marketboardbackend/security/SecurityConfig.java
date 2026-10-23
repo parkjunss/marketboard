@@ -63,6 +63,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/market-indices/**", "/api/market-breadth", "/api/market-sentiment/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/quotes/**", "/api/news/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/execution/demo").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/market-reports", "/api/market-reports/**").permitAll()
                         // /actuator/prometheus is scraped by Prometheus itself (no JWT to send), so it's
                         // permitAll like health/info — order matters here, this must come before the
                         // ADMIN-gated /actuator/** rule below or it'd be shadowed by it.

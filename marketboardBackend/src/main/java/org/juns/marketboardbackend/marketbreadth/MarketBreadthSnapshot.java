@@ -52,6 +52,24 @@ public class MarketBreadthSnapshot {
     @Column(name = "computed_at", nullable = false)
     private Instant computedAt;
 
+    private LocalDate tradingDate;
+    private String source;
+    @Column(name = "calendar_name")
+    private String calendar;
+    private String calendarVersion;
+    private Instant sessionClosedAt;
+    private Integer eligibleCount;
+
+    public void setEvidence(LocalDate tradingDate, String calendar, String calendarVersion,
+            Instant sessionClosedAt, int eligibleCount) {
+        this.tradingDate = tradingDate;
+        this.source = "MarketBoard price_history (provider metadata unavailable)";
+        this.calendar = calendar;
+        this.calendarVersion = calendarVersion;
+        this.sessionClosedAt = sessionClosedAt;
+        this.eligibleCount = eligibleCount;
+    }
+
     @Builder
     public MarketBreadthSnapshot(
             LocalDate snapshotDate,

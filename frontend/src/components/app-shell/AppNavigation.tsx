@@ -19,12 +19,13 @@ const marketNavigation = [
   { label: '스크리너', href: '/screener', icon: BeakerIcon },
   { label: '포트폴리오 설계', href: '/etf', icon: ChartBarIcon },
   { label: '시장 동향', href: '/market', icon: GlobeAltIcon },
+  { label: '시황 보고서', href: '/market-reports', icon: NewspaperIcon },
   { label: '뉴스', href: '/news', icon: NewspaperIcon },
   { label: '재무 비교', href: '/financials', icon: BanknotesIcon },
 ];
 
 const publicNavigation = marketNavigation.filter(({ href }) =>
-  ['/dashboard', '/stock-list', '/market', '/news'].includes(href),
+  ['/dashboard', '/stock-list', '/market', '/market-reports', '/news'].includes(href),
 );
 
 const accountNavigation = [

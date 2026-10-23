@@ -134,6 +134,11 @@ market-index-history:
   # Daily after sector performance.
   cron: ${MARKET_INDEX_HISTORY_CRON:0 30 8 * * *}
 
+market-report:
+  # 08:40 UTC (17:40 KST), after the daily 08:30 UTC index refresh.
+  # DELAYED results alone receive up to two retries, 30 minutes apart.
+  cron: ${MARKET_REPORT_CRON:0 40 8 * * *}
+
 news:
   # General market headlines refresh hourly; per-company news remains lazy on request.
   cron: ${NEWS_CRON:0 0 * * * *}

@@ -5,9 +5,10 @@ daily-only, fetch-on-request path (no WS ticks, no MySQL storage) — each call
 just pulls fresh daily candles from yfinance.
 """
 
-from datetime import timezone
+from datetime import datetime, timezone
 
 import yfinance as yf
+from .market_calendar import completed_sessions, is_us_equity_session
 
 MACRO_INDICES = [
     {"slug": "SPX", "yf_ticker": "^GSPC", "name": "S&P 500"},
@@ -52,16 +53,31 @@ def list_indices() -> list[dict]:
     return [{"slug": i["slug"], "name": i["name"]} for i in MACRO_INDICES]
 
 
-def get_index_history(slug: str, period: str = "6mo") -> list[dict]:
+def get_index_history(slug: str, period: str = "6mo", *, session: dict | None = None) -> list[dict]:
     index = _BY_SLUG[slug]
-    data = yf.Ticker(index["yf_ticker"]).history(period=period, interval="1d")
+    us_equity = slug in {"SPX", "IXIC", "RUT"} or any(s["slug"] == slug for s in SECTOR_INDICES)
+    session = (session or completed_sessions()) if us_equity else None
+    data = yf.Ticker(index["yf_ticker"]).history(period=period, interval="1d", auto_adjust=True)
+    fetched_at = datetime.now(timezone.utc).isoformat()
     rows = []
     for ts, row in data.iterrows():
+        if ts.tzinfo is None:
+            raise ValueError("Provider daily bar label must have a timezone")
+        trading_date = ts.date().isoformat()
+        if session and (trading_date > session["tradingDate"] or not is_us_equity_session(trading_date)):
+            continue
         utc_ts = ts.to_pydatetime().astimezone(timezone.utc)
         volume = row["Volume"]
         rows.append(
             {
                 "ts": utc_ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "tradingDate": trading_date,
+                "fetchedAt": fetched_at,
+                "source": "Yahoo Finance via yfinance",
+                "sourceSymbol": index["yf_ticker"],
+                "calendar": "XNYS" if session else None,
+                "sessionStatus": "COMPLETED" if session else "UNVERIFIED",
+                "adjustment": "YFINANCE_AUTO_ADJUST",
                 "open": float(row["Open"]),
                 "high": float(row["High"]),
                 "low": float(row["Low"]),
@@ -73,12 +89,13 @@ def get_index_history(slug: str, period: str = "6mo") -> list[dict]:
     return rows
 
 
-def _pct_change(closes: list[float], trading_days_back: int) -> float | None:
-    idx = len(closes) - 1 - trading_days_back
+def _pct_change(history: list[dict], sessions: list[str], trading_days_back: int) -> float | None:
+    idx = sessions.index(history[-1]["tradingDate"]) - trading_days_back
     if idx < 0:
         return None
-    base = closes[idx]
-    return ((closes[-1] - base) / base) * 100 if base else None
+    by_date = {row["tradingDate"]: row["close"] for row in history}
+    base = by_date.get(sessions[idx])
+    return ((history[-1]["close"] - base) / base) * 100 if base else None
 
 
 def get_sector_performance() -> list[dict]:
@@ -86,18 +103,25 @@ def get_sector_performance() -> list[dict]:
     sector at the top is the one that's been "hot" over the past month relative to the others,
     the closest proxy for sector rotation retail tools actually use without paid fund-flow data."""
     results = []
+    session = completed_sessions()
     for sector in SECTOR_INDICES:
-        history = get_index_history(sector["slug"], period="2mo")
+        history = get_index_history(sector["slug"], period="2mo", session=session)
         if len(history) < 2:
             continue
-        closes = [h["close"] for h in history]
         results.append(
             {
                 "slug": sector["slug"],
                 "name": sector["name"],
-                "changePct1d": _pct_change(closes, 1),
-                "changePct1w": _pct_change(closes, 5),
-                "changePct1m": _pct_change(closes, 21),
+                "tradingDate": history[-1]["tradingDate"],
+                "expectedTradingDate": session["tradingDate"],
+                "fetchedAt": history[-1]["fetchedAt"],
+                "source": "Yahoo Finance via yfinance",
+                "calendar": "XNYS",
+                "status": "READY" if history[-1]["tradingDate"] == session["tradingDate"] else "STALE",
+                "adjustment": "YFINANCE_AUTO_ADJUST",
+                "changePct1d": _pct_change(history, session["sessionDates"], 1),
+                "changePct1w": _pct_change(history, session["sessionDates"], 5),
+                "changePct1m": _pct_change(history, session["sessionDates"], 21),
             }
         )
     results.sort(key=lambda r: r["changePct1m"] if r["changePct1m"] is not None else float("-inf"), reverse=True)

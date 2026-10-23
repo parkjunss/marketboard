@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    "exchange-calendars>=4.11,<5",
     "beautifulsoup4>=4.15.0",
     "fastapi>=0.139.1",
     "fear-greed>=0.1.2",

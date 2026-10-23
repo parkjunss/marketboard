@@ -13,7 +13,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, isInitializing } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const isPublic = PUBLIC_PATHS.has(pathname);
+  const isPublic = PUBLIC_PATHS.has(pathname) || pathname === '/market-reports' || /^\/market-reports\/\d+$/.test(pathname);
 
   useEffect(() => {
     if (!isInitializing && !user && !isPublic) {

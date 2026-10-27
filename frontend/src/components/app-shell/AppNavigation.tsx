@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/lib/auth-context';
 import { getNotifications } from '@/lib/api';
+import { isPublicPage } from '@/lib/public-routes';
 import styles from './app-shell.module.css';
 
 const marketNavigation = [
@@ -25,7 +26,7 @@ const marketNavigation = [
 ];
 
 const publicNavigation = marketNavigation.filter(({ href }) =>
-  ['/dashboard', '/stock-list', '/market', '/market-reports', '/news'].includes(href),
+  isPublicPage(href),
 );
 
 const accountNavigation = [

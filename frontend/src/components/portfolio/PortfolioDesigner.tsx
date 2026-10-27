@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { portfolioPeriod, portfolioValidationPeriods } from '@/lib/portfolio-period';
 import styles from './portfolio-designer.module.css';
@@ -75,7 +76,7 @@ function Frontier({ result, selected, onSelect }: { result: Result; selected: st
 }
 
 export function PortfolioDesigner() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const [tickers, setTickers] = useState(defaults);
   const [ticker, setTicker] = useState('');
   const [result, setResult] = useState<Result | null>(null);
@@ -129,7 +130,8 @@ export function PortfolioDesigner() {
   const chosen = candidates.find(c=>c.id===selected);
   return <section className={styles.designer} aria-label="포트폴리오 설계">
     <p className={styles.lead}>투자금과 후보 자산을 정하고, 위험 대비 수익과 배분 금액을 비교하세요. USD 표시 주식·ETF 기준이며 환전·공매도·차입은 반영하지 않습니다.</p>
-    <SavedPortfolioDesigns result={result} selected={selected} dirty={dirty} busy={busy} onBusy={setBusy} onRestore={restore}/>
+    {user ? <SavedPortfolioDesigns key={user.id} result={result} selected={selected} dirty={dirty} busy={busy} onBusy={setBusy} onRestore={restore}/>
+      : <p className={styles.notice}>배분안 비교는 로그인 없이 이용할 수 있습니다. <Link href="/login?next=%2Fetf">로그인하고 설계 저장·불러오기</Link></p>}
     {savedSource && <p role="status" className={styles.notice}>저장 기록: {savedSource.name} · {new Date(savedSource.createdAt).toLocaleString('ko-KR')}. 아래 결과와 참고 종가는 저장 당시 기준입니다. 최신 저장 일봉으로 확인하려면 배분안 비교하기를 누르세요. 원본 기록은 유지됩니다.</p>}
     <form onSubmit={submit} onChange={()=>setDirty(true)}><fieldset disabled={busy}>
       <legend>1. 투자 조건</legend>

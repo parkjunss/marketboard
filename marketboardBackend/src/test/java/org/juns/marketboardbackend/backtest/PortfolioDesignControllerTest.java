@@ -34,9 +34,11 @@ class PortfolioDesignControllerTest {
     @MockitoBean CollectorClient collector;
     @MockitoBean JwtTokenProvider jwtTokenProvider;
 
-    @Test void anonymousCannotCalculate() throws Exception {
-        mvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(REQUEST)).andExpect(status().isUnauthorized());
-        verifyNoInteractions(collector);
+    @Test void anonymousCanCalculateWithoutSaving() throws Exception {
+        when(collector.designPortfolio(any())).thenReturn(Optional.of(mapper.readTree("{\"status\":\"READY\"}")));
+        mvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(REQUEST))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("READY"));
+        verify(collector).designPortfolio(any());
     }
     @ParameterizedTest @ValueSource(strings={"10001","-1","null"})
     void invalidCashCannotReachCollector(String cash) throws Exception {

@@ -62,6 +62,10 @@ public class SecurityConfig {
                         // recompute trigger is under /api/admin/**, gated separately below).
                         .requestMatchers("/api/market-indices/**", "/api/market-breadth", "/api/market-sentiment/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/quotes/**", "/api/news/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/symbols/*/profile", "/api/financials/*",
+                                "/api/indicators/*", "/api/analysis/*", "/api/screener/etf-momentum").permitAll()
+                        // Read-only searches/calculations use POST for structured input; saved records stay private.
+                        .requestMatchers(HttpMethod.POST, "/api/screener/search", "/api/portfolio/design").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/execution/demo").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/market-reports", "/api/market-reports/**").permitAll()
                         // /actuator/prometheus is scraped by Prometheus itself (no JWT to send), so it's

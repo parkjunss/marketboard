@@ -54,7 +54,7 @@ function toCompareRow(ticker: string, data: FinancialsResponse): CompareRow {
 }
 
 export default function FinancialsPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   // Tickers explicitly added via the input or a watchlist quick-add chip, kept separate from
   // the watchlist itself so ordering/dedup with auto-added watchlist tickers can be derived below.
   const [manualTickers, setManualTickers] = useState<string[]>([]);
@@ -65,17 +65,20 @@ export default function FinancialsPage() {
   const [removedTickers, setRemovedTickers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    api.getWatchlist(authFetch).then(setWatchlist);
-  }, [authFetch]);
+    if (!user) return;
+    let active = true;
+    api.getWatchlist(authFetch).then(items => { if (active) setWatchlist(items); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [authFetch, user]);
 
   // Watchlist tickers are auto-included in the comparison; manual additions/removals layer on top.
   const tickers = useMemo(() => {
-    const combined = watchlist.map((item) => item.ticker).filter((ticker) => !removedTickers.has(ticker));
+    const combined = (user ? watchlist : []).map((item) => item.ticker).filter((ticker) => !removedTickers.has(ticker));
     manualTickers.forEach((ticker) => {
       if (!combined.includes(ticker)) combined.push(ticker);
     });
     return combined;
-  }, [watchlist, removedTickers, manualTickers]);
+  }, [watchlist, removedTickers, manualTickers, user]);
 
   const requestKey = tickers.join(',');
   const [result, setResult] = useState<{
@@ -134,7 +137,7 @@ export default function FinancialsPage() {
     })
     .filter((row): row is CompareRow => row !== null);
 
-  const quickAddCandidates = watchlist.filter((item) => !tickers.includes(item.ticker));
+  const quickAddCandidates = user ? watchlist.filter((item) => !tickers.includes(item.ticker)) : [];
 
   return (
     <PageLayout title="재무 종목 비교" description="관심 종목의 건전성, 성장성, 수익성과 밸류에이션을 같은 기준으로 비교하세요.">

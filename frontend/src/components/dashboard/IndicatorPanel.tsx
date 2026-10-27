@@ -20,14 +20,14 @@ export function IndicatorPanel({ ticker, indicator }: { ticker: string; indicato
   const { authFetch } = useAuth();
   // Keyed by ticker so isLoading derives from render-time comparison instead of an effect
   // calling setState synchronously (see react-hooks/set-state-in-effect).
-  const [result, setResult] = useState<{ key: string; items: IndicatorResponse[] } | null>(null);
+  const [result, setResult] = useState<{ key: string; items: IndicatorResponse[]; error?: boolean } | null>(null);
 
   useEffect(() => {
     if (!ticker) return undefined;
     let cancelled = false;
     api.getIndicators(authFetch, ticker).then((data) => {
       if (!cancelled) setResult({ key: ticker, items: data });
-    });
+    }).catch(() => { if (!cancelled) setResult({ key: ticker, items: [], error: true }); });
     return () => {
       cancelled = true;
     };
@@ -56,7 +56,7 @@ export function IndicatorPanel({ ticker, indicator }: { ticker: string; indicato
     return (
       <Center height={160}>
         <Text type="body" color="secondary">
-          아직 계산된 지표가 없습니다
+          {result.error ? '기술 지표를 불러오지 못했습니다. 잠시 후 다시 조회해 주세요.' : '아직 계산된 지표가 없습니다'}
         </Text>
       </Center>
     );

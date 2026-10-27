@@ -48,7 +48,6 @@ export function QuoteStreamProvider({ children }: { children: React.ReactNode })
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!accessToken) return undefined;
     let cancelled = false;
     api
       .getQuotes(authFetch)
@@ -61,6 +60,7 @@ export function QuoteStreamProvider({ children }: { children: React.ReactNode })
         setQuotes(map);
         setTickers(initialQuotes.map((quote) => quote.symbol));
       })
+      .catch(() => undefined)
       .finally(() => {
         if (!cancelled) setIsLoading(false);
       });

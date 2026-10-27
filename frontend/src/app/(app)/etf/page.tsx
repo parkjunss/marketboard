@@ -25,7 +25,7 @@ const number = (v: number | null) => v == null ? '—' : v.toLocaleString('ko-KR
 const percent = (v: number) => new Intl.NumberFormat('ko-KR', { style: 'percent', maximumFractionDigits: 2 }).format(v);
 
 export default function EtfWorkflowPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const [reviews, setReviews] = useState<Summary[]>([]);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [decisions, setDecisions] = useState<ReviewDecision[]>([]);
@@ -45,12 +45,13 @@ export default function EtfWorkflowPage() {
     setReviews(saved); setPapers(accounts); setPortfolios(owned);
   }
   useEffect(() => {
+    if (!user) return;
     let active = true;
     load().then(([saved, accounts, owned]) => {
       if (active) { setReviews(saved); setPapers(accounts); setPortfolios(owned); }
     }).catch(e => { if (active) setError(e.message); });
     return () => { active = false; };
-  }, [load]);
+  }, [load, user]);
   async function act(action: () => Promise<void>) {
     setBusy(true); setError(null);
     try { await action(); } catch (e) { setError(e instanceof Error ? e.message : '요청을 완료하지 못했습니다.'); }
@@ -92,7 +93,7 @@ export default function EtfWorkflowPage() {
     <PortfolioDesigner />
     <details><summary>월말 ETF 모멘텀 · 검토 기록 · 모의 운용</summary>
     <EtfMomentumPanel />
-    <section className={styles.panel}>
+    {user ? <section className={styles.panel}>
       <div className={styles.panelHeader}><h2>전략 검토 · 모의 운용</h2><Link href="/backtest#etf-comparison">전략 백테스트 비교</Link></div>
       <div className={styles.etfExplanation}>
         <p>비교 근거를 저장하고 판단을 남긴 뒤 모의 운용을 시작합니다. 실제 주문과 보유 수량은 변경하지 않습니다.</p>
@@ -157,7 +158,7 @@ export default function EtfWorkflowPage() {
         <button disabled={busy} onClick={() => void act(async () => setSnapshots({ accountId: p.id, rows: await authFetch<Snapshot[]>(`/api/etf/paper/${p.id}/snapshots`) }))}>신호·체결·평가 기록</button>
       </article>)}
       {snapshots && <section><h3>계좌 #{snapshots.accountId}의 변경 불가 기록</h3>{snapshots.rows.length === 0 && <p>아직 기록이 없습니다.</p>}{snapshots.rows.map(s => <details key={s.id}><summary>{s.date} · {s.kind} · 저장 {s.capturedAt}</summary><pre style={{ overflow: 'auto', maxHeight: 300 }}>{JSON.stringify(s.payload, null, 2)}</pre></details>)}</section>}
-    </section>
+    </section> : <p><Link href="/login?next=%2Fetf">로그인하고 검토 기록 저장·모의 운용 시작</Link></p>}
     </details>
   </main>;
 }

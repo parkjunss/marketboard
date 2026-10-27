@@ -1,6 +1,6 @@
 package org.juns.marketboardbackend.screener;
 
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -31,9 +31,12 @@ class EtfMomentumControllerTest {
     @MockitoBean JwtTokenProvider jwtTokenProvider;
 
     @Test
-    void anonymousRequestDoesNotRunCalculation() throws Exception {
-        mvc.perform(get("/api/screener/etf-momentum")).andExpect(status().isUnauthorized());
-        verifyNoInteractions(collector);
+    void anonymousRequestCanReadCalculation() throws Exception {
+        when(collector.getEtfMomentum()).thenReturn(Optional.of(new EtfMomentumResult(
+                LocalDate.parse("2025-09-30"), LocalDate.parse("2024-09-30"),
+                LocalDate.parse("2025-08-31"), false, List.of(), null)));
+        mvc.perform(get("/api/screener/etf-momentum")).andExpect(status().isOk());
+        verify(collector).getEtfMomentum();
     }
 
     @Test

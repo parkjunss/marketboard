@@ -4,6 +4,8 @@ import { DataStamp } from '@/components/DataStamp';
 
 
 import { use, useEffect, useMemo, useState } from 'react';
+import NextLink from 'next/link';
+import { useRouter } from 'next/navigation';
 import { VStack, HStack } from '@astryxdesign/core/Stack';
 import { Section } from '@astryxdesign/core/Section';
 import { Grid } from '@astryxdesign/core/Grid';
@@ -109,7 +111,9 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
   const { ticker: rawTicker } = use(params);
   const ticker = rawTicker.toUpperCase();
 
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const router = useRouter();
+  const loginHref = `/login?next=${encodeURIComponent(`/symbols/${ticker}`)}`;
   const { quotes } = useQuoteStream();
   const liveQuote = quotes[ticker];
 
@@ -130,14 +134,15 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
   const [relativeVolumePeriod, setRelativeVolumePeriod] = useState<number | null>(null);
 
   useEffect(() => {
+    if (!user) return;
     let cancelled = false;
     api.getChartIndicatorSettings(authFetch).then((settings) => {
       if (!cancelled) setSmaPeriods(settings.smaOverlays.map((overlay) => overlay.period));
-    });
+    }).catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [authFetch]);
+  }, [authFetch, user]);
 
   function removeSmaPeriod(periodToRemove: number) {
     setSmaPeriods((prev) => prev.filter((p) => p !== periodToRemove));
@@ -152,6 +157,7 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
   }
 
   async function saveSmaSettings() {
+    if (!user) { router.push(loginHref); return; }
     setIsSavingSmaSettings(true);
     try {
       const saved = await api.saveChartIndicatorSettings(authFetch, { smaOverlays: smaPeriods.map((p) => ({ period: p })) });
@@ -244,17 +250,19 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
   const [isTogglingWatchlist, setIsTogglingWatchlist] = useState(false);
 
   useEffect(() => {
+    if (!user) return;
     let cancelled = false;
     api.getWatchlist(authFetch).then((items) => {
       if (cancelled) return;
       setWatchlistItem(items.find((item) => item.ticker === ticker) ?? null);
-    });
+    }).catch(() => { if (!cancelled) setWatchlistItem(null); });
     return () => {
       cancelled = true;
     };
-  }, [authFetch, ticker]);
+  }, [authFetch, ticker, user]);
 
   async function toggleWatchlist() {
+    if (!user) { router.push(loginHref); return; }
     setIsTogglingWatchlist(true);
     try {
       if (watchlistItem) {
@@ -291,7 +299,7 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
               variant={isWatched ? 'secondary' : 'primary'}
               icon={<Icon icon={isWatched ? StarSolidIcon : StarOutlineIcon} />}
               label={isWatched ? '관심종목에서 제거' : '관심종목에 추가'}
-              isLoading={isTogglingWatchlist || watchlistItem === undefined}
+              isLoading={isTogglingWatchlist || (!!user && watchlistItem === undefined)}
               clickAction={toggleWatchlist}
             />
           </HStack>
@@ -425,7 +433,7 @@ export default function SymbolDetailPage({ params }: { params: Promise<{ ticker:
             </VStack>
           </PanelCard>
 
-          <AlertsPanel ticker={ticker} />
+          {user ? <AlertsPanel key={user.id} ticker={ticker} /> : <p><NextLink href={loginHref}>로그인하고 가격 알림 설정</NextLink></p>}
 
           <VStack gap={2}>
             <Heading level={4}>시장 분석</Heading>

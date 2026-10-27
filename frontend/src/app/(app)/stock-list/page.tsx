@@ -362,7 +362,7 @@ export function StockListContent({ initialFilter = 'all' }: { initialFilter?: 'a
       }
     >
       <p className={styles.disclosure}>출처: 시세 API (제공자 미제공) · 가격 기준 시각은 종목별 표시 · 연결 상태와 데이터 최신성은 별개입니다. 표는 좌우로 스크롤할 수 있습니다.</p>
-      {!user && <p className={styles.disclosure}>종목 상세와 관심종목 관리는 로그인이 필요합니다. 선택한 종목은 로그인 후 이어서 확인할 수 있습니다.</p>}
+      {!user && <p className={styles.disclosure}>종목 상세와 분석은 로그인 없이 볼 수 있습니다. 관심종목을 저장하려면 로그인해 주세요.</p>}
       <PageSurface>
       {catalogResource.status === 'error' ? <ResourceState status="error" label="종목 목록" onRetry={catalogResource.retry} /> : isLoading ? (
         <Center height={320}>

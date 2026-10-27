@@ -66,14 +66,14 @@ export default function FinancialsDetailPage({ params }: { params: Promise<{ tic
   const router = useRouter();
   const { authFetch } = useAuth();
   const [tickerInput, setTickerInput] = useState(ticker);
-  const [result, setResult] = useState<{ key: string; data: FinancialsResponse } | null>(null);
+  const [result, setResult] = useState<{ key: string; data: FinancialsResponse | null; error?: boolean } | null>(null);
   const isLoading = result?.key !== ticker;
 
   useEffect(() => {
     let cancelled = false;
     api.getFinancials(authFetch, ticker).then((data) => {
       if (!cancelled) setResult({ key: ticker, data });
-    });
+    }).catch(() => { if (!cancelled) setResult({ key: ticker, data: null, error: true }); });
     return () => {
       cancelled = true;
     };
@@ -120,7 +120,7 @@ export default function FinancialsDetailPage({ params }: { params: Promise<{ tic
           </Center>
         ) : !data || !hasYears ? (
           <Center height={400}>
-            <EmptyState title="재무 데이터가 없습니다" description="종목 코드를 확인하고 다시 조회해보세요" />
+            <EmptyState title={result?.error ? '재무 데이터를 불러오지 못했습니다' : '재무 데이터가 없습니다'} description="종목 코드를 확인하고 잠시 후 다시 조회해 주세요" />
           </Center>
         ) : (
           <VStack gap={4}>

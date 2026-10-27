@@ -6,14 +6,14 @@ import { Center } from '@astryxdesign/core/Center';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { useAuth } from '@/lib/auth-context';
 import { rememberLoginReturn } from '@/lib/login-return';
+import { isPublicPage } from '@/lib/public-routes';
 
-const PUBLIC_PATHS = new Set(['/', '/dashboard', '/stock-list', '/market', '/news', '/execution-demo']);
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, isInitializing } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const isPublic = PUBLIC_PATHS.has(pathname) || pathname === '/market-reports' || /^\/market-reports\/\d+$/.test(pathname);
+  const isPublic = isPublicPage(pathname);
 
   useEffect(() => {
     if (!isInitializing && !user && !isPublic) {

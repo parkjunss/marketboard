@@ -131,6 +131,8 @@ market-risk:
   cron: ${MARKET_RISK_CRON:0 25 8 * * *}
   # Retry interval while no snapshot exists yet (e.g. collector still starting).
   retry-delay-ms: ${MARKET_RISK_RETRY_DELAY_MS:300000}
+  # Weekly inbox check-in (KST, Monday morning) for users with "important info" enabled.
+  weekly-cron: ${MARKET_RISK_WEEKLY_CRON:0 30 8 * * MON}
 
 put-call-ratio:
   # Daily after the other market snapshots.

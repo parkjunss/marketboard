@@ -16,3 +16,4 @@ artifacts/rl-trading/
 
 # Factor research datasets and results (code lives in scripts/factor_research/)
 artifacts/factor-research/
+__pycache__/

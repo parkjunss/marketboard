@@ -13,3 +13,6 @@ artifacts/rl-trading/
 /scripts/rl_trading/
 /docs/RL_Trading_*
 /docs/rl-*
+
+# Factor research datasets and results (code lives in scripts/factor_research/)
+artifacts/factor-research/

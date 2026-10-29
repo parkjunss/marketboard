@@ -32,12 +32,20 @@ function pct(value: number | null, digits = 1, suffix = '%') {
   return <Text type="body" hasTabularNumbers>{value == null || !Number.isFinite(value) ? '—' : `${value.toFixed(digits)}${suffix}`}</Text>;
 }
 
+// Floor, not round: 69.6 must not read as "70" while the state (cut-off 70) is still NORMAL.
+function rank(percentile: number | null) {
+  return percentile == null || !Number.isFinite(percentile) ? '—' : `${Math.floor(percentile)}번째 백분위`;
+}
+
+function pair(main: React.ReactNode, sub: string) {
+  return <VStack gap={0}>{main}<Text type="supporting" size="sm" hasTabularNumbers>{sub}</Text></VStack>;
+}
+
+// Four columns so the state and its percentile stay in the first mobile viewport of the table.
 const columns: TableColumn<RiskRow>[] = [
-  { key: 'name', header: '자산', width: proportional(1.6), renderCell: (row) => <VStack gap={0}><Text type="body">{row.name}</Text><Text type="supporting" size="sm">{row.ticker}{row.status === 'STALE' ? ' · 최신 거래일 아님' : ''}</Text></VStack> },
-  { key: 'state', header: '상태', width: proportional(1), renderCell: (row) => level(row.state) },
-  { key: 'volatility20Pct', header: '20일 변동성', width: proportional(1), renderCell: (row) => pct(row.volatility20Pct) },
-  { key: 'percentile', header: '과거 대비 위치', width: proportional(1), renderCell: (row) => pct(row.percentile, 0, '번째 백분위') },
-  { key: 'medianVolatilityPct', header: '장기 중앙값', width: proportional(1), renderCell: (row) => pct(row.medianVolatilityPct) },
+  { key: 'name', header: '자산', width: proportional(1.4), renderCell: (row) => pair(<Text type="body">{row.name}</Text>, `${row.ticker}${row.status === 'STALE' ? ' · 최신 거래일 아님' : ''}`) },
+  { key: 'state', header: '상태 · 과거 대비', width: proportional(1.2), renderCell: (row) => pair(level(row.state), rank(row.percentile)) },
+  { key: 'volatility20Pct', header: '20일 변동성', width: proportional(1), renderCell: (row) => pair(pct(row.volatility20Pct), `장기 중앙값 ${row.medianVolatilityPct?.toFixed(1) ?? '—'}%`) },
   { key: 'drawdown252Pct', header: '1년 고점 대비', width: proportional(1), renderCell: (row) => pct(row.drawdown252Pct == null ? null : -row.drawdown252Pct) },
 ];
 
@@ -55,10 +63,10 @@ export function MarketRiskPanel() {
       <VStack gap={0}>
         <Section padding={3} dividers={['bottom']}>
           <VStack gap={2}>
-            {spy && <HStack gap={2} align="center">
-              <Text type="body">S&P 500(SPY)</Text>{level(spy.state)}
-              <Text type="supporting" size="sm">20일 변동성 {spy.volatility20Pct?.toFixed(1) ?? '—'}% · 과거 {spy.percentile?.toFixed(0) ?? '—'}번째 백분위</Text>
-            </HStack>}
+            {spy && <VStack gap={0.5}>
+              <HStack gap={2} align="center"><Text type="body">S&P 500(SPY)</Text>{level(spy.state)}</HStack>
+              <Text type="supporting" size="sm">20일 변동성 {spy.volatility20Pct?.toFixed(1) ?? '—'}% · 과거 {rank(spy.percentile)}</Text>
+            </VStack>}
             <Text type="supporting" size="sm" aria-live="polite">
               15개 ETF 중 정상 {counts.NORMAL} · 주의 {counts.CAUTION} · 위험 {counts.RISK}{counts.UNAVAILABLE ? ` · 미제공 ${counts.UNAVAILABLE}` : ''}
             </Text>

@@ -297,6 +297,38 @@ export interface SectorPerformance {
   changePct1m: number | null;
 }
 
+export type MarketRiskLevel = 'NORMAL' | 'CAUTION' | 'RISK' | 'UNAVAILABLE';
+
+export interface MarketRiskAsset {
+  ticker: string;
+  name: string;
+  group: 'MULTI_ASSET' | 'SECTOR';
+  status: 'READY' | 'STALE' | null;
+  state: MarketRiskLevel;
+  volatility20Pct: number | null;
+  percentile: number | null;
+  medianVolatilityPct: number | null;
+  drawdown252Pct: number | null;
+  trend200Pct: number | null;
+  historyStart: string | null;
+  tradingDate: string | null;
+}
+
+export interface MarketRiskState {
+  expectedTradingDate: string;
+  fetchedAt: string;
+  source: string;
+  thresholds: { caution: number; risk: number; validated: boolean };
+  evidence: {
+    medianSpearman: { development: number; validation: number; holdout: number };
+    positiveAssets: { development: number; validation: number; holdout: number };
+    assets: number;
+    period: string;
+  };
+  counts: Record<MarketRiskLevel, number>;
+  assets: MarketRiskAsset[];
+}
+
 export interface MarketBreadthResponse {
   snapshotDate: string;
   advancingCount: number;

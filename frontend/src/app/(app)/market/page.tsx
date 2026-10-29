@@ -7,6 +7,7 @@ import { Grid } from '@astryxdesign/core/Grid';
 import { PageLayout, PageSurface } from '@/components/layout/PageLayout';
 import { MarketIndexCard } from '@/components/market/MarketIndexCard';
 import { MarketBreadthPanel } from '@/components/market/MarketBreadthPanel';
+import { MarketRiskPanel } from '@/components/market/MarketRiskPanel';
 import { MarketSentimentPanel } from '@/components/market/MarketSentimentPanel';
 import { SectorRotationTable } from '@/components/market/SectorRotationTable';
 import { MacroMarketGrid, MACRO_SLUGS } from '@/components/dashboard/MacroMarketGrid';
@@ -17,6 +18,7 @@ export default function MarketPage() {
   const indices = resource.data?.filter(index => !MACRO_SLUGS.has(index.slug)) ?? [];
 
   return <PageLayout title="시장 동향" description="시장 폭과 투자 심리의 세부 수치, 섹터별 기간 수익률과 거시 지표를 비교하세요. 각 자료의 기준 시각은 다를 수 있습니다.">
+    <section id="risk" style={{ scrollMarginTop: 80 }}><PageSurface title="시장 위험 상태"><MarketRiskPanel /></PageSurface></section>
     <section id="sentiment" style={{ scrollMarginTop: 80 }}><PageSurface title="시장 심리 상세"><MarketSentimentPanel /></PageSurface></section>
     <section id="breadth" style={{ scrollMarginTop: 80 }}><PageSurface title="시장 폭 상세"><MarketBreadthPanel /></PageSurface></section>
     <PageSurface title="거시 지표"><MacroMarketGrid /></PageSurface>

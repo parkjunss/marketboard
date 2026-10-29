@@ -12,6 +12,7 @@ import type {
   IndicatorResponse,
   MarketBreadthResponse,
   MarketIndexInfo,
+  MarketRiskState,
   NewsItem,
   NotificationListResponse,
   OptionsLevelsResponse,
@@ -402,6 +403,10 @@ export function searchScreener(fetcher: Fetcher, request: import('./screener-typ
 
 export function getSectorPerformance(fetcher: Fetcher): Promise<SectorPerformance[]> {
   return fetcher<SectorPerformance[]>('/api/market-indices/sectors/performance');
+}
+
+export function getMarketRiskState(fetcher: Fetcher): Promise<MarketRiskState> {
+  return fetcher<MarketRiskState>('/api/market-indices/risk-state');
 }
 
 export function getMarketBreadth(fetcher: Fetcher): Promise<MarketBreadthResponse> {

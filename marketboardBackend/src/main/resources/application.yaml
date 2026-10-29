@@ -126,6 +126,10 @@ sector-performance:
   # Daily, staggered after market breadth to avoid competing for the scheduler pool.
   cron: ${SECTOR_PERFORMANCE_CRON:0 20 8 * * *}
 
+market-risk:
+  # Daily after sector performance; recomputes 15 ETF volatility states from yfinance history.
+  cron: ${MARKET_RISK_CRON:0 25 8 * * *}
+
 put-call-ratio:
   # Daily after the other market snapshots.
   cron: ${PUT_CALL_RATIO_CRON:0 40 8 * * *}

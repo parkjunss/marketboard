@@ -4,6 +4,7 @@ import java.util.List;
 import org.juns.marketboardbackend.collector.CollectorClient;
 import org.juns.marketboardbackend.collector.MarketIndexCandle;
 import org.juns.marketboardbackend.collector.MarketIndexInfo;
+import org.juns.marketboardbackend.collector.MarketRiskState;
 import org.juns.marketboardbackend.collector.SectorPerformance;
 import org.juns.marketboardbackend.sectorperformance.SectorPerformanceService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,14 +25,17 @@ public class MarketIndexController {
     private final CollectorClient collectorClient;
     private final MarketIndexHistoryService marketIndexHistoryService;
     private final SectorPerformanceService sectorPerformanceService;
+    private final MarketRiskStateService marketRiskStateService;
 
     public MarketIndexController(
             CollectorClient collectorClient,
             MarketIndexHistoryService marketIndexHistoryService,
-            SectorPerformanceService sectorPerformanceService) {
+            SectorPerformanceService sectorPerformanceService,
+            MarketRiskStateService marketRiskStateService) {
         this.collectorClient = collectorClient;
         this.marketIndexHistoryService = marketIndexHistoryService;
         this.sectorPerformanceService = sectorPerformanceService;
+        this.marketRiskStateService = marketRiskStateService;
     }
 
     @GetMapping
@@ -47,5 +51,10 @@ public class MarketIndexController {
     @GetMapping("/sectors/performance")
     public List<SectorPerformance> getSectorPerformance() {
         return sectorPerformanceService.getLatest();
+    }
+
+    @GetMapping("/risk-state")
+    public MarketRiskState getRiskState() {
+        return marketRiskStateService.getLatest();
     }
 }

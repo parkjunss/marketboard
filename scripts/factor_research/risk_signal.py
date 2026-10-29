@@ -98,12 +98,33 @@ def evaluate_asset(ticker, series):
         for rule in ("buy_hold",) + RULES:
             weights = pd.Series(1.0, index=index) if rule == "buy_hold" else part[rule]
             performance_rows.append(dict(ticker=ticker, split=split, rule=rule, **performance(weights, forward)))
-        sample = part.iloc[::HORIZON].dropna(subset=["future_vol", "future_drawdown"])
-        for score in SCORES:
-            for target in ("future_vol", "future_drawdown"):
-                predictive_rows.append(dict(ticker=ticker, split=split, score=score, target=target, samples=len(sample),
-                                            spearman=float(sample[score].rank().corr(sample[target].rank()))))
+        predictive_rows += predictive(ticker, split, part)
     return performance_rows, predictive_rows
+
+
+def predictive(ticker, split, part):
+    """Spearman of each score against next-21-day risk on non-overlapping 21-day samples."""
+    sample = part.iloc[::HORIZON].dropna(subset=["future_vol", "future_drawdown"])
+    return [dict(ticker=ticker, split=split, score=score, target=target, samples=len(sample),
+                 spearman=float(sample[score].rank().corr(sample[target].rank())))
+            for score in SCORES for target in ("future_vol", "future_drawdown")]
+
+
+def holdout_predictive(prices):
+    """Pre-registered holdout check: predictiveness only, no exposure rule is ever scored on these dates."""
+    rows = []
+    for ticker, series in prices.groupby("ticker"):
+        close = series.sort_values("date").set_index("date").adj_close
+        frame = signals(close).join(future_risk(close)).iloc[HISTORY_DAYS:]
+        rows += predictive(ticker, "holdout", frame[frame.index >= HOLDOUT_START])
+    table = pd.DataFrame(rows)
+    gates = []
+    for target in ("future_vol", "future_drawdown"):
+        part = table[(table.score == "vol_20") & (table.target == target)]
+        median, positive = float(part.spearman.median()), int((part.spearman > 0).sum())
+        gates.append(dict(score="vol_20", target=target, assets=len(part), medianSpearman=median,
+                          positiveAssets=positive, passed=bool(median > 0 and positive >= 12)))
+    return table, pd.DataFrame(gates)
 
 
 def judge(performance_frame):
@@ -129,6 +150,28 @@ def judge(performance_frame):
     selected = (candidates.sort_values(["medianSharpeDelta", "medianTurnover"], ascending=[False, True]).rule.iloc[0]
                 if len(candidates) else None)
     return table, selected
+
+
+def run_holdout(snapshot, output):
+    snapshot, output = Path(snapshot), Path(output)
+    if output.exists():
+        raise ValueError("Choose a fresh holdout output directory")
+    prices = pd.read_csv(snapshot / "prices.csv")
+    table, gates = holdout_predictive(prices)
+    summary = table.groupby(["score", "target"]).agg(
+        assets=("spearman", "size"), medianSpearman=("spearman", "median"), medianSamples=("samples", "median"),
+        positiveAssets=("spearman", lambda x: int((x > 0).sum()))).reset_index()
+    output.mkdir(parents=True)
+    table.to_csv(output / "predictive.csv", index=False)
+    summary.to_csv(output / "predictive-summary.csv", index=False)
+    gates.to_csv(output / "gates.csv", index=False)
+    (output / "protocol.json").write_text(json.dumps(dict(
+        createdAt=datetime.now(timezone.utc).isoformat(), snapshotSha256=sha256(snapshot / "prices.csv"),
+        holdoutStart=HOLDOUT_START, lastPriceDate=prices.date.max(), horizon=HORIZON, scope="predictiveness only",
+        exposureRulesEvaluated=False, gates="vol_20 median Spearman > 0 and >= 12/15 positive, per target",
+        sourceSha256=sha256(Path(__file__))), indent=2), encoding="utf-8")
+    print(summary.round(3).to_string(index=False))
+    print(gates.round(3).to_string(index=False))
 
 
 def run(snapshot, output):
@@ -165,5 +208,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--snapshot", default="artifacts/factor-research/etf-snapshot-2026-10-29")
     parser.add_argument("--output", required=True)
+    parser.add_argument("--holdout-predictive", action="store_true", help="pre-registered 2020+ predictiveness check")
     args = parser.parse_args()
-    run(args.snapshot, args.output)
+    (run_holdout if args.holdout_predictive else run)(args.snapshot, args.output)

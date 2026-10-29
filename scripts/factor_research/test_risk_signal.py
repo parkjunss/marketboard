@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from .risk_signal import future_risk, next_open_returns, performance, signals
+from .risk_signal import future_risk, holdout_predictive, next_open_returns, performance, signals
 
 
 def series(days=400, seed=0):
@@ -33,6 +33,18 @@ class RiskSignalTest(unittest.TestCase):
         close = pd.Series([100.0] + [100.0, 90.0] + [95.0] * 19 + [50.0])
         risk = future_risk(close)
         self.assertAlmostEqual(risk.future_drawdown.iloc[0], 0.10)  # the day-22 crash is outside t+1..t+21
+
+
+    def test_holdout_check_scores_only_holdout_dates(self):
+        days = pd.bdate_range("2018-01-01", "2021-12-31")
+        generator = np.random.default_rng(3)
+        prices = pd.concat([pd.DataFrame(dict(ticker=t, date=[d.date().isoformat() for d in days],
+                                              adj_close=100 * np.cumprod(1 + generator.normal(0, .01, len(days)))))
+                            for t in ("A", "B")])
+        table, gates = holdout_predictive(prices)
+        self.assertEqual(set(table.split), {"holdout"})
+        self.assertTrue((table.samples <= len(days[days >= "2020-01-01"]) // 21 + 1).all())
+        self.assertEqual(set(gates.target), {"future_vol", "future_drawdown"})
 
 
 if __name__ == "__main__":

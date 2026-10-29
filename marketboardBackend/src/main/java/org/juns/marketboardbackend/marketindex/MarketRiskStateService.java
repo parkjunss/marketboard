@@ -13,7 +13,9 @@ import org.springframework.stereotype.Service;
  * Scheduled snapshot of the collector's volatility risk state, same "requests never wait on a live
  * yfinance round trip" reasoning as SectorPerformanceService. Held in memory rather than MySQL: the
  * state is fully recomputed from public prices each run, so a restart only needs one refresh
- * (MarketRiskStateInitializer) instead of a migration-backed table.
+ * (MarketRiskStateInitializer) instead of a migration-backed table. Because nothing survives a
+ * restart, an empty snapshot is retried every few minutes: at startup the backend is up before the
+ * collector (compose order), so the initializer's first refresh routinely fails.
  */
 @Service
 public class MarketRiskStateService {
@@ -35,6 +37,13 @@ public class MarketRiskStateService {
                     latest.set(state);
                     log.info("Market risk state refreshed ({} assets, {})", state.assets().size(), state.expectedTradingDate());
                 }, () -> log.warn("Market risk state refresh returned no data -- keeping previous snapshot"));
+    }
+
+    @Scheduled(initialDelayString = "${market-risk.retry-delay-ms}", fixedDelayString = "${market-risk.retry-delay-ms}")
+    public void refreshIfMissing() {
+        if (latest.get() == null) {
+            refresh();
+        }
     }
 
     public MarketRiskState getLatest() {

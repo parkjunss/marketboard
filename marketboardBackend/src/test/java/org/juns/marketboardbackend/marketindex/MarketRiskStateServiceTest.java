@@ -3,6 +3,8 @@ package org.juns.marketboardbackend.marketindex;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -46,5 +48,18 @@ class MarketRiskStateServiceTest {
         service.refresh();
 
         assertThat(service.getLatest()).isEqualTo(good);
+    }
+
+    @Test
+    void retryRefreshesOnlyWhileNoSnapshotExists() {
+        when(collectorClient.getMarketRiskState()).thenReturn(Optional.empty());
+        service.refreshIfMissing();
+        MarketRiskState good = state("2026-10-28", List.of(spy()));
+        when(collectorClient.getMarketRiskState()).thenReturn(Optional.of(good));
+        service.refreshIfMissing();
+        assertThat(service.getLatest()).isEqualTo(good);
+
+        service.refreshIfMissing();
+        verify(collectorClient, times(2)).getMarketRiskState();  // no third call once a snapshot exists
     }
 }

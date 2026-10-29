@@ -71,6 +71,7 @@ sector-performance:
 
 market-risk:
   cron: 0 25 7 * * *
+  retry-delay-ms: 3600000
 
 put-call-ratio:
   cron: 0 */10 * * * *

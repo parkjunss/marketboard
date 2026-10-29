@@ -208,6 +208,32 @@ public class CollectorClient {
         }
     }
 
+    // Raw HttpClient with a 60s timeout, not RestClient's shared 10s: the collector downloads full
+    // daily history for 15 ETFs from yfinance (~4s on the dev PC, slower on the Raspberry Pi).
+    // Only MarketRiskStateService.refresh() calls this, on a schedule.
+    public Optional<MarketRiskState> getMarketRiskState() {
+        try {
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/market-indices/risk-state"))
+                    .timeout(Duration.ofSeconds(60))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                log.warn("Market risk state failed via collector: HTTP {} {}", response.statusCode(), response.body());
+                return Optional.empty();
+            }
+            return Optional.ofNullable(objectMapper.readValue(response.body(), MarketRiskState.class));
+        } catch (IOException ex) {
+            log.warn("Market risk state failed via collector (collector may be offline): {}", ex.getMessage());
+            return Optional.empty();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while fetching market risk state via collector: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
     // Not @Cacheable here -- only MarketIndexHistoryService.refresh() calls this now (on a
     // schedule, writing the result to MySQL), and CacheConfig.MARKET_INDEX_HISTORY caches its
     // getHistory() DB read instead. See MarketIndexHistoryService for why.

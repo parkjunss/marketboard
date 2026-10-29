@@ -69,6 +69,11 @@ market-breadth:
 sector-performance:
   cron: 0 10 7 * * *
 
+market-risk:
+  cron: 0 25 7 * * *
+  retry-delay-ms: 3600000
+  weekly-cron: 0 30 8 * * MON
+
 put-call-ratio:
   cron: 0 */10 * * * *
 

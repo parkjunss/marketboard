@@ -23,6 +23,7 @@ from app.options_levels import OptionsLevelsUnavailableError, get_options_levels
 from app.quant_analysis import InvalidAnalysisParamsError, analyze_stock
 from app.redis_publisher import publish_quote
 from app.rest_fallback import rest_fallback_loop
+from app.risk_state import get_risk_state
 from app.screener import InsufficientScreenerDataError, InvalidScreenerParamsError, run_screener
 from app.screening_snapshot import SnapshotAlreadyRunningError, run_snapshot_batch
 from app.sentiment import FearGreedUnavailableError, PutCallDataUnavailableError, get_fear_greed, get_put_call_ratio
@@ -221,6 +222,15 @@ async def market_indices_history(slug: str, period: str = "6mo"):
 @app.get("/market-indices/sectors/performance")
 async def market_sector_performance():
     return await asyncio.to_thread(get_sector_performance)
+
+
+@app.get("/market-indices/risk-state")
+async def market_risk_state():
+    try:
+        return await asyncio.to_thread(get_risk_state)
+    except Exception as exc:
+        logger.exception("Market risk state calculation failed")
+        raise HTTPException(status_code=502, detail="시장 위험 상태 계산에 실패했습니다.") from exc
 
 
 @app.get("/financials/{symbol}")

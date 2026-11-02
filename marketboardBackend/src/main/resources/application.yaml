@@ -116,19 +116,19 @@ marketboard:
     opening-backfill-enabled: ${PORTFOLIO_LEDGER_OPENING_BACKFILL_ENABLED:false}
 
 indicators:
-  cron: ${INDICATORS_CRON:0 0 8 * * *}
+  cron: ${INDICATORS_CRON:0 30 22 * * *}
 
 market-breadth:
-  # Daily after the Collector's 06:00 UTC price/snapshot pipeline and indicator calculation.
-  cron: ${MARKET_BREADTH_CRON:0 10 8 * * *}
+  # Daily after the Collector's 22:00 UTC price/snapshot pipeline and indicator calculation.
+  cron: ${MARKET_BREADTH_CRON:0 40 22 * * *}
 
 sector-performance:
   # Daily, staggered after market breadth to avoid competing for the scheduler pool.
-  cron: ${SECTOR_PERFORMANCE_CRON:0 20 8 * * *}
+  cron: ${SECTOR_PERFORMANCE_CRON:0 50 22 * * *}
 
 market-risk:
   # Daily after sector performance; recomputes 15 ETF volatility states from yfinance history.
-  cron: ${MARKET_RISK_CRON:0 25 8 * * *}
+  cron: ${MARKET_RISK_CRON:0 55 22 * * *}
   # Retry interval while no snapshot exists yet (e.g. collector still starting).
   retry-delay-ms: ${MARKET_RISK_RETRY_DELAY_MS:300000}
   # Weekly inbox check-in (KST, Monday morning) for users with "important info" enabled.
@@ -136,16 +136,16 @@ market-risk:
 
 put-call-ratio:
   # Daily after the other market snapshots.
-  cron: ${PUT_CALL_RATIO_CRON:0 40 8 * * *}
+  cron: ${PUT_CALL_RATIO_CRON:0 10 23 * * *}
 
 market-index-history:
   # Daily after sector performance.
-  cron: ${MARKET_INDEX_HISTORY_CRON:0 30 8 * * *}
+  cron: ${MARKET_INDEX_HISTORY_CRON:0 0 23 * * *}
 
 market-report:
-  # 08:40 UTC (17:40 KST), after the daily 08:30 UTC index refresh.
+  # 23:10 UTC (08:10 KST next day), after the daily 23:00 UTC index refresh.
   # DELAYED results alone receive up to two retries, 30 minutes apart.
-  cron: ${MARKET_REPORT_CRON:0 40 8 * * *}
+  cron: ${MARKET_REPORT_CRON:0 10 23 * * *}
 
 news:
   # General market headlines refresh hourly; per-company news remains lazy on request.

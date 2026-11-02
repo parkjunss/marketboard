@@ -17,7 +17,7 @@ public class MarketReportScheduler {
     public MarketReportScheduler(MarketReportService service, @Qualifier("taskScheduler") TaskScheduler scheduler) {
         this.service = service; this.scheduler = scheduler;
     }
-    @Scheduled(cron = "${market-report.cron:0 40 8 * * *}", zone = "UTC")
+    @Scheduled(cron = "${market-report.cron:0 10 23 * * *}", zone = "UTC")
     public void publish() {
         attempt(0);
     }

@@ -135,7 +135,7 @@ services:
       MYSQL_USER: stockmonitor
       MYSQL_PASSWORD: ${DB_PASSWORD}
       SP500_BATCH_PERIOD: ${SP500_BATCH_PERIOD:-2y}
-      DAILY_BATCH_HOUR_UTC: ${DAILY_BATCH_HOUR_UTC:-6}
+      DAILY_BATCH_HOUR_UTC: ${DAILY_BATCH_HOUR_UTC:-22}
     ports:
       - "8001:8000"
     networks: [marketboard]

@@ -66,7 +66,7 @@ services:
       MYSQL_USER: stockmonitor
       MYSQL_PASSWORD: ${LOCAL_DB_PASSWORD:-marketboard-local}
       SP500_BATCH_PERIOD: ${SP500_BATCH_PERIOD:-2y}
-      DAILY_BATCH_HOUR_UTC: ${DAILY_BATCH_HOUR_UTC:-6}
+      DAILY_BATCH_HOUR_UTC: ${DAILY_BATCH_HOUR_UTC:-22}
     ports:
       - "${LOCAL_COLLECTOR_PORT:-18001}:8000"
     networks: [marketboard-local]

@@ -60,7 +60,7 @@ class MarketReportSchedulerTest {
 
     @Test void dailyUtcScheduleHasNoStartupListener() throws Exception {
         var method = MarketReportScheduler.class.getMethod("publish");
-        assertThat(method.getAnnotation(Scheduled.class).cron()).isEqualTo("${market-report.cron:0 40 8 * * *}");
+        assertThat(method.getAnnotation(Scheduled.class).cron()).isEqualTo("${market-report.cron:0 10 23 * * *}");
         assertThat(method.getAnnotation(Scheduled.class).zone()).isEqualTo("UTC");
         assertThat(method.getAnnotation(EventListener.class)).isNull();
     }

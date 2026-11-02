@@ -33,7 +33,7 @@ REST_FALLBACK_POLL_SECONDS = float(os.getenv("REST_FALLBACK_POLL_SECONDS", "60")
 REST_FALLBACK_STALE_AFTER_SECONDS = float(os.getenv("REST_FALLBACK_STALE_AFTER_SECONDS", "90"))
 
 SP500_BATCH_PERIOD = os.getenv("SP500_BATCH_PERIOD", "2y")
-DAILY_BATCH_HOUR_UTC = int(os.getenv("DAILY_BATCH_HOUR_UTC", "6"))
+DAILY_BATCH_HOUR_UTC = int(os.getenv("DAILY_BATCH_HOUR_UTC", "22"))
 if not 0 <= DAILY_BATCH_HOUR_UTC <= 23:
     raise ValueError("DAILY_BATCH_HOUR_UTC must be between 0 and 23")
 # Unset/blank = full S&P 500 universe. Set to a small number (e.g. "20") to verify the batch

@@ -1,5 +1,5 @@
 import type { Fetcher } from './api';
-import type { FearGreedResponse, MarketBreadthResponse, PutCallRatioResponse, SectorPerformance } from './types';
+import type { FearGreedResponse, MarketBreadthResponse, MarketRiskState, PutCallRatioResponse, SectorPerformance } from './types';
 
 export interface MarketReportSummary {
   id: number; market: string; tradingDate: string; version: number; status: 'READY' | 'PARTIAL'; publishedAt: string;
@@ -25,8 +25,17 @@ export interface MarketReportDetail {
     fearGreed: FearGreedResponse | null; putCall: PutCallRatioResponse | null;
     news: Array<{ headline: string; source: string; publishedAt: string; url: string }>;
     checks: string[];
+    // schemaVersion 2+: missing (undefined/null) in version 1 reports.
+    signals?: ReportSignal[] | null;
+    trends?: ReportTrend[] | null;
+    breadthHistory?: ReportBreadthPoint[] | null;
+    risk?: MarketRiskState | null;
   };
 }
+export type SignalTone = 'POSITIVE' | 'NEUTRAL' | 'CAUTION';
+export interface ReportSignal { key: string; label: string; tone: SignalTone; value: string; basis: string; section: string }
+export interface ReportTrend { slug: string; name: string; points: Array<{ tradingDate: string; close: number; sma50: number | null }> }
+export interface ReportBreadthPoint { tradingDate: string; advancing: number; declining: number; unchanged: number; newHighs: number; newLows: number }
 export const getLatestMarketReport = (fetcher: Fetcher) => fetcher<LatestMarketReport>('/api/market-reports/latest');
 export const getMarketReports = (fetcher: Fetcher, before = '') => fetcher<MarketReportSummary[]>(`/api/market-reports${before ? `?before=${encodeURIComponent(before)}` : ''}`);
 export const getMarketReport = (fetcher: Fetcher, id: number) => fetcher<MarketReportDetail>(`/api/market-reports/${id}`);

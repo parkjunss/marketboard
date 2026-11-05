@@ -10,6 +10,7 @@ import java.util.concurrent.*;
 import org.juns.marketboardbackend.collector.*;
 import org.juns.marketboardbackend.marketbreadth.MarketBreadthService;
 import org.juns.marketboardbackend.marketindex.MarketIndexHistoryService;
+import org.juns.marketboardbackend.marketindex.MarketRiskStateService;
 import org.juns.marketboardbackend.news.NewsService;
 import org.juns.marketboardbackend.sectorperformance.SectorPerformanceService;
 import org.juns.marketboardbackend.sentiment.PutCallRatioService;
@@ -28,6 +29,7 @@ class MarketReportServiceTest {
     @MockitoBean MarketBreadthService breadth;
     @MockitoBean NewsService news;
     @MockitoBean PutCallRatioService putCall;
+    @MockitoBean MarketRiskStateService risk;
     final LocalDate date = LocalDate.parse("2026-03-09");
 
     @BeforeEach void setup() {
@@ -62,6 +64,27 @@ class MarketReportServiceTest {
         assertThat(service.latest().state()).isEqualTo("CURRENT");
         assertThat(service.list(date.minusDays(1))).isEmpty();
         assertThat(service.list(date)).hasSize(1);
+    }
+
+    @Test void v2PayloadStoresTrendSeriesBreadthHistoryAndSignals() {
+        List<MarketIndexCandle> history = new ArrayList<>();
+        for (int i = 69; i >= 0; i--) history.add(candle(date.minusDays(i).toString(), 200 - i));
+        when(prices.getHistory("SPX")).thenReturn(history);
+        when(breadth.getHistory(date, 20)).thenReturn(List.of(new org.juns.marketboardbackend.marketbreadth.dto.MarketBreadthResponse(
+                date, 300, 200, 5, 20, 3, 505, Instant.now(), date, "test", "XNYS", "test", Instant.now(), 505, "READY")));
+        when(risk.getLatest()).thenReturn(new MarketRiskState("2026-03-08", "t", "s", "a", null, Map.of(), Map.of(), List.of()));
+
+        var payload = service.get(service.generate().reportId()).payload();
+
+        assertThat(payload.schemaVersion()).isEqualTo(2);
+        var spx = payload.trends().get(0);
+        assertThat(spx.points()).hasSize(MarketReportService.TREND_POINTS);
+        assertThat(spx.points().get(spx.points().size() - 1).sma50()).isCloseTo(175.5, org.assertj.core.data.Offset.offset(0.0001));
+        assertThat(payload.breadthHistory()).hasSize(1);
+        assertThat(payload.signals()).extracting(MarketReportService.Signal::key).contains("trend");
+        // A risk snapshot from another session must not be presented as this report's state.
+        assertThat(payload.risk()).isNull();
+        assertThat(payload.checks()).contains("같은 거래일의 변동성 위험 상태를 확보하지 못했습니다.");
     }
 
     @Test void missingRequiredDateDefersWithoutPublishing() {

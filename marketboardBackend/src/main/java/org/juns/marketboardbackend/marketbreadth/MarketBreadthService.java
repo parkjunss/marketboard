@@ -8,9 +8,11 @@ import java.time.ZoneOffset;
 import java.time.LocalTime;
 import java.util.HashSet;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
 import org.juns.marketboardbackend.collector.CollectorClient;
@@ -169,5 +171,21 @@ public class MarketBreadthService {
                 .findTopByOrderBySnapshotDateDesc()
                 .map(MarketBreadthResponse::from)
                 .orElseThrow(() -> new ResourceNotFoundException("No market breadth snapshot computed yet"));
+    }
+
+    /**
+     * Up to {@code limit} verified snapshots, one per trading date (oldest first). Weekend/holiday runs
+     * re-save the previous session under a new snapshot date, so the latest row per trading date wins.
+     */
+    @Transactional(readOnly = true)
+    public List<MarketBreadthResponse> getHistory(LocalDate throughTradingDate, int limit) {
+        var byTradingDate = new TreeMap<LocalDate, MarketBreadthResponse>();
+        for (var snapshot : marketBreadthSnapshotRepository.findTop60ByOrderBySnapshotDateDesc()) {
+            var tradingDate = snapshot.getTradingDate();
+            if (tradingDate == null || tradingDate.isAfter(throughTradingDate)) continue;
+            byTradingDate.putIfAbsent(tradingDate, MarketBreadthResponse.from(snapshot));
+        }
+        var rows = new ArrayList<>(byTradingDate.values());
+        return List.copyOf(rows.subList(Math.max(0, rows.size() - limit), rows.size()));
     }
 }

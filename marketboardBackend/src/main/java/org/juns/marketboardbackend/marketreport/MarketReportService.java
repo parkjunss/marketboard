@@ -9,6 +9,7 @@ import org.juns.marketboardbackend.common.exception.ResourceNotFoundException;
 import org.juns.marketboardbackend.marketbreadth.MarketBreadthService;
 import org.juns.marketboardbackend.marketbreadth.dto.MarketBreadthResponse;
 import org.juns.marketboardbackend.marketindex.MarketIndexHistoryService;
+import org.juns.marketboardbackend.marketindex.MarketRiskStateService;
 import org.juns.marketboardbackend.news.NewsService;
 import org.juns.marketboardbackend.sectorperformance.SectorPerformanceService;
 import org.juns.marketboardbackend.sentiment.*;
@@ -27,7 +28,14 @@ public class MarketReportService {
     public record Payload(int schemaVersion, String calculationVersion, Session session,
             Instant startedAt, Instant capturedAt, List<Highlight> highlights, List<Index> indices,
             List<SectorPerformance> sectors, MarketBreadthResponse breadth, List<Index> macro,
-            FearGreedResponse fearGreed, PutCallRatioTrendResponse putCall, List<Headline> news, List<String> checks) {}
+            FearGreedResponse fearGreed, PutCallRatioTrendResponse putCall, List<Headline> news, List<String> checks,
+            // schemaVersion 2+: absent (null) in version 1 reports.
+            List<Signal> signals, List<Trend> trends, List<BreadthPoint> breadthHistory, MarketRiskState risk) {}
+    /** One row of the "market state" summary. tone: POSITIVE / NEUTRAL / CAUTION -- a reference, not an order signal. */
+    public record Signal(String key, String label, String tone, String value, String basis, String section) {}
+    public record TrendPoint(String tradingDate, double close, Double sma50) {}
+    public record Trend(String slug, String name, List<TrendPoint> points) {}
+    public record BreadthPoint(LocalDate tradingDate, int advancing, int declining, int unchanged, int newHighs, int newLows) {}
     public record Summary(Long id, String market, LocalDate tradingDate, int version, String status, Instant publishedAt) {}
     public record Detail(Summary report, Payload payload) {}
     public record Latest(LocalDate expectedTradingDate, String state, Summary report) {}
@@ -45,13 +53,14 @@ public class MarketReportService {
     private final MarketBreadthService breadth;
     private final NewsService news;
     private final PutCallRatioService putCall;
+    private final MarketRiskStateService risk;
     private final ObjectMapper mapper;
 
     public MarketReportService(MarketReportRepository repository, MarketReportStore store, CollectorClient collector,
             MarketIndexHistoryService prices, SectorPerformanceService sectors, MarketBreadthService breadth,
-            NewsService news, PutCallRatioService putCall, ObjectMapper mapper) {
+            NewsService news, PutCallRatioService putCall, MarketRiskStateService risk, ObjectMapper mapper) {
         this.repository = repository; this.store = store; this.collector = collector; this.prices = prices;
-        this.sectors = sectors; this.breadth = breadth; this.news = news; this.putCall = putCall; this.mapper = mapper;
+        this.sectors = sectors; this.breadth = breadth; this.news = news; this.putCall = putCall; this.risk = risk; this.mapper = mapper;
     }
 
     public List<Summary> list(LocalDate before) {
@@ -80,11 +89,12 @@ public class MarketReportService {
         if (existing.isPresent()) return result("EXISTING", existing.get());
         List<String> required = new ArrayList<>();
         List<Index> indexRows = new ArrayList<>();
+        List<Trend> trends = new ArrayList<>();
         for (String slug : INDEX_ORDER) {
             List<MarketIndexCandle> history = read(() -> prices.getHistory(slug), List.of());
             var row = index(slug, INDICES.get(slug), "지수", history, session, true);
             if (row == null || row.changePct1d() == null) required.add(INDICES.get(slug) + "의 완료 거래일/직전 거래일 마감 자료가 준비되지 않았습니다.");
-            else indexRows.add(row);
+            else { indexRows.add(row); trends.add(trend(slug, INDICES.get(slug), history, session)); }
         }
         if (!required.isEmpty()) return new Generation("DELAYED", session.tradingDate(), null, List.copyOf(required));
 
@@ -120,9 +130,17 @@ public class MarketReportService {
                 row.name(), row.close(), row.changePct1d()), "indices"));
         sectorRows.stream().filter(s -> finite(s.changePct1d())).max(Comparator.comparing(SectorPerformance::changePct1d))
                 .ifPresent(s -> highlights.add(new Highlight(String.format(Locale.ROOT, "확보한 섹터 중 1일 수익률 상위: %s (%+.2f%%)", s.name(), s.changePct1d()), "sectors")));
-        var payload = new Payload(1, "market-report-v1", new Session(session.tradingDate(), session.closedAt(), session.calendar(), session.calendarVersion()),
+        List<BreadthPoint> breadthHistory = read(() -> breadth.getHistory(session.tradingDate(), 20), List.<MarketBreadthResponse>of()).stream()
+                .map(b -> new BreadthPoint(b.tradingDate(), b.advancingCount(), b.decliningCount(), b.unchangedCount(),
+                        b.new52wHighCount(), b.new52wLowCount())).toList();
+        var riskState = read(risk::getLatest, (MarketRiskState) null);
+        if (riskState != null && !session.tradingDate().toString().equals(riskState.expectedTradingDate())) riskState = null;
+        if (riskState == null) checks.add("같은 거래일의 변동성 위험 상태를 확보하지 못했습니다.");
+        var signals = MarketSignals.evaluate(trends.isEmpty() ? null : trends.get(0), breadthRow, breadthHistory, riskState, sectorRows, fear, ratio);
+        var payload = new Payload(2, "market-report-v2", new Session(session.tradingDate(), session.closedAt(), session.calendar(), session.calendarVersion()),
                 started, Instant.now(), List.copyOf(highlights), List.copyOf(indexRows), sectorRows, breadthRow,
-                List.copyOf(macroRows), fear, ratio, headlines, List.copyOf(checks));
+                List.copyOf(macroRows), fear, ratio, headlines, List.copyOf(checks),
+                signals, List.copyOf(trends), breadthHistory, riskState);
         try { return result("PUBLISHED", store.insert(payload)); }
         catch (DataIntegrityViolationException conflict) {
             // Another instance may have committed the same immutable session while capture ran.
@@ -158,6 +176,31 @@ public class MarketReportService {
         int end = session.sessionDates().indexOf(LocalDate.parse(current.tradingDate()));
         return new Index(slug, name, unit, current.close(), change(rows, session.sessionDates(), end, 1, current.close()),
                 change(rows, session.sessionDates(), end, 5, current.close()), change(rows, session.sessionDates(), end, 21, current.close()), current);
+    }
+
+    static final int TREND_POINTS = 63;
+    static final int SMA_WINDOW = 50;
+
+    /** Last ~3 months of verified closes with a 50-session simple moving average (null until 50 closes exist). */
+    private static Trend trend(String slug, String name, List<MarketIndexCandle> history, CompletedMarketSession session) {
+        Map<String, Double> closes = new TreeMap<>();
+        for (var c : history) {
+            if (c.tradingDate() == null || !c.tradingDate().matches("\\d{4}-\\d{2}-\\d{2}")
+                    || c.tradingDate().compareTo(session.tradingDate().toString()) > 0 || !Double.isFinite(c.close()) || c.close() <= 0
+                    || !"COMPLETED".equals(c.sessionStatus()) || !"XNYS".equals(c.calendar())) continue;
+            closes.put(c.tradingDate(), c.close());
+        }
+        var dates = new ArrayList<>(closes.keySet());
+        var values = new ArrayList<>(closes.values());
+        List<TrendPoint> points = new ArrayList<>();
+        double sum = 0;
+        for (int i = 0; i < values.size(); i++) {
+            sum += values.get(i);
+            if (i >= SMA_WINDOW) sum -= values.get(i - SMA_WINDOW);
+            Double sma = i >= SMA_WINDOW - 1 ? sum / SMA_WINDOW : null;
+            if (i >= values.size() - TREND_POINTS) points.add(new TrendPoint(dates.get(i), values.get(i), sma));
+        }
+        return new Trend(slug, name, List.copyOf(points));
     }
 
     private static Double change(Map<String, MarketIndexCandle> rows, List<LocalDate> dates, int end, int offset, double close) {

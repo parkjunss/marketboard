@@ -6,6 +6,7 @@ import { useResource } from '@/lib/use-resource';
 import type { Fetcher } from '@/lib/api';
 import { getMarketReport, getMarketReports, type ReportIndex } from '@/lib/market-report-api';
 import { MarketReportLatest } from './MarketReportLatest';
+import { BreadthTrendCharts, IndexTrendCharts, PutCallTrendChart, RiskStateBars, SectorReturnChart, SignalSummary } from './ReportCharts';
 import styles from './market-report.module.css';
 
 const timestamp = (value: string | null | undefined) => value ? new Date(value).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false }) + ' KST' : '미제공';
@@ -67,9 +68,11 @@ export function MarketReportReader({ id }: { id: number }) {
     <p className={styles.lead}>발행 {timestamp(report.publishedAt)} · 버전 {report.version} <span className={styles.badge}>{report.status === 'PARTIAL' ? '일부 자료 미확인' : '완료'}</span></p>
     <p className={styles.muted}>시장 마감 {timestamp(p.session.closedAt)} · 보고서 자료 확보 {timestamp(p.capturedAt)}</p>
     {!!p.checks.length && <section className={styles.notice} aria-labelledby="checks-title"><h2 id="checks-title">읽기 전에 확인하세요</h2><ul>{p.checks.map(check => <li key={check}>{check}</li>)}</ul></section>}
+    {!!p.signals?.length && <SignalSummary signals={p.signals} />}
     <section aria-labelledby="summary-title"><h2 id="summary-title">핵심 요약</h2><ul className={styles.highlights}>{p.highlights.map(item => <li key={item.text}><a href={`#${item.section}`}>{item.text}</a></li>)}</ul></section>
-    <section id="indices"><h2>주요 지수</h2><p className={styles.muted}>미국 주식장 완료 거래일 기준 · 수익률은 1·5·21거래일 전 종가 대비입니다.</p><IndexCards rows={p.indices} /></section>
-    <section id="sectors"><h2>섹터 비교</h2>{p.sectors.length ? <div className={styles.table} role="region" aria-label="섹터 기간별 수익률" tabIndex={0}><table>
+    <section id="indices"><h2>주요 지수</h2><p className={styles.muted}>미국 주식장 완료 거래일 기준 · 수익률은 1·5·21거래일 전 종가 대비입니다.</p><IndexCards rows={p.indices} />
+      {!!p.trends?.length && <IndexTrendCharts trends={p.trends} />}</section>
+    <section id="sectors"><h2>섹터 비교</h2>{p.sectors.length > 0 && <SectorReturnChart sectors={p.sectors} />}{p.sectors.length ? <div className={styles.table} role="region" aria-label="섹터 기간별 수익률" tabIndex={0}><table>
       <thead><tr><th scope="col">섹터</th><th scope="col">1일</th><th scope="col">1주</th><th scope="col">1개월</th><th scope="col">기준 거래일 · 출처</th></tr></thead>
       <tbody>{p.sectors.map(row => <tr key={row.slug}><th scope="row">{row.name}</th><td>{percent(row.changePct1d)}</td><td>{percent(row.changePct1w)}</td><td>{percent(row.changePct1m)}</td><td>{row.tradingDate}<br />{row.source}<br />수집 {timestamp(row.fetchedAt)}</td></tr>)}</tbody>
     </table></div> : <p>동일 거래일의 섹터 자료가 없습니다.</p>}</section>
@@ -77,12 +80,15 @@ export function MarketReportReader({ id }: { id: number }) {
       <dl className={styles.metrics}><div><dt>상승</dt><dd>{p.breadth.advancingCount}</dd></div><div><dt>하락</dt><dd>{p.breadth.decliningCount}</dd></div><div><dt>보합</dt><dd>{p.breadth.unchangedCount}</dd></div></dl>
       <p>집계 {p.breadth.universeSize} / 대상 {p.breadth.eligibleCount}종목 · 신고가 {p.breadth.new52wHighCount} · 신저가 {p.breadth.new52wLowCount}</p>
       <p className={styles.muted}>기준 {p.breadth.tradingDate} · 계산 {timestamp(p.breadth.computedAt)}<br />출처: MarketBoard 저장 일봉 집계 · 원천 공급자·수집 시각 미확인. 신고가·신저가는 확보된 최대 252개 종가 범위입니다.</p>
-    </> : <p>동일 거래일의 시장 폭 자료가 없습니다.</p>}</section>
+    </> : <p>동일 거래일의 시장 폭 자료가 없습니다.</p>}
+      {(p.breadthHistory?.length ?? 0) > 1 && <BreadthTrendCharts history={p.breadthHistory!} />}</section>
+    {p.risk && <section id="risk"><h2>변동성 위험 상태</h2><RiskStateBars risk={p.risk} /></section>}
     <section id="macro"><h2>거시 지표</h2><p className={styles.muted}>자산별 거래 시간이 다르며 미국장 마감 확정 여부는 미확인입니다. 기준일이 다른 자료는 당시 수집된 참고값입니다.</p>
       {p.macro.length ? <IndexCards rows={p.macro} /> : <p>확보된 거시 지표가 없습니다.</p>}</section>
     <section id="sentiment"><h2>투자 심리 · 참고 자료</h2><div className={styles.grid}>
       <article className={styles.card}><h3>공포·탐욕 지수</h3><p className={styles.value}>{number(p.fearGreed?.score)}</p><p>{p.fearGreed?.rating}</p><p className={styles.muted}>출처 CNN · 공급자 시각 {timestamp(p.fearGreed?.timestamp)} · 수집 시각 미제공</p></article>
-      <article className={styles.card}><h3>SPY Put/Call</h3><p className={styles.value}>{number(p.putCall?.putCallRatio)}</p><p className={styles.muted}>출처 Yahoo Finance 옵션 집계 · 계산 이력 {timestamp(p.putCall?.history?.at(-1)?.timestamp)} · 원천 관측 시각 미제공</p></article>
+      <article className={styles.card}><h3>SPY Put/Call</h3><p className={styles.value}>{number(p.putCall?.putCallRatio)}</p><p className={styles.muted}>출처 Yahoo Finance 옵션 집계 · 계산 이력 {timestamp(p.putCall?.history?.at(-1)?.timestamp)} · 원천 관측 시각 미제공</p>
+        {(p.putCall?.history?.length ?? 0) > 1 && <PutCallTrendChart history={p.putCall!.history!} />}</article>
     </div></section>
     <section id="news"><h2>당시 주요 뉴스</h2><p className={styles.muted}>직전 거래일 시작부터 대상 거래일 마감까지 발행된 뉴스 중 중복을 제외했습니다.</p>
       {p.news.length ? <ul className={styles.records}>{p.news.map(item => <li key={item.url}><div><a href={item.url} target="_blank" rel="noopener noreferrer">{item.headline} ↗</a><p className={styles.muted}>{item.source || '출처 미제공'} · {timestamp(item.publishedAt)}</p></div></li>)}</ul> : <p>대상 기간에 확보된 뉴스가 없습니다.</p>}</section>
